@@ -1,0 +1,319 @@
+"use server";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { z } from "zod";
+import { gerarCodigoTurma } from "@/lib/codigo";
+import { dataHoraLocalParaIso } from "@/lib/datas";
+import { exigirProfessor } from "@/lib/professor";
+import { TIPOS, validarConteudo } from "@/lib/questoes/tipos";
+
+export type EstadoForm = { erro?: string; ok?: string };
+
+const texto = (form: FormData, campo: string) => String(form.get(campo) ?? "").trim();
+
+// Escolas e turmas ----------------------------------------------------------
+
+export async function criarEscola(_: EstadoForm, form: FormData): Promise<EstadoForm> {
+  const { supabase } = await exigirProfessor();
+  const nome = texto(form, "nome");
+  const periodo = texto(form, "periodo") === "bimestre" ? "bimestre" : "trimestre";
+  if (!nome) return { erro: "Informe o nome da escola." };
+  const { error } = await supabase.from("escolas").insert({ nome, periodo });
+  if (error) return { erro: "Não foi possível criar a escola." };
+  revalidatePath("/professor");
+  return { ok: "Escola criada." };
+}
+
+export async function criarTurma(_: EstadoForm, form: FormData): Promise<EstadoForm> {
+  const { supabase } = await exigirProfessor();
+  const nome = texto(form, "nome");
+  if (!nome) return { erro: "Informe o nome da turma." };
+  for (let i = 0; i < 5; i++) {
+    const { error } = await supabase.from("turmas").insert({
+      escola_id: texto(form, "escola_id"),
+      nome,
+      serie: texto(form, "serie") || null,
+      codigo: gerarCodigoTurma(),
+    });
+    if (!error) {
+      revalidatePath("/professor");
+      return { ok: "Turma criada." };
+    }
+    if (error.code !== "23505") return { erro: "Não foi possível criar a turma." };
+  }
+  return { erro: "Não foi possível gerar um código único. Tente de novo." };
+}
+
+export async function novoCodigoTurma(turmaId: string) {
+  const { supabase } = await exigirProfessor();
+  await supabase.from("turmas").update({ codigo: gerarCodigoTurma() }).eq("id", turmaId);
+  revalidatePath(`/professor/turmas/${turmaId}`);
+}
+
+// Alunos ---------------------------------------------------------------------
+
+export async function atualizarAluno(form: FormData) {
+  const { supabase } = await exigirProfessor();
+  const id = texto(form, "id");
+  const apelido = texto(form, "apelido");
+  const dados: Record<string, string | null> = { nome_real: texto(form, "nome_real") || null };
+  if (apelido.length >= 2 && apelido.length <= 20) dados.apelido = apelido;
+  const { data } = await supabase.from("alunos").update(dados).eq("id", id).select("turma_id").single();
+  if (data) revalidatePath(`/professor/turmas/${data.turma_id}`);
+}
+
+/** Apaga o PIN: no próximo acesso, o PIN que o aluno digitar passa a valer. Encerra sessões abertas. */
+export async function redefinirPin(alunoId: string) {
+  const { supabase } = await exigirProfessor();
+  const { data: aluno } = await supabase.from("alunos").select("turma_id, versao_sessao").eq("id", alunoId).single();
+  if (!aluno) return;
+  await supabase
+    .from("alunos")
+    .update({ pin_hash: null, tentativas_falhas: 0, bloqueado_ate: null, versao_sessao: aluno.versao_sessao + 1 })
+    .eq("id", alunoId);
+  revalidatePath(`/professor/turmas/${aluno.turma_id}`);
+}
+
+export async function removerAluno(alunoId: string) {
+  const { supabase } = await exigirProfessor();
+  const { data } = await supabase.from("alunos").delete().eq("id", alunoId).select("turma_id").single();
+  if (data) revalidatePath(`/professor/turmas/${data.turma_id}`);
+}
+
+// Temporadas -----------------------------------------------------------------
+
+const schemaTemporada = z.object({
+  nome: z.string().trim().min(1, "Informe o nome da temporada."),
+  narrativa: z.string().trim(),
+  inicio: z.iso.date("Informe a data de início."),
+  data_prova: z.iso.date("Informe a data da prova."),
+  capitulos: z.string(),
+});
+
+function lerTemporada(form: FormData) {
+  const r = schemaTemporada.safeParse(Object.fromEntries(form));
+  if (!r.success) return { erro: r.error.issues[0].message } as const;
+  if (r.data.data_prova < r.data.inicio) return { erro: "A prova deve ser depois do início." } as const;
+  return {
+    dados: {
+      nome: r.data.nome,
+      narrativa: r.data.narrativa || null,
+      inicio: r.data.inicio,
+      data_prova: r.data.data_prova,
+      capitulos: r.data.capitulos
+        .split("\n")
+        .map((c) => c.trim())
+        .filter(Boolean),
+    },
+  } as const;
+}
+
+export async function criarTemporada(_: EstadoForm, form: FormData): Promise<EstadoForm> {
+  const { supabase } = await exigirProfessor();
+  const lido = lerTemporada(form);
+  if ("erro" in lido) return { erro: lido.erro };
+  const { data, error } = await supabase
+    .from("temporadas")
+    .insert({ ...lido.dados, turma_id: texto(form, "turma_id") })
+    .select("id")
+    .single();
+  if (error || !data) return { erro: "Não foi possível criar a temporada." };
+  redirect(`/professor/temporadas/${data.id}`);
+}
+
+export async function atualizarTemporada(_: EstadoForm, form: FormData): Promise<EstadoForm> {
+  const { supabase } = await exigirProfessor();
+  const lido = lerTemporada(form);
+  if ("erro" in lido) return { erro: lido.erro };
+  const id = texto(form, "id");
+  const { error } = await supabase.from("temporadas").update(lido.dados).eq("id", id);
+  if (error) return { erro: "Não foi possível salvar." };
+  revalidatePath(`/professor/temporadas/${id}`);
+  return { ok: "Temporada salva." };
+}
+
+// Questões -------------------------------------------------------------------
+
+const schemaQuestao = z.object({
+  id: z.uuid().optional(),
+  tipo: z.enum(TIPOS),
+  capitulo: z.string().trim().max(200),
+  habilidades: z.array(z.string()).max(8),
+  dificuldade: z.number().int().min(1).max(3),
+  fonte: z.string().trim().max(500),
+  enunciado: z.string().trim().min(1, "Escreva o enunciado.").max(3000),
+  imagem_path: z.string().nullable(),
+  tempo_limite_s: z.number().int().min(10, "Tempo mínimo: 10 s.").max(180, "Tempo máximo: 180 s."),
+  conteudo: z.unknown(),
+  explicacao: z.string().trim().max(2000),
+  status: z.enum(["rascunho", "publicada"]),
+});
+export type DadosQuestao = z.input<typeof schemaQuestao>;
+
+export async function salvarQuestao(dados: DadosQuestao): Promise<EstadoForm & { id?: string }> {
+  const { supabase, professorId } = await exigirProfessor();
+  const r = schemaQuestao.safeParse(dados);
+  if (!r.success) return { erro: r.error.issues[0].message };
+  const conteudo = validarConteudo(r.data.tipo, r.data.conteudo);
+  if (!conteudo.success) return { erro: conteudo.error.issues[0].message };
+  if (r.data.imagem_path && !r.data.imagem_path.startsWith(`${professorId}/`)) return { erro: "Imagem inválida." };
+
+  const linha = {
+    tipo: r.data.tipo,
+    capitulo: r.data.capitulo || null,
+    habilidades: r.data.habilidades,
+    dificuldade: r.data.dificuldade,
+    fonte: r.data.fonte || null,
+    enunciado: r.data.enunciado,
+    imagem_path: r.data.imagem_path,
+    tempo_limite_s: r.data.tempo_limite_s,
+    conteudo: conteudo.data,
+    explicacao: r.data.explicacao || null,
+    status: r.data.status,
+  };
+
+  if (r.data.id) {
+    // Questão já usada num desafio: o gabarito vira histórico e não pode mudar.
+    const { count } = await supabase
+      .from("respostas")
+      .select("*", { count: "exact", head: true })
+      .eq("questao_id", r.data.id);
+    if (count) {
+      const { data: atual } = await supabase.from("questoes").select("tipo, conteudo").eq("id", r.data.id).single();
+      if (atual && (atual.tipo !== linha.tipo || JSON.stringify(atual.conteudo) !== JSON.stringify(linha.conteudo))) {
+        return {
+          erro: "Alunos já responderam esta questão: o tipo e as alternativas não podem mudar. Duplique-a para criar uma versão nova.",
+        };
+      }
+    }
+    const { error } = await supabase.from("questoes").update(linha).eq("id", r.data.id);
+    if (error) return { erro: "Não foi possível salvar." };
+    revalidatePath("/professor/questoes");
+    return { ok: "Questão salva.", id: r.data.id };
+  }
+  const { data, error } = await supabase.from("questoes").insert(linha).select("id").single();
+  if (error || !data) return { erro: "Não foi possível salvar." };
+  revalidatePath("/professor/questoes");
+  return { ok: "Questão criada.", id: data.id };
+}
+
+export async function duplicarQuestao(id: string) {
+  const { supabase } = await exigirProfessor();
+  const { data: q } = await supabase.from("questoes").select("*").eq("id", id).single();
+  if (!q) return;
+  const { data } = await supabase
+    .from("questoes")
+    .insert({
+      tipo: q.tipo,
+      capitulo: q.capitulo,
+      habilidades: q.habilidades,
+      dificuldade: q.dificuldade,
+      fonte: q.fonte,
+      enunciado: q.enunciado,
+      imagem_path: q.imagem_path,
+      tempo_limite_s: q.tempo_limite_s,
+      conteudo: q.conteudo,
+      explicacao: q.explicacao,
+      status: "rascunho",
+      origem: "manual",
+    })
+    .select("id")
+    .single();
+  if (data) redirect(`/professor/questoes/${data.id}`);
+}
+
+export async function mudarStatusQuestoes(ids: string[], status: "rascunho" | "publicada") {
+  const { supabase } = await exigirProfessor();
+  if (!ids.length) return;
+  await supabase.from("questoes").update({ status }).in("id", ids);
+  revalidatePath("/professor/questoes");
+}
+
+export async function excluirQuestao(id: string) {
+  const { supabase } = await exigirProfessor();
+  const { count } = await supabase
+    .from("desafio_questoes")
+    .select("*", { count: "exact", head: true })
+    .eq("questao_id", id);
+  if (count) return { erro: "Esta questão está em um desafio e não pode ser apagada." };
+  const { data } = await supabase.from("questoes").delete().eq("id", id).select("imagem_path").single();
+  if (data?.imagem_path) {
+    // Duplicatas compartilham a imagem: só apaga o arquivo se ninguém mais usa.
+    const { count: outras } = await supabase
+      .from("questoes")
+      .select("*", { count: "exact", head: true })
+      .eq("imagem_path", data.imagem_path);
+    if (!outras) await supabase.storage.from("questoes").remove([data.imagem_path]);
+  }
+  revalidatePath("/professor/questoes");
+  return {};
+}
+
+// Desafios -------------------------------------------------------------------
+
+const schemaDesafio = z.object({
+  temporada_id: z.uuid(),
+  titulo: z.string().trim().min(1, "Dê um título ao desafio."),
+  abre_em: z.string().min(1, "Informe quando abre."),
+  fecha_em: z.string().min(1, "Informe quando fecha."),
+  pontos_por_acerto: z.number().int().min(1).max(100),
+  questoes: z.array(z.uuid()).min(5, "Escolha de 5 a 15 questões.").max(15, "Escolha de 5 a 15 questões."),
+});
+
+export async function criarDesafio(dados: z.input<typeof schemaDesafio>): Promise<EstadoForm> {
+  const { supabase } = await exigirProfessor();
+  const r = schemaDesafio.safeParse(dados);
+  if (!r.success) return { erro: r.error.issues[0].message };
+  const abre = dataHoraLocalParaIso(r.data.abre_em);
+  const fecha = dataHoraLocalParaIso(r.data.fecha_em);
+  if (fecha <= abre) return { erro: "O fechamento deve ser depois da abertura." };
+
+  const { data: publicadas } = await supabase
+    .from("questoes")
+    .select("id")
+    .in("id", r.data.questoes)
+    .eq("status", "publicada");
+  if ((publicadas ?? []).length !== r.data.questoes.length) return { erro: "Use só questões publicadas." };
+
+  const { data: desafio, error } = await supabase
+    .from("desafios")
+    .insert({
+      temporada_id: r.data.temporada_id,
+      titulo: r.data.titulo,
+      abre_em: abre,
+      fecha_em: fecha,
+      pontos_por_acerto: r.data.pontos_por_acerto,
+    })
+    .select("id")
+    .single();
+  if (error || !desafio) return { erro: "Não foi possível criar o desafio." };
+  const { error: erroQuestoes } = await supabase
+    .from("desafio_questoes")
+    .insert(r.data.questoes.map((questao_id, posicao) => ({ desafio_id: desafio.id, questao_id, posicao })));
+  if (erroQuestoes) {
+    await supabase.from("desafios").delete().eq("id", desafio.id);
+    return { erro: "Não foi possível salvar as questões do desafio." };
+  }
+  redirect(`/professor/desafios/${desafio.id}`);
+}
+
+export async function atualizarJanelaDesafio(_: EstadoForm, form: FormData): Promise<EstadoForm> {
+  const { supabase } = await exigirProfessor();
+  const id = texto(form, "id");
+  const abre = dataHoraLocalParaIso(texto(form, "abre_em"));
+  const fecha = dataHoraLocalParaIso(texto(form, "fecha_em"));
+  if (fecha <= abre) return { erro: "O fechamento deve ser depois da abertura." };
+  const { error } = await supabase
+    .from("desafios")
+    .update({ abre_em: abre, fecha_em: fecha, titulo: texto(form, "titulo") || undefined })
+    .eq("id", id);
+  if (error) return { erro: "Não foi possível salvar." };
+  revalidatePath(`/professor/desafios/${id}`);
+  return { ok: "Desafio atualizado." };
+}
+
+export async function excluirDesafio(id: string) {
+  const { supabase } = await exigirProfessor();
+  const { data } = await supabase.from("desafios").delete().eq("id", id).select("temporada_id").single();
+  redirect(data ? `/professor/temporadas/${data.temporada_id}` : "/professor");
+}

@@ -1,9 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
+  // O app é quase todo autenticado (professor e aluno), então fica no modelo
+  // dinâmico padrão, sem Cache Components.
   turbopack: {
     rules: {
       "*.css": {
@@ -11,6 +10,12 @@ const nextConfig: NextConfig = {
         as: "*.css",
       },
     },
+  },
+  images: {
+    remotePatterns: [{ protocol: "https", hostname: "*.supabase.co" }],
+  },
+  experimental: {
+    serverActions: { bodySizeLimit: "2mb" },
   },
 };
 
