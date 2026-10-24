@@ -3,7 +3,15 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { dataHoraLocalParaIso, formatarDataHora } from "@/lib/datas";
 import { HABILIDADES } from "@/lib/habilidades";
-import { NOME_TIPO, TEMPO_PADRAO, TIPOS, validarConteudo, type TipoQuestao } from "@/lib/questoes/tipos";
+import {
+  NOME_TIPO,
+  TEMPO_MAX_S,
+  TEMPO_MIN_S,
+  TEMPO_PADRAO,
+  TIPOS,
+  validarConteudo,
+  type TipoQuestao,
+} from "@/lib/questoes/tipos";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { professorDoConector } from "./professor";
 
@@ -28,8 +36,8 @@ const schemaQuestao = z.object({
   tempo_limite_s: z
     .number()
     .int()
-    .min(10)
-    .max(180)
+    .min(TEMPO_MIN_S)
+    .max(TEMPO_MAX_S)
     .optional()
     .describe("Padrão: 40 s na múltipla escolha e 60 s nos outros tipos."),
   alternativas: z.array(z.string()).optional().describe("multipla_escolha: 4 ou 5 alternativas."),
@@ -204,8 +212,8 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         tempo_por_questao_s: z
           .number()
           .int()
-          .min(10)
-          .max(180)
+          .min(TEMPO_MIN_S)
+          .max(TEMPO_MAX_S)
           .optional()
           .describe("Tempo único para todas as questões, em segundos. Omita para usar o tempo de cada questão."),
         saida_zera_questao: z

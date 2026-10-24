@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState, useTransition } from "react";
 import { Aviso, Botao, Campo, Cartao, Entrada, Etiqueta, Selecao } from "@/components/ui";
-import { NOME_DIFICULDADE, NOME_TIPO, type TipoQuestao } from "@/lib/questoes/tipos";
+import { NOME_DIFICULDADE, NOME_TIPO, TEMPO_MAX_S, TEMPO_MIN_S, type TipoQuestao } from "@/lib/questoes/tipos";
 import { criarDesafio } from "../../actions";
 
 type Opcao = {
@@ -150,15 +150,18 @@ export function MontarDesafio({
               onChange={(e) => setPontos(Number(e.target.value))}
             />
           </Campo>
-          <Campo rotulo="Tempo por questão">
-            <Selecao value={tempoFixo} onChange={(e) => setTempoFixo(e.target.value)}>
-              <option value="">O tempo de cada questão</option>
-              {[20, 30, 40, 45, 60, 90].map((s) => (
-                <option key={s} value={s}>
-                  {s} segundos em todas
-                </option>
-              ))}
-            </Selecao>
+          <Campo
+            rotulo="Tempo por questão (segundos)"
+            dica={`Deixe em branco para usar o tempo de cada questão. De ${TEMPO_MIN_S} a ${TEMPO_MAX_S} s.`}
+          >
+            <Entrada
+              type="number"
+              min={TEMPO_MIN_S}
+              max={TEMPO_MAX_S}
+              placeholder="Tempo de cada questão"
+              value={tempoFixo}
+              onChange={(e) => setTempoFixo(e.target.value)}
+            />
           </Campo>
           <label className="flex items-start gap-2 text-sm">
             <input

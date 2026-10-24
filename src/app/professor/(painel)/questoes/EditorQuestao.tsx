@@ -11,6 +11,8 @@ import {
   NOME_DIFICULDADE,
   NOME_TIPO,
   tamanhoPermutacao,
+  TEMPO_MAX_S,
+  TEMPO_MIN_S,
   TEMPO_PADRAO,
   TIPOS,
   validarConteudo,
@@ -170,8 +172,8 @@ export function EditorQuestao({
           <Campo rotulo="Tempo limite (segundos)">
             <Entrada
               type="number"
-              min={10}
-              max={180}
+              min={TEMPO_MIN_S}
+              max={TEMPO_MAX_S}
               value={campos.tempo_limite_s}
               onChange={(e) => set("tempo_limite_s", Number(e.target.value))}
             />
