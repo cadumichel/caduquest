@@ -80,6 +80,29 @@ export async function removerAluno(alunoId: string) {
   if (data) revalidatePath(`/professor/turmas/${data.turma_id}`);
 }
 
+export async function aprovarAluno(alunoId: string) {
+  const { supabase } = await exigirProfessor();
+  const { data } = await supabase
+    .from("alunos")
+    .update({ aprovado: true })
+    .eq("id", alunoId)
+    .select("turma_id")
+    .single();
+  if (data) revalidatePath(`/professor/turmas/${data.turma_id}`);
+}
+
+export async function aprovarTodos(turmaId: string) {
+  const { supabase } = await exigirProfessor();
+  await supabase.from("alunos").update({ aprovado: true }).eq("turma_id", turmaId).eq("aprovado", false);
+  revalidatePath(`/professor/turmas/${turmaId}`);
+}
+
+export async function alternarAprovacao(turmaId: string, exige: boolean) {
+  const { supabase } = await exigirProfessor();
+  await supabase.from("turmas").update({ exige_aprovacao: exige }).eq("id", turmaId);
+  revalidatePath(`/professor/turmas/${turmaId}`);
+}
+
 // Temporadas -----------------------------------------------------------------
 
 const schemaTemporada = z.object({
@@ -257,6 +280,8 @@ const schemaDesafio = z.object({
   abre_em: z.string().min(1, "Informe quando abre."),
   fecha_em: z.string().min(1, "Informe quando fecha."),
   pontos_por_acerto: z.number().int().min(1).max(100),
+  tempo_por_questao_s: z.number().int().min(10).max(180).nullable(),
+  saida_zera_questao: z.boolean(),
   questoes: z.array(z.uuid()).min(5, "Escolha de 5 a 15 questões.").max(15, "Escolha de 5 a 15 questões."),
 });
 
@@ -283,6 +308,8 @@ export async function criarDesafio(dados: z.input<typeof schemaDesafio>): Promis
       abre_em: abre,
       fecha_em: fecha,
       pontos_por_acerto: r.data.pontos_por_acerto,
+      tempo_por_questao_s: r.data.tempo_por_questao_s,
+      saida_zera_questao: r.data.saida_zera_questao,
     })
     .select("id")
     .single();

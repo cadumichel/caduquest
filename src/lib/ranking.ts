@@ -1,6 +1,8 @@
 export type LinhaRanking = {
   alunoId: string;
   apelido: string;
+  avatar: number;
+  cor: number;
   pontos: number;
   /** Taxa de acerto de 0 a 1 (média das frações de todas as questões respondidas). */
   acerto: number;
@@ -8,7 +10,15 @@ export type LinhaRanking = {
   posicao: number;
 };
 
-type Entrada = { alunoId: string; apelido: string; pontos: number; somaFracoes: number; questoes: number };
+type Entrada = {
+  alunoId: string;
+  apelido: string;
+  avatar?: number;
+  cor?: number;
+  pontos: number;
+  somaFracoes: number;
+  questoes: number;
+};
 
 /**
  * Ranking da temporada: soma de pontos; desempate pela maior taxa de acerto.
@@ -18,6 +28,8 @@ export function montarRanking(entradas: Entrada[]): LinhaRanking[] {
   const linhas = entradas.map((e) => ({
     alunoId: e.alunoId,
     apelido: e.apelido,
+    avatar: e.avatar ?? 0,
+    cor: e.cor ?? 0,
     pontos: Math.round(e.pontos * 100) / 100,
     acerto: e.questoes > 0 ? e.somaFracoes / e.questoes : 0,
     questoes: e.questoes,

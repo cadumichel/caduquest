@@ -27,7 +27,7 @@ export async function temporadaAtual(db: SupabaseClient, turmaId: string): Promi
  */
 export async function rankingDaTemporada(db: SupabaseClient, temporada: Pick<Temporada, "id" | "turma_id">) {
   const [{ data: alunos }, { data: desafios }] = await Promise.all([
-    db.from("alunos").select("id, apelido").eq("turma_id", temporada.turma_id),
+    db.from("alunos").select("id, apelido, avatar, cor").eq("turma_id", temporada.turma_id).eq("aprovado", true),
     db.from("desafios").select("id").eq("temporada_id", temporada.id),
   ]);
   const idsDesafios = (desafios ?? []).map((d) => d.id);
@@ -46,7 +46,10 @@ export async function rankingDaTemporada(db: SupabaseClient, temporada: Pick<Tem
     : { data: [] as { tentativa_id: string; fracao: number }[] };
 
   const porAluno = new Map(
-    (alunos ?? []).map((a) => [a.id, { alunoId: a.id, apelido: a.apelido, pontos: 0, somaFracoes: 0, questoes: 0 }]),
+    (alunos ?? []).map((a) => [
+      a.id,
+      { alunoId: a.id, apelido: a.apelido, avatar: a.avatar, cor: a.cor, pontos: 0, somaFracoes: 0, questoes: 0 },
+    ]),
   );
   const alunoDaTentativa = new Map<string, string>();
   for (const t of tentativas ?? []) {

@@ -95,18 +95,33 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
                     className={`py-1.5 text-right tabular-nums ${l.saidasTela > 3 ? "font-semibold text-amber-700" : ""}`}
                   >
                     {l.saidasTela || ""}
+                    {l.zeradasPorSaida > 0 && (
+                      <span className="block text-xs font-normal text-red-700">
+                        {l.zeradasPorSaida} zerada{l.zeradasPorSaida > 1 ? "s" : ""}
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
           <p className="mt-3 text-xs text-slate-500">
-            Mais de 3 saídas da tela aparecem em destaque. É só um alerta: o app não tira pontos sozinho.
+            {desafio.saida_zera_questao
+              ? "Neste desafio, sair da tela zera a questão em que o aluno estava."
+              : "Mais de 3 saídas da tela aparecem em destaque. É só um alerta: neste desafio, sair da tela não tira pontos."}
           </p>
         </Cartao>
 
         <Cartao>
           <Subtitulo>Janela do desafio</Subtitulo>
+          <p className="mb-3 text-sm text-slate-600">
+            ⏱️{" "}
+            {desafio.tempo_por_questao_s
+              ? `${desafio.tempo_por_questao_s} s em todas as questões`
+              : "Tempo de cada questão"}
+            {" · "}
+            {desafio.saida_zera_questao ? "🚫 sair da tela zera a questão" : "saídas da tela só são registradas"}
+          </p>
           <FormAcao acao={atualizarJanelaDesafio}>
             <input type="hidden" name="id" value={id} />
             <Campo rotulo="Título">

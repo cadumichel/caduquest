@@ -1,8 +1,17 @@
 import type { LinhaRanking } from "@/lib/ranking";
+import { Avatar } from "./Avatar";
 import { Vazio } from "./ui";
 
 /** Ranking completo (só o professor vê todas as posições). */
-export function TabelaRanking({ ranking, nomes }: { ranking: LinhaRanking[]; nomes?: Map<string, string | null> }) {
+export function TabelaRanking({
+  ranking,
+  nomes,
+  medalhas,
+}: {
+  ranking: LinhaRanking[];
+  nomes?: Map<string, string | null>;
+  medalhas?: Map<string, number>;
+}) {
   if (!ranking.length) return <Vazio>Sem alunos ainda.</Vazio>;
   return (
     <table className="w-full text-sm">
@@ -18,7 +27,8 @@ export function TabelaRanking({ ranking, nomes }: { ranking: LinhaRanking[]; nom
         {ranking.map((l) => (
           <tr key={l.alunoId}>
             <td className="py-1.5 pr-2 font-semibold">{l.posicao}º</td>
-            <td className="py-1.5 pr-2">
+            <td className="flex items-center gap-2 py-1.5 pr-2">
+              <Avatar avatar={l.avatar} cor={l.cor} medalhas={medalhas?.get(l.alunoId) ?? 0} tamanho={26} />
               {l.apelido}
               {nomes?.get(l.alunoId) && <span className="text-slate-500"> · {nomes.get(l.alunoId)}</span>}
             </td>

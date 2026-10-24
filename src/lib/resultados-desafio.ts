@@ -12,19 +12,20 @@ export type LinhaResultado = {
   respondidas: number;
   esgotadas: number;
   saidasTela: number;
+  zeradasPorSaida: number;
 };
 
 /** Resultados de um desafio por aluno e acerto médio por questão (cliente com RLS do professor). */
 export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string, turmaId: string) {
   const [{ data: alunos }, { data: tentativasBrutas }] = await Promise.all([
-    db.from("alunos").select("id, apelido, nome_real").eq("turma_id", turmaId).order("apelido"),
+    db.from("alunos").select("id, apelido, nome_real").eq("turma_id", turmaId).eq("aprovado", true).order("apelido"),
     db.from("tentativas").select("*").eq("desafio_id", desafioId),
   ]);
   const tentativas = (tentativasBrutas ?? []) as Tentativa[];
   const { data: respostas } = tentativas.length
     ? await db
         .from("respostas")
-        .select("tentativa_id, questao_id, fracao, tempo_esgotado, saidas_tela")
+        .select("tentativa_id, questao_id, fracao, tempo_esgotado, saidas_tela, zerada_por_saida")
         .in(
           "tentativa_id",
           tentativas.map((t) => t.id),
@@ -36,13 +37,15 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
           fracao: number | null;
           tempo_esgotado: boolean;
           saidas_tela: number;
+          zerada_por_saida: boolean;
         }[],
       };
 
-  const porTentativa = new Map<string, { acertos: number; respondidas: number; esgotadas: number; saidas: number }>();
+  type Agregado = { acertos: number; respondidas: number; esgotadas: number; saidas: number; zeradas: number };
+  const porTentativa = new Map<string, Agregado>();
   const porQuestao = new Map<string, { soma: number; n: number }>();
   for (const r of respostas ?? []) {
-    const agg = porTentativa.get(r.tentativa_id) ?? { acertos: 0, respondidas: 0, esgotadas: 0, saidas: 0 };
+    const agg = porTentativa.get(r.tentativa_id) ?? { acertos: 0, respondidas: 0, esgotadas: 0, saidas: 0, zeradas: 0 };
     if (r.fracao !== null) {
       agg.acertos += Number(r.fracao);
       agg.respondidas += 1;
@@ -52,6 +55,7 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
       porQuestao.set(r.questao_id, q);
     }
     if (r.tempo_esgotado) agg.esgotadas += 1;
+    if (r.zerada_por_saida) agg.zeradas += 1;
     agg.saidas += r.saidas_tela;
     porTentativa.set(r.tentativa_id, agg);
   }
@@ -70,6 +74,7 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
       respondidas: agg?.respondidas ?? 0,
       esgotadas: agg?.esgotadas ?? 0,
       saidasTela: agg?.saidas ?? 0,
+      zeradasPorSaida: agg?.zeradas ?? 0,
     };
   });
   linhas.sort((a, b) => b.pontos - a.pontos || a.apelido.localeCompare(b.apelido, "pt-BR"));

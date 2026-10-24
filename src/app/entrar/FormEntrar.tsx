@@ -46,6 +46,11 @@ export function FormEntrar({ aviso }: { aviso?: string }) {
         >
           <Entrada name="apelido" required minLength={2} maxLength={20} autoComplete="username" />
         </Campo>
+        {modo === "cadastrar" && (
+          <Campo rotulo="Nome completo" dica="Só o professor vê. Ele usa para saber quem é você.">
+            <Entrada name="nome_real" required minLength={5} maxLength={80} autoComplete="name" />
+          </Campo>
+        )}
         <Campo
           rotulo={modo === "cadastrar" ? "Crie um PIN de 4 números" : "PIN"}
           dica={modo === "cadastrar" ? "Guarde bem: você vai usá-lo sempre para entrar." : undefined}

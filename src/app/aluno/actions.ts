@@ -1,4 +1,6 @@
 "use server";
+import { revalidatePath } from "next/cache";
+import { CORES_AVATAR, TOTAL_AVATARES } from "@/components/Avatar";
 import { exigirAluno } from "@/lib/aluno-sessao";
 import { estadoAtual, responderQuestao, type EstadoJogo } from "@/lib/jogo";
 import { schemaResposta } from "@/lib/questoes/tipos";
@@ -25,4 +27,14 @@ export async function enviarResposta(
     r && r.success ? r.data : null,
     Number.isFinite(saidasTela) ? saidasTela : 0,
   );
+}
+
+export async function salvarPerfil(avatar: number, cor: number): Promise<{ erro?: string }> {
+  const aluno = await exigirAluno();
+  if (!Number.isInteger(avatar) || avatar < 0 || avatar >= TOTAL_AVATARES) return { erro: "Avatar inválido." };
+  if (!Number.isInteger(cor) || cor < 0 || cor >= CORES_AVATAR.length) return { erro: "Cor inválida." };
+  const { error } = await criarClienteAdmin().from("alunos").update({ avatar, cor }).eq("id", aluno.id);
+  if (error) return { erro: "Não foi possível salvar." };
+  revalidatePath("/aluno", "layout");
+  return {};
 }

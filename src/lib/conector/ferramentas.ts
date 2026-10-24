@@ -201,6 +201,19 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         fecha_em: dataHora,
         questoes: z.array(z.string().uuid()).min(5).max(15).describe("ids de questões publicadas"),
         pontos_por_acerto: z.number().int().min(1).max(100).optional().describe("Padrão 10."),
+        tempo_por_questao_s: z
+          .number()
+          .int()
+          .min(10)
+          .max(180)
+          .optional()
+          .describe("Tempo único para todas as questões, em segundos. Omita para usar o tempo de cada questão."),
+        saida_zera_questao: z
+          .boolean()
+          .optional()
+          .describe(
+            "true: sair da tela (trocar de aba ou de app) durante uma questão faz ela valer zero. Padrão false.",
+          ),
         confirmar: z.boolean(),
       }),
     },
@@ -240,6 +253,8 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         abre: formatarDataHora(abre),
         fecha: formatarDataHora(fecha),
         pontos_por_acerto: args.pontos_por_acerto ?? 10,
+        tempo_por_questao: args.tempo_por_questao_s ? `${args.tempo_por_questao_s} s em todas` : "o de cada questão",
+        sair_da_tela_zera: args.saida_zera_questao ?? false,
         questoes: args.questoes.map((id, i) => `${i + 1}. ${porId.get(id)!.enunciado}`),
       };
       if (!args.confirmar) return resultado({ previa, proximo_passo: "Mostre a prévia e confirme com o professor." });
@@ -253,6 +268,8 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           abre_em: abre,
           fecha_em: fecha,
           pontos_por_acerto: args.pontos_por_acerto ?? 10,
+          tempo_por_questao_s: args.tempo_por_questao_s ?? null,
+          saida_zera_questao: args.saida_zera_questao ?? false,
         })
         .select("id")
         .single();
