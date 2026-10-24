@@ -28,11 +28,13 @@ export const metadata: Metadata = { title: "Turma" };
 export default async function PaginaTurma({ params }: PageProps<"/professor/turmas/[id]">) {
   const { id } = await params;
   const { supabase } = await exigirProfessor();
-  const { data: turma } = await supabase
+  const { data: turma, error } = await supabase
     .from("turmas")
     .select("id, nome, serie, codigo, exige_aprovacao, escolas(nome, periodo)")
     .eq("id", id)
     .maybeSingle();
+  // Erro de banco (ex.: migração não aplicada) não pode virar "página não encontrada".
+  if (error) throw new Error(`Falha ao carregar a turma: ${error.message}`);
   if (!turma) notFound();
   const escola = turma.escolas as unknown as { nome: string; periodo: string };
 

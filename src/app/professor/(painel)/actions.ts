@@ -5,7 +5,7 @@ import { z } from "zod";
 import { gerarCodigoTurma } from "@/lib/codigo";
 import { dataHoraLocalParaIso } from "@/lib/datas";
 import { exigirProfessor } from "@/lib/professor";
-import { TIPOS, validarConteudo } from "@/lib/questoes/tipos";
+import { TEMPO_MAX_S, TEMPO_MIN_S, TIPOS, validarConteudo } from "@/lib/questoes/tipos";
 
 export type EstadoForm = { erro?: string; ok?: string };
 
@@ -166,7 +166,11 @@ const schemaQuestao = z.object({
   fonte: z.string().trim().max(500),
   enunciado: z.string().trim().min(1, "Escreva o enunciado.").max(3000),
   imagem_path: z.string().nullable(),
-  tempo_limite_s: z.number().int().min(10, "Tempo mínimo: 10 s.").max(180, "Tempo máximo: 180 s."),
+  tempo_limite_s: z
+    .number()
+    .int()
+    .min(TEMPO_MIN_S, `Tempo mínimo: ${TEMPO_MIN_S} s.`)
+    .max(TEMPO_MAX_S, `Tempo máximo: ${TEMPO_MAX_S} s.`),
   conteudo: z.unknown(),
   explicacao: z.string().trim().max(2000),
   status: z.enum(["rascunho", "publicada"]),
@@ -280,7 +284,12 @@ const schemaDesafio = z.object({
   abre_em: z.string().min(1, "Informe quando abre."),
   fecha_em: z.string().min(1, "Informe quando fecha."),
   pontos_por_acerto: z.number().int().min(1).max(100),
-  tempo_por_questao_s: z.number().int().min(10).max(180).nullable(),
+  tempo_por_questao_s: z
+    .number()
+    .int()
+    .min(TEMPO_MIN_S, `Tempo mínimo: ${TEMPO_MIN_S} s.`)
+    .max(TEMPO_MAX_S, `Tempo máximo: ${TEMPO_MAX_S} s.`)
+    .nullable(),
   saida_zera_questao: z.boolean(),
   questoes: z.array(z.uuid()).min(5, "Escolha de 5 a 15 questões.").max(15, "Escolha de 5 a 15 questões."),
 });

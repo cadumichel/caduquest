@@ -11,6 +11,10 @@ export const NOME_TIPO: Record<TipoQuestao, string> = {
 };
 
 /** Tempo limite padrão por tipo, em segundos (escopo: 20 a 60 s). */
+/** Limites do tempo por questão, em segundos (o professor escolhe livremente dentro deles). */
+export const TEMPO_MIN_S = 5;
+export const TEMPO_MAX_S = 600;
+
 export const TEMPO_PADRAO: Record<TipoQuestao, number> = {
   multipla_escolha: 40,
   vf_bloco: 60,
