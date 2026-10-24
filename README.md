@@ -50,7 +50,7 @@ Desafio relâmpago em sala, aposta de confiança, dois andares, lacunas, detetiv
    npx supabase db push
    ```
    Em _Authentication > Sign In / Providers_, desligue "Allow new users to sign up" e crie seu usuário em _Authentication > Users_. Para o Google, ative o provedor e adicione `https://SEU-DOMINIO/auth/callback` às URLs de redirecionamento.
-2. **Vercel**: importe o repositório e configure as variáveis de `.env.example`.
+2. **Vercel**: importe o repositório e configure as variáveis de `.env.example`. O `vercel.json` agenda uma consulta diária (`/api/manter-ativo`) para o Supabase gratuito não pausar por inatividade nas férias; ela só funciona com `CRON_SECRET` configurado.
 3. Entre em `/professor`, crie escola, turma e temporada, e passe o código da turma aos alunos.
 
 ## Desenvolvimento local
