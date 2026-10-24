@@ -20,7 +20,12 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="pt-BR" className={`${geistSans.variable} h-full antialiased`}>
-      <body className="flex min-h-full flex-col font-sans">{children}</body>
+      <body className="flex min-h-full flex-col font-sans">
+        {children}
+        <footer className="py-3 text-center text-[11px] text-slate-400">
+          CaduQuest {process.env.NEXT_PUBLIC_VERSAO}
+        </footer>
+      </body>
     </html>
   );
 }
