@@ -1,7 +1,8 @@
 "use client";
 import { useState, useTransition } from "react";
-import { Avatar, CORES_AVATAR, TOTAL_AVATARES } from "@/components/Avatar";
+import { Avatar, CORES_AVATAR } from "@/components/Avatar";
 import { Aviso, Botao } from "@/components/ui";
+import { INICIO_ESPECIAIS, medalhasNecessarias, PERSONAGENS, TOTAL_PERSONAGENS } from "@/lib/personagens";
 import { salvarPerfil } from "../actions";
 
 export function EscolherAvatar({
@@ -34,20 +35,37 @@ export function EscolherAvatar({
       </div>
 
       <section>
-        <h2 className="mb-2 font-semibold">Carinha</h2>
+        <h2 className="mb-2 font-semibold">Personagem</h2>
+        <p className="mb-2 text-sm text-slate-600">{PERSONAGENS[avatar % TOTAL_PERSONAGENS].nome}</p>
         <div className="grid grid-cols-5 gap-2">
-          {Array.from({ length: TOTAL_AVATARES }, (_, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => setAvatar(i)}
-              aria-label={`Carinha ${i + 1}`}
-              aria-pressed={avatar === i}
-              className={`flex justify-center rounded-xl p-1.5 transition ${avatar === i ? "bg-marca-100 ring-2 ring-marca-600" : "hover:bg-slate-100"}`}
-            >
-              <Avatar avatar={i} cor={cor} tamanho={48} />
-            </button>
+          {Array.from({ length: INICIO_ESPECIAIS }, (_, i) => (
+            <OpcaoPersonagem key={i} indice={i} cor={cor} escolhido={avatar === i} onEscolher={setAvatar} />
           ))}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="font-semibold">Especiais 🏅</h2>
+        <p className="mb-2 text-sm text-slate-600">
+          Cada desafio vencido libera um personagem especial. Você já liberou{" "}
+          {Math.min(medalhas, TOTAL_PERSONAGENS - INICIO_ESPECIAIS)} de {TOTAL_PERSONAGENS - INICIO_ESPECIAIS}.
+        </p>
+        <div className="grid grid-cols-5 gap-2">
+          {Array.from({ length: TOTAL_PERSONAGENS - INICIO_ESPECIAIS }, (_, j) => {
+            const i = INICIO_ESPECIAIS + j;
+            return medalhasNecessarias(i) <= medalhas ? (
+              <OpcaoPersonagem key={i} indice={i} cor={cor} escolhido={avatar === i} onEscolher={setAvatar} />
+            ) : (
+              <div
+                key={i}
+                title={`Vença ${medalhasNecessarias(i)} ${medalhasNecessarias(i) === 1 ? "desafio" : "desafios"} para liberar`}
+                className="flex aspect-square flex-col items-center justify-center rounded-xl bg-slate-100 text-slate-400"
+              >
+                <span className="text-xl">🔒</span>
+                <span className="text-[10px] font-semibold">{medalhasNecessarias(i)} 🏅</span>
+              </div>
+            );
+          })}
         </div>
       </section>
 
@@ -82,5 +100,30 @@ export function EscolherAvatar({
         {pendente ? "Salvando…" : "Salvar"}
       </Botao>
     </div>
+  );
+}
+
+function OpcaoPersonagem({
+  indice,
+  cor,
+  escolhido,
+  onEscolher,
+}: {
+  indice: number;
+  cor: number;
+  escolhido: boolean;
+  onEscolher: (i: number) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onEscolher(indice)}
+      aria-label={PERSONAGENS[indice].nome}
+      title={`${PERSONAGENS[indice].nome} · ${PERSONAGENS[indice].epoca}`}
+      aria-pressed={escolhido}
+      className={`flex justify-center rounded-xl p-1.5 transition ${escolhido ? "bg-marca-100 ring-2 ring-marca-600" : "hover:bg-slate-100"}`}
+    >
+      <Avatar avatar={indice} cor={cor} tamanho={48} />
+    </button>
   );
 }
