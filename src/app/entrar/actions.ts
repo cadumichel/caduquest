@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { encerrarSessaoAluno, iniciarSessaoAluno } from "@/lib/aluno-sessao";
 import { apelidoImproprio } from "@/lib/apelido";
-import { TOTAL_AVATARES, CORES_AVATAR } from "@/components/Avatar";
+import { CORES_AVATAR } from "@/components/Avatar";
+import { INICIO_ESPECIAIS } from "@/lib/personagens";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 
 const LIMITE_TENTATIVAS = 5;
@@ -68,7 +69,7 @@ export async function entrar(_: EstadoEntrar, form: FormData): Promise<EstadoEnt
         pin_hash: await bcrypt.hash(pin, 10),
         versao_sessao: 1,
         aprovado: !turma.exige_aprovacao,
-        avatar: Math.floor(Math.random() * TOTAL_AVATARES),
+        avatar: Math.floor(Math.random() * INICIO_ESPECIAIS),
         cor: Math.floor(Math.random() * CORES_AVATAR.length),
         ultimo_acesso: new Date().toISOString(),
         total_acessos: 1,
