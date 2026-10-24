@@ -28,5 +28,14 @@ export default async function PaginaDesafio({ params }: PageProps<"/aluno/desafi
   if (concluido || situacaoDesafio(desafio) === "encerrado") redirect(`/aluno/desafio/${id}/resultado`);
   if (situacaoDesafio(desafio) === "agendado") redirect("/aluno");
 
-  return <Jogo desafioId={id} titulo={desafio.titulo} totalQuestoes={count ?? 0} jaComecou={Boolean(tentativa)} />;
+  return (
+    <Jogo
+      desafioId={id}
+      titulo={desafio.titulo}
+      totalQuestoes={count ?? 0}
+      jaComecou={Boolean(tentativa)}
+      tempoFixo={desafio.tempo_por_questao_s}
+      saidaZera={desafio.saida_zera_questao}
+    />
+  );
 }

@@ -8,6 +8,11 @@ export type Aluno = {
   apelido: string;
   nome_real: string | null;
   pin_hash: string | null;
+  avatar: number;
+  cor: number;
+  aprovado: boolean;
+  ultimo_acesso: string | null;
+  total_acessos: number;
   criado_em: string;
 };
 export type Temporada = {
@@ -42,6 +47,8 @@ export type Desafio = {
   abre_em: string;
   fecha_em: string;
   pontos_por_acerto: number;
+  tempo_por_questao_s: number | null;
+  saida_zera_questao: boolean;
 };
 export type Tentativa = {
   id: string;
@@ -66,6 +73,7 @@ export type RespostaBanco = {
   pontos: number | null;
   tempo_esgotado: boolean;
   saidas_tela: number;
+  zerada_por_saida: boolean;
 };
 
 export function situacaoDesafio(d: Pick<Desafio, "abre_em" | "fecha_em">, agora = new Date()) {

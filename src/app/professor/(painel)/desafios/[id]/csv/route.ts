@@ -29,6 +29,7 @@ export async function GET(_: Request, ctx: RouteContext<"/professor/desafios/[id
     "Respondidas",
     "Tempo esgotado",
     "Saídas da tela",
+    "Zeradas por saída",
   ];
   const corpo = linhas.map((l) =>
     [
@@ -40,6 +41,7 @@ export async function GET(_: Request, ctx: RouteContext<"/professor/desafios/[id
       l.respondidas,
       l.esgotadas,
       l.saidasTela,
+      l.zeradasPorSaida,
     ]
       .map(celula)
       .join(";"),

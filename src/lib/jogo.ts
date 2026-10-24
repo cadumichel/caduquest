@@ -15,11 +15,13 @@ export type QuestaoServida = {
   vista: Vista;
   tempoLimite: number;
   restanteMs: number;
+  /** Sair da tela zera a questão (opção do desafio). */
+  saidaZera: boolean;
 };
 
 export type EstadoJogo =
-  | { fase: "questao"; questao: QuestaoServida; posicao: number; total: number }
-  | { fase: "fim" }
+  | { fase: "questao"; questao: QuestaoServida; posicao: number; total: number; aviso?: string }
+  | { fase: "fim"; aviso?: string }
   | { fase: "erro"; mensagem: string };
 
 type QuestaoBanco = {
@@ -35,7 +37,9 @@ type QuestaoBanco = {
 export async function desafioDoAluno(db: SupabaseClient, aluno: AlunoSessao, desafioId: string) {
   const { data } = await db
     .from("desafios")
-    .select("id, temporada_id, titulo, abre_em, fecha_em, pontos_por_acerto, temporadas!inner(turma_id)")
+    .select(
+      "id, temporada_id, titulo, abre_em, fecha_em, pontos_por_acerto, tempo_por_questao_s, saida_zera_questao, temporadas!inner(turma_id)",
+    )
     .eq("id", desafioId)
     .eq("temporadas.turma_id", aluno.turmaId)
     .maybeSingle();
@@ -54,6 +58,9 @@ async function carregarQuestao(db: SupabaseClient, id: string): Promise<QuestaoB
 
 const comoConteudo = (q: QuestaoBanco) => ({ tipo: q.tipo, conteudo: q.conteudo }) as Conteudo;
 
+/** O desafio pode fixar um tempo único para todas as questões. */
+const tempoDaQuestao = (desafio: Desafio, q: QuestaoBanco) => desafio.tempo_por_questao_s ?? q.tempo_limite_s;
+
 async function recalcularTentativa(db: SupabaseClient, tentativa: Tentativa, novoIndice: number) {
   const { data: respostas } = await db.from("respostas").select("pontos").eq("tentativa_id", tentativa.id);
   const pontos = (respostas ?? []).reduce((s, r) => s + Number(r.pontos ?? 0), 0);
@@ -71,6 +78,7 @@ async function recalcularTentativa(db: SupabaseClient, tentativa: Tentativa, nov
 /**
  * Registra a resposta (ou o tempo esgotado) de uma questão servida.
  * Só a primeira gravação vale: um segundo envio da mesma questão é ignorado.
+ * Devolve true se a questão foi zerada porque o aluno saiu da tela.
  */
 async function registrar(
   db: SupabaseClient,
@@ -82,8 +90,9 @@ async function registrar(
   saidasTela: number,
 ) {
   const agora = new Date();
-  const esgotado = tempoEsgotado(new Date(linha.servida_em), agora, questao.tempo_limite_s);
-  const fracao = esgotado ? 0 : corrigir(comoConteudo(questao), linha.permutacao, resposta);
+  const esgotado = tempoEsgotado(new Date(linha.servida_em), agora, tempoDaQuestao(desafio, questao));
+  const zerada = !esgotado && desafio.saida_zera_questao && saidasTela > 0;
+  const fracao = esgotado || zerada ? 0 : corrigir(comoConteudo(questao), linha.permutacao, resposta);
   const { data: gravada } = await db
     .from("respostas")
     .update({
@@ -92,12 +101,14 @@ async function registrar(
       fracao,
       pontos: calcularPontos(fracao, desafio.pontos_por_acerto),
       tempo_esgotado: esgotado,
+      zerada_por_saida: zerada,
       saidas_tela: Math.max(0, Math.min(saidasTela, 999)),
     })
     .eq("id", linha.id)
     .is("respondida_em", null)
     .select("id");
   if (gravada?.length) await recalcularTentativa(db, tentativa, tentativa.indice_atual + 1);
+  return Boolean(gravada?.length) && zerada;
 }
 
 async function obterOuCriarTentativa(db: SupabaseClient, desafioId: string, alunoId: string): Promise<Tentativa> {
@@ -178,7 +189,8 @@ export async function estadoAtual(db: SupabaseClient, aluno: AlunoSessao, desafi
     }
 
     const agora = new Date();
-    if (tempoEsgotado(new Date(linha.servida_em), agora, questao.tempo_limite_s)) {
+    const tempoLimite = tempoDaQuestao(desafio, questao);
+    if (tempoEsgotado(new Date(linha.servida_em), agora, tempoLimite)) {
       await registrar(db, desafio, tentativa, linha, questao, null, 0);
       continue;
     }
@@ -193,8 +205,9 @@ export async function estadoAtual(db: SupabaseClient, aluno: AlunoSessao, desafi
         enunciado: questao.enunciado,
         imagemUrl: urlImagem(questao.imagem_path),
         vista: montarVista(comoConteudo(questao), linha.permutacao),
-        tempoLimite: questao.tempo_limite_s,
-        restanteMs: Math.max(0, questao.tempo_limite_s * 1000 - decorrido),
+        tempoLimite,
+        restanteMs: Math.max(0, tempoLimite * 1000 - decorrido),
+        saidaZera: desafio.saida_zera_questao,
       },
     };
   }
@@ -225,6 +238,7 @@ export async function responderQuestao(
   if (!tentativa) return estadoAtual(db, aluno, desafioId);
   const t = tentativa as Tentativa;
 
+  let zerada = false;
   if (t.ordem[t.indice_atual] === questaoId) {
     const { data: linha } = await db
       .from("respostas")
@@ -234,8 +248,12 @@ export async function responderQuestao(
       .maybeSingle();
     if (linha && !linha.respondida_em) {
       const questao = await carregarQuestao(db, questaoId);
-      await registrar(db, desafio, t, linha as RespostaBanco, questao, resposta, saidasTela);
+      zerada = await registrar(db, desafio, t, linha as RespostaBanco, questao, resposta, saidasTela);
     }
   }
-  return estadoAtual(db, aluno, desafioId);
+  const estado = await estadoAtual(db, aluno, desafioId);
+  if (zerada && estado.fase !== "erro") {
+    estado.aviso = "Você saiu da tela durante a questão anterior, então ela valeu zero.";
+  }
+  return estado;
 }

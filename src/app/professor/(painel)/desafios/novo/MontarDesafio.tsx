@@ -32,6 +32,8 @@ export function MontarDesafio({
   const [abre, setAbre] = useState(abrePadrao);
   const [fecha, setFecha] = useState(fechaPadrao);
   const [pontos, setPontos] = useState(10);
+  const [tempoFixo, setTempoFixo] = useState("");
+  const [saidaZera, setSaidaZera] = useState(false);
   const [escolhidas, setEscolhidas] = useState<string[]>([]);
   const [filtroCapitulo, setFiltroCapitulo] = useState("");
   const [busca, setBusca] = useState("");
@@ -66,6 +68,8 @@ export function MontarDesafio({
         abre_em: abre,
         fecha_em: fecha,
         pontos_por_acerto: pontos,
+        tempo_por_questao_s: tempoFixo ? Number(tempoFixo) : null,
+        saida_zera_questao: saidaZera,
         questoes: escolhidas,
       });
       if (r?.erro) setErro(r.erro);
@@ -146,6 +150,30 @@ export function MontarDesafio({
               onChange={(e) => setPontos(Number(e.target.value))}
             />
           </Campo>
+          <Campo rotulo="Tempo por questão">
+            <Selecao value={tempoFixo} onChange={(e) => setTempoFixo(e.target.value)}>
+              <option value="">O tempo de cada questão</option>
+              {[20, 30, 40, 45, 60, 90].map((s) => (
+                <option key={s} value={s}>
+                  {s} segundos em todas
+                </option>
+              ))}
+            </Selecao>
+          </Campo>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={saidaZera}
+              onChange={(e) => setSaidaZera(e.target.checked)}
+            />
+            <span>
+              <strong>Sair da tela zera a questão</strong>
+              <span className="block text-xs text-slate-500">
+                Trocar de aba, de app ou de janela durante uma questão faz ela valer zero. O aluno é avisado antes.
+              </span>
+            </span>
+          </label>
           <div className="rounded-lg bg-slate-50 p-3 text-sm">
             <p>
               <strong>{escolhidas.length}</strong> de 5 a 15 questões
