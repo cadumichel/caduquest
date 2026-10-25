@@ -2,7 +2,7 @@
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { encerrarSessaoAluno, iniciarSessaoAluno } from "@/lib/aluno-sessao";
+import { encerrarSessaoAluno, esquecerAluno, iniciarSessaoAluno, lembrarAluno } from "@/lib/aluno-sessao";
 import { apelidoImproprio } from "@/lib/apelido";
 import { CORES_AVATAR } from "@/components/Avatar";
 import { BASICOS } from "@/lib/personagens";
@@ -26,7 +26,11 @@ const schema = z.object({
     .regex(/^[\p{L}\p{N} _.-]+$/u, "Use só letras, números, espaço, ponto, hífen ou _."),
   pin: z.string().regex(/^\d{4}$/, "O PIN tem 4 números."),
   nome_real: z.string().trim().max(80, "Nome muito longo.").optional(),
+  avatar: z.coerce.number().int().optional(),
+  cor: z.coerce.number().int().optional(),
 });
+
+const sorteio = <T>(lista: readonly T[]) => lista[Math.floor(Math.random() * lista.length)];
 
 export type EstadoEntrar = { erro?: string };
 
@@ -34,6 +38,12 @@ export async function entrar(_: EstadoEntrar, form: FormData): Promise<EstadoEnt
   const dados = schema.safeParse(Object.fromEntries(form));
   if (!dados.success) return { erro: dados.error.issues[0].message };
   const { modo, codigo, apelido, pin, nome_real } = dados.data;
+  // No cadastro o aluno escolhe entre os personagens básicos; especial só com medalha.
+  const avatarEscolhido = BASICOS.includes(dados.data.avatar ?? -1) ? dados.data.avatar! : sorteio(BASICOS);
+  const corEscolhida =
+    dados.data.cor !== undefined && dados.data.cor >= 0 && dados.data.cor < CORES_AVATAR.length
+      ? dados.data.cor
+      : Math.floor(Math.random() * CORES_AVATAR.length);
 
   const db = criarClienteAdmin();
   const { data: turma } = await db.from("turmas").select("id, exige_aprovacao").eq("codigo", codigo).maybeSingle();
@@ -41,7 +51,7 @@ export async function entrar(_: EstadoEntrar, form: FormData): Promise<EstadoEnt
 
   const { data: aluno } = await db
     .from("alunos")
-    .select("id, pin_hash, tentativas_falhas, bloqueado_ate, versao_sessao, total_acessos")
+    .select("id, apelido, avatar, cor, pin_hash, tentativas_falhas, bloqueado_ate, versao_sessao, total_acessos")
     .eq("turma_id", turma.id)
     .ilike(
       "apelido",
@@ -51,6 +61,7 @@ export async function entrar(_: EstadoEntrar, form: FormData): Promise<EstadoEnt
 
   let alunoId: string;
   let versao: number;
+  let lembrar = { codigo, apelido, avatar: avatarEscolhido, cor: corEscolhida };
 
   if (!aluno) {
     if (modo === "entrar") {
@@ -69,8 +80,8 @@ export async function entrar(_: EstadoEntrar, form: FormData): Promise<EstadoEnt
         pin_hash: await bcrypt.hash(pin, 10),
         versao_sessao: 1,
         aprovado: !turma.exige_aprovacao,
-        avatar: BASICOS[Math.floor(Math.random() * BASICOS.length)],
-        cor: Math.floor(Math.random() * CORES_AVATAR.length),
+        avatar: avatarEscolhido,
+        cor: corEscolhida,
         ultimo_acesso: new Date().toISOString(),
         total_acessos: 1,
       })
@@ -117,10 +128,18 @@ export async function entrar(_: EstadoEntrar, form: FormData): Promise<EstadoEnt
       })
       .eq("id", aluno.id);
     alunoId = aluno.id;
+    lembrar = { codigo, apelido: aluno.apelido, avatar: aluno.avatar, cor: aluno.cor };
   }
 
   await iniciarSessaoAluno(alunoId, turma.id, versao);
+  await lembrarAluno(lembrar);
   redirect("/aluno");
+}
+
+/** "Não é você?": esquece o aluno lembrado neste aparelho. */
+export async function trocarConta() {
+  await esquecerAluno();
+  redirect("/entrar");
 }
 
 export async function sair() {

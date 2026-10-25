@@ -30,6 +30,38 @@ export async function encerrarSessaoAluno() {
   (await cookies()).delete(COOKIE);
 }
 
+/**
+ * Lembra neste aparelho quem entrou por último, para o próximo acesso pedir só
+ * o PIN. Não dá acesso sozinho: o PIN continua sendo conferido.
+ */
+const COOKIE_LEMBRAR = "cq_lembrar";
+export type AlunoLembrado = { codigo: string; apelido: string; avatar: number; cor: number };
+
+export async function lembrarAluno(dados: AlunoLembrado) {
+  (await cookies()).set(COOKIE_LEMBRAR, JSON.stringify(dados), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 365 * 86400,
+  });
+}
+
+export async function alunoLembrado(): Promise<AlunoLembrado | null> {
+  const valor = (await cookies()).get(COOKIE_LEMBRAR)?.value;
+  if (!valor) return null;
+  try {
+    const d = JSON.parse(valor) as AlunoLembrado;
+    return typeof d.codigo === "string" && typeof d.apelido === "string" ? d : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function esquecerAluno() {
+  (await cookies()).delete(COOKIE_LEMBRAR);
+}
+
 export type AlunoSessao = {
   id: string;
   apelido: string;
