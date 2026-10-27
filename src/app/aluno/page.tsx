@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { MuralRanking } from "@/components/MuralRanking";
 import { BotaoLink, Cartao, Etiqueta, Vazio } from "@/components/ui";
 import { exigirAluno } from "@/lib/aluno-sessao";
 import { diasAte, formatarData, formatarDataHora } from "@/lib/datas";
+import { medalhasDaTurma } from "@/lib/medalhas";
 import { rankingParaAluno } from "@/lib/ranking";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { rankingDaTemporada, temporadaAtual } from "@/lib/temporada-dados";
@@ -24,13 +26,14 @@ export default async function MapaTemporada() {
     );
   }
 
-  const [{ data: desafiosBrutos }, ranking] = await Promise.all([
+  const [{ data: desafiosBrutos }, ranking, medalhas] = await Promise.all([
     db
       .from("desafios")
       .select("id, temporada_id, titulo, abre_em, fecha_em, pontos_por_acerto, desafio_questoes(count)")
       .eq("temporada_id", temporada.id)
       .order("abre_em"),
     rankingDaTemporada(db, temporada),
+    medalhasDaTurma(db, aluno.turmaId),
   ]);
   const desafios = (desafiosBrutos ?? []) as (Desafio & { desafio_questoes: { count: number }[] })[];
   const { data: tentativasBrutas } = desafios.length
@@ -44,7 +47,7 @@ export default async function MapaTemporada() {
         )
     : { data: [] };
   const tentativas = new Map(((tentativasBrutas ?? []) as Tentativa[]).map((t) => [t.desafio_id, t]));
-  const { eu, total } = rankingParaAluno(ranking, aluno.id);
+  const { top, eu, total } = rankingParaAluno(ranking, aluno.id);
   const faltam = diasAte(temporada.data_prova);
 
   const abertos = desafios.filter((d) => situacaoDesafio(d) === "aberto");
@@ -73,6 +76,8 @@ export default async function MapaTemporada() {
           </div>
         </div>
       </section>
+
+      <MuralRanking top={top} eu={eu} total={total} medalhas={medalhas} alunoId={aluno.id} />
 
       {temporada.capitulos.length > 0 && (
         <Cartao>
