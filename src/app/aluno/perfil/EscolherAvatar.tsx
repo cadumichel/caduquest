@@ -2,7 +2,7 @@
 import { useState, useTransition } from "react";
 import { Avatar, CORES_AVATAR } from "@/components/Avatar";
 import { Aviso, Botao } from "@/components/ui";
-import { INICIO_ESPECIAIS, medalhasNecessarias, PERSONAGENS, TOTAL_PERSONAGENS } from "@/lib/personagens";
+import { BASICOS, medalhasNecessarias, ORDEM_ESPECIAIS, PERSONAGENS, TOTAL_PERSONAGENS } from "@/lib/personagens";
 import { salvarPerfil } from "../actions";
 
 export function EscolherAvatar({
@@ -38,7 +38,7 @@ export function EscolherAvatar({
         <h2 className="mb-2 font-semibold">Personagem</h2>
         <p className="mb-2 text-sm text-slate-600">{PERSONAGENS[avatar % TOTAL_PERSONAGENS].nome}</p>
         <div className="grid grid-cols-5 gap-2">
-          {Array.from({ length: INICIO_ESPECIAIS }, (_, i) => (
+          {BASICOS.map((i) => (
             <OpcaoPersonagem key={i} indice={i} cor={cor} escolhido={avatar === i} onEscolher={setAvatar} />
           ))}
         </div>
@@ -48,11 +48,10 @@ export function EscolherAvatar({
         <h2 className="font-semibold">Especiais 🏅</h2>
         <p className="mb-2 text-sm text-slate-600">
           Cada desafio vencido libera um personagem especial. Você já liberou{" "}
-          {Math.min(medalhas, TOTAL_PERSONAGENS - INICIO_ESPECIAIS)} de {TOTAL_PERSONAGENS - INICIO_ESPECIAIS}.
+          {Math.min(medalhas, ORDEM_ESPECIAIS.length)} de {ORDEM_ESPECIAIS.length}.
         </p>
         <div className="grid grid-cols-5 gap-2">
-          {Array.from({ length: TOTAL_PERSONAGENS - INICIO_ESPECIAIS }, (_, j) => {
-            const i = INICIO_ESPECIAIS + j;
+          {ORDEM_ESPECIAIS.map((i) => {
             return medalhasNecessarias(i) <= medalhas ? (
               <OpcaoPersonagem key={i} indice={i} cor={cor} escolhido={avatar === i} onEscolher={setAvatar} />
             ) : (

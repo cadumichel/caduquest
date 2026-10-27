@@ -372,6 +372,189 @@ const TODOS: Personagem[] = [
       `<ellipse cx="50" cy="47" rx="19" ry="16" fill="#1e3a8a"/>` +
       `<path d="M38 40 Q44 34 52 35" stroke="#93c5fd" stroke-width="3" fill="none" stroke-linecap="round"/>`,
   },
+  {
+    nome: "Escudeira viking",
+    epoca: "Escandinávia medieval",
+    svg:
+      `<path d="M30 40 Q30 22 50 22 Q70 22 70 40 L66 70 L34 70 Z" fill="#facc15"/>` +
+      busto(PELE.clara, "#1e3a8a") +
+      `<path d="M16 96 Q18 80 34 77 Q50 84 66 77 Q82 80 84 96" stroke="#a16207" stroke-width="5" fill="none"/>` +
+      `<path d="M66 50 Q74 62 70 80" stroke="#eab308" stroke-width="5" fill="none" stroke-linecap="round"/>` +
+      `<path d="M31 42 Q31 22 50 22 Q69 22 69 42 Z" fill="#6b7280"/>` +
+      `<rect x="31" y="39" width="38" height="4" fill="#4b5563"/>` +
+      `<circle cx="22" cy="90" r="11" fill="#b45309" stroke="#78350f" stroke-width="2"/><circle cx="22" cy="90" r="3" fill="#9ca3af"/>` +
+      labios(),
+  },
+  {
+    nome: "Mulher ateniense",
+    epoca: "Grécia Antiga",
+    svg:
+      busto(PELE.media, "#f8fafc") +
+      `<path d="M30 80 Q40 90 46 100 M70 80 Q60 90 54 100" stroke="#e5e7eb" stroke-width="2" fill="none"/>` +
+      `<circle cx="50" cy="20" r="9" fill="#3f2a1d"/>` +
+      `<path d="M32 46 Q31 25 50 25 Q69 25 68 46 Q64 32 50 31 Q36 32 32 46 Z" fill="#3f2a1d"/>` +
+      `<path d="M33 33 Q50 24 67 33" stroke="${ouro}" stroke-width="3" fill="none"/>` +
+      labios(),
+  },
+  {
+    nome: "Camponesa medieval",
+    epoca: "Idade Média",
+    svg:
+      busto(PELE.clara, "#65a30d") +
+      `<path d="M30 80 L70 80 L66 100 L34 100 Z" fill="#f5f5f4"/>` +
+      `<path d="M28 52 Q26 22 50 21 Q74 22 72 52 L72 66 Q66 60 66 48 Q66 30 50 30 Q34 30 34 48 Q34 60 28 66 Z" fill="#f5f5f4"/>` +
+      `<path d="M34 34 Q50 28 66 34" stroke="#a8a29e" stroke-width="1.5" fill="none"/>` +
+      labios(),
+  },
+  {
+    nome: "Dama da corte",
+    epoca: "Europa, séc. XVIII",
+    svg:
+      busto(PELE.clara, "#93c5fd") +
+      `<path d="M34 76 Q50 86 66 76" stroke="#f8fafc" stroke-width="4" fill="none"/>` +
+      `<path d="M28 50 Q22 30 32 14 Q50 -4 68 14 Q78 30 72 50 Q70 32 50 30 Q30 32 28 50 Z" fill="#f1f5f9"/>` +
+      `<circle cx="36" cy="18" r="5" fill="#e2e8f0"/><circle cx="64" cy="18" r="5" fill="#e2e8f0"/><circle cx="50" cy="8" r="5" fill="#e2e8f0"/>` +
+      `<path d="M58 6 L66 2 L64 10 Z" fill="#ec4899"/>` +
+      `<circle cx="58" cy="52" r="1" fill="#111"/>` +
+      labios("#db2777"),
+  },
+  {
+    nome: "Operária",
+    epoca: "Revolução Industrial",
+    svg:
+      busto(PELE.media, "#475569") +
+      `<path d="M34 80 L66 80 L64 100 L36 100 Z" fill="#cbd5e1"/>` +
+      `<path d="M32 46 Q31 27 50 27 Q69 27 68 46 Q64 34 50 33 Q36 34 32 46 Z" fill="#4a2c17"/>` +
+      `<path d="M30 34 Q50 16 70 34 Q72 40 66 38 Q50 30 34 38 Q28 40 30 34 Z" fill="#dc2626"/>` +
+      `<circle cx="50" cy="22" r="3" fill="#dc2626"/>` +
+      labios(),
+  },
+  {
+    nome: "Sufragista",
+    epoca: "Início do séc. XX",
+    svg:
+      busto(PELE.clara, "#6d28d9") +
+      `<path d="M20 82 L28 78 L76 100 L64 100 Z" fill="#f8fafc"/>` +
+      `<path d="M24 80 L70 100" stroke="#16a34a" stroke-width="3"/>` +
+      `<path d="M32 48 Q31 30 50 30 Q69 30 68 48 Q64 36 50 36 Q36 36 32 48 Z" fill="#6b3f1d"/>` +
+      `<path d="M18 34 Q50 26 82 34 Q50 30 18 34 Z" stroke="#111" stroke-width="4" fill="none"/>` +
+      `<path d="M32 33 Q34 16 50 16 Q66 16 68 33 Z" fill="#111"/>` +
+      `<path d="M58 18 Q70 10 74 20 Q66 18 62 26 Z" fill="#a855f7"/>` +
+      labios(),
+  },
+  {
+    nome: "Baiana do acarajé",
+    epoca: "Brasil, tradição afro-baiana",
+    svg:
+      busto(PELE.retinta, "#f8fafc") +
+      `<path d="M30 80 Q50 92 70 80" stroke="#dc2626" stroke-width="3" fill="none"/>` +
+      `<path d="M32 82 Q50 96 68 82" stroke="#16a34a" stroke-width="3" fill="none"/>` +
+      `<path d="M34 84 Q50 100 66 84" stroke="${ouro}" stroke-width="3" fill="none"/>` +
+      `<path d="M30 42 Q26 12 50 10 Q76 12 70 42 Q60 30 50 30 Q40 30 30 42 Z" fill="#f8fafc"/>` +
+      `<path d="M34 24 Q50 16 66 24 M32 33 Q50 24 68 33" stroke="#e5e7eb" stroke-width="2" fill="none"/>` +
+      `<circle cx="32" cy="56" r="3.5" fill="none" stroke="${ouro}" stroke-width="2"/><circle cx="68" cy="56" r="3.5" fill="none" stroke="${ouro}" stroke-width="2"/>` +
+      labios("#7f1d1d"),
+  },
+  {
+    nome: "Enfermeira",
+    epoca: "Guerra do Paraguai",
+    svg:
+      busto(PELE.clara, "#1f2937") +
+      `<path d="M34 76 L66 76 L64 100 L36 100 Z" fill="#f8fafc"/>` +
+      `<path d="M50 82 L50 94 M44 88 L56 88" stroke="#dc2626" stroke-width="4"/>` +
+      `<path d="M32 48 Q31 28 50 28 Q69 28 68 48 Q64 36 50 35 Q36 36 32 48 Z" fill="#3f2a1d"/>` +
+      `<path d="M32 30 Q50 20 68 30 L66 36 Q50 30 34 36 Z" fill="#f8fafc"/>` +
+      `<path d="M50 24 L50 30 M47 27 L53 27" stroke="#dc2626" stroke-width="2"/>` +
+      labios(),
+  },
+  {
+    nome: "Aviadora",
+    epoca: "Anos 1920",
+    svg:
+      busto(PELE.clara, "#78350f") +
+      `<path d="M24 80 Q50 74 76 80 L74 88 Q50 82 26 88 Z" fill="#f8fafc"/>` +
+      `<path d="M30 60 L30 38 Q30 22 50 22 Q70 22 70 38 L70 60 L64 60 L64 44 L36 44 L36 60 Z" fill="#92400e"/>` +
+      `<circle cx="42" cy="32" r="6" fill="#bae6fd" stroke="#78716c" stroke-width="2.5"/><circle cx="58" cy="32" r="6" fill="#bae6fd" stroke="#78716c" stroke-width="2.5"/>` +
+      `<path d="M48 32 L52 32" stroke="#78716c" stroke-width="2.5"/>` +
+      labios(),
+  },
+  {
+    nome: "Cientista",
+    epoca: "Ciência moderna",
+    svg:
+      busto(PELE.escura, "#f8fafc") +
+      `<path d="M40 76 L50 92 L60 76" stroke="#cbd5e1" stroke-width="3" fill="none"/>` +
+      `<rect x="62" y="84" width="10" height="3" fill="#2563eb"/>` +
+      `<path d="M28 50 Q22 18 50 18 Q78 18 72 50 Q74 60 68 64 Q68 34 50 32 Q32 34 32 64 Q26 60 28 50 Z" fill="#111"/>` +
+      `<circle cx="42" cy="45" r="5.5" fill="none" stroke="#7c3aed" stroke-width="2"/><circle cx="58" cy="45" r="5.5" fill="none" stroke="#7c3aed" stroke-width="2"/>` +
+      `<path d="M47.5 45 L52.5 45" stroke="#7c3aed" stroke-width="2"/>` +
+      labios("#7f1d1d"),
+  },
+  {
+    nome: "Nefertiti",
+    epoca: "Egito Antigo",
+    svg:
+      busto(PELE.morena, PELE.morena) +
+      `<path d="M26 84 Q50 99 74 84 L70 76 Q50 90 30 76 Z" fill="${ouro}"/>` +
+      `<path d="M29 84 Q50 96 71 84" stroke="#dc2626" stroke-width="2" fill="none"/><path d="M31 81 Q50 92 69 81" stroke="#16a34a" stroke-width="2" fill="none"/>` +
+      `<path d="M32 40 L28 6 Q50 -2 72 6 L68 40 Q50 34 32 40 Z" fill="#1e40af"/>` +
+      `<path d="M32 38 Q50 32 68 38" stroke="${ouro}" stroke-width="3" fill="none"/>` +
+      `<path d="M30 20 Q50 14 70 20" stroke="#dc2626" stroke-width="2" fill="none"/>` +
+      labios("#7f1d1d"),
+  },
+  {
+    nome: "Elizabeth I",
+    epoca: "Inglaterra, séc. XVI",
+    svg:
+      busto(PELE.clara, "#111827") +
+      `<path d="M22 72 Q50 58 78 72 Q50 84 22 72 Z" fill="#f8fafc" stroke="#e5e7eb" stroke-width="1.5"/>` +
+      [30, 38, 46, 54, 62, 70].map((x) => `<path d="M50 72 L${x} 66" stroke="#e5e7eb" stroke-width="1"/>`).join("") +
+      [80, 88, 96].map((y) => `<circle cx="50" cy="${y}" r="2" fill="#f8fafc"/>`).join("") +
+      `<path d="M32 48 Q28 24 50 24 Q72 24 68 48 Q66 32 50 32 Q34 32 32 48 Z" fill="#dc6b19"/>` +
+      `<circle cx="34" cy="30" r="6" fill="#dc6b19"/><circle cx="66" cy="30" r="6" fill="#dc6b19"/>` +
+      `<path d="M38 24 L40 14 L45 20 L50 11 L55 20 L60 14 L62 24 Z" fill="${ouro}"/>` +
+      `<circle cx="50" cy="19" r="1.8" fill="#dc2626"/>` +
+      labios(),
+  },
+  {
+    nome: "Maria Quitéria",
+    epoca: "Brasil, Independência",
+    svg:
+      busto(PELE.media, "#1e3a8a") +
+      `<path d="M14 84 Q24 75 34 77 L32 84 Z M86 84 Q76 75 66 77 L68 84 Z" fill="${ouro}"/>` +
+      `<path d="M34 76 L66 100 M66 76 L34 100" stroke="#f8fafc" stroke-width="3"/>` +
+      `<path d="M32 50 Q30 30 50 30 Q70 30 68 50 Q64 38 50 38 Q36 38 32 50 Z" fill="#111"/>` +
+      `<path d="M34 34 L36 14 L64 14 L66 34 Z" fill="#111"/>` +
+      `<rect x="34" y="30" width="32" height="4" fill="${ouro}"/>` +
+      `<path d="M50 14 Q46 2 54 0 Q52 8 54 14 Z" fill="#16a34a"/>` +
+      `<path d="M30 52 Q24 66 30 74" stroke="#111" stroke-width="5" fill="none" stroke-linecap="round"/>` +
+      labios(),
+  },
+  {
+    nome: "Rosa Parks",
+    epoca: "EUA, direitos civis",
+    svg:
+      busto(PELE.escura, "#7f1d1d") +
+      `<path d="M38 74 L50 84 L62 74" stroke="#f8fafc" stroke-width="3.5" fill="none"/>` +
+      `<circle cx="64" cy="86" r="3" fill="${ouro}"/>` +
+      `<path d="M32 48 Q31 28 50 28 Q69 28 68 48 Q62 36 50 36 Q38 36 32 48 Z" fill="#1f2937"/>` +
+      `<path d="M30 30 Q32 18 50 18 Q68 18 70 30 Q50 26 30 30 Z" fill="#7f1d1d"/>` +
+      `<circle cx="42" cy="45" r="5" fill="none" stroke="#1f2937" stroke-width="1.6"/><circle cx="58" cy="45" r="5" fill="none" stroke="#1f2937" stroke-width="1.6"/>` +
+      `<path d="M47 45 L53 45" stroke="#1f2937" stroke-width="1.6"/>` +
+      labios("#7f1d1d"),
+  },
+  {
+    nome: "Malala",
+    epoca: "Paquistão, séc. XXI",
+    svg:
+      `<path d="M26 54 Q22 18 50 16 Q78 18 74 54 L80 100 L20 100 Z" fill="#db2777"/>` +
+      busto(PELE.media, "#be185d") +
+      `<path d="M26 100 Q24 70 32 56 L36 56 Q34 70 40 100 Z M74 100 Q76 70 68 56 L64 56 Q66 70 60 100 Z" fill="#db2777"/>` +
+      `<path d="M30 44 Q30 22 50 22 Q70 22 70 44 Q66 30 50 30 Q34 30 30 44 Z" fill="#db2777"/>` +
+      `<path d="M34 42 Q36 32 50 32 Q64 32 66 42 Q58 36 50 37 Q42 36 34 42 Z" fill="#111"/>` +
+      `<rect x="20" y="84" width="16" height="12" rx="2" fill="#fef3c7" stroke="#a16207" stroke-width="1.5"/><path d="M28 84 L28 96" stroke="#a16207" stroke-width="1.5"/>` +
+      labios("#9d174d"),
+  },
 ];
 
 const porNome = (nomes: string[]) =>
@@ -381,8 +564,12 @@ const porNome = (nomes: string[]) =>
     return p;
   });
 
-/** Liberados para todos (índices 0–19 de alunos.avatar). */
-const BASICOS = porNome([
+/**
+ * Ordem fixa = índice salvo em alunos.avatar. Personagens novos entram sempre no
+ * fim, para não mudar o avatar de quem já escolheu.
+ */
+export const PERSONAGENS = porNome([
+  // 0–19: básicos
   "Caçador pré-histórico",
   "Faraó",
   "Hoplita grego",
@@ -403,10 +590,7 @@ const BASICOS = porNome([
   "Gandhi",
   "Pracinha da FEB",
   "Astronauta",
-]);
-
-/** Especiais (índices 20–29): o 1º desafio vencido libera o 1º, o 2º libera o 2º, e assim por diante. */
-const ESPECIAIS = porNome([
+  // 20–29: especiais
   "Cleópatra",
   "Júlio César",
   "Joana d'Arc",
@@ -417,13 +601,51 @@ const ESPECIAIS = porNome([
   "Dom Pedro I",
   "Marie Curie",
   "Albert Einstein",
+  // 30–39: básicos
+  "Escudeira viking",
+  "Mulher ateniense",
+  "Camponesa medieval",
+  "Dama da corte",
+  "Operária",
+  "Sufragista",
+  "Baiana do acarajé",
+  "Enfermeira",
+  "Aviadora",
+  "Cientista",
+  // 40–44: especiais
+  "Nefertiti",
+  "Elizabeth I",
+  "Maria Quitéria",
+  "Rosa Parks",
+  "Malala",
 ]);
-
-export const PERSONAGENS = [...BASICOS, ...ESPECIAIS];
 export const TOTAL_PERSONAGENS = PERSONAGENS.length;
-export const INICIO_ESPECIAIS = BASICOS.length;
 
-export const ehEspecial = (avatar: number) => avatar >= INICIO_ESPECIAIS;
+const indice = (nome: string) => PERSONAGENS.findIndex((p) => p.nome === nome);
+
+/** Especiais na ordem de desbloqueio: o 1º desafio vencido libera o 1º, o 2º libera o 2º, e assim por diante. */
+export const ORDEM_ESPECIAIS = [
+  "Cleópatra",
+  "Nefertiti",
+  "Júlio César",
+  "Joana d'Arc",
+  "Elizabeth I",
+  "Leonardo da Vinci",
+  "Zumbi dos Palmares",
+  "Tiradentes",
+  "Maria Quitéria",
+  "Napoleão",
+  "Dom Pedro I",
+  "Rosa Parks",
+  "Marie Curie",
+  "Albert Einstein",
+  "Malala",
+].map(indice);
+
+/** Liberados para todos, na ordem da tela de escolha (dois do 1º lote, um do 2º, intercalados). */
+export const BASICOS = Array.from({ length: 10 }, (_, k) => [2 * k, 2 * k + 1, 30 + k]).flat();
+
+export const ehEspecial = (avatar: number) => ORDEM_ESPECIAIS.includes(avatar);
 
 /** Quantas medalhas o aluno precisa para usar este avatar (0 para os básicos). */
-export const medalhasNecessarias = (avatar: number) => (ehEspecial(avatar) ? avatar - INICIO_ESPECIAIS + 1 : 0);
+export const medalhasNecessarias = (avatar: number) => ORDEM_ESPECIAIS.indexOf(avatar) + 1;
