@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Cartao } from "@/components/ui";
-import { obterAluno } from "@/lib/aluno-sessao";
+import { alunoLembrado, obterAluno } from "@/lib/aluno-sessao";
 import { FormEntrar } from "./FormEntrar";
 
 export const metadata: Metadata = { title: "Entrar" };
@@ -19,7 +19,7 @@ export default async function PaginaEntrar({ searchParams }: PageProps<"/entrar"
         CaduQuest
       </Link>
       <Cartao>
-        <FormEntrar aviso={aviso} />
+        <FormEntrar aviso={aviso} lembrado={await alunoLembrado()} />
       </Cartao>
     </main>
   );
