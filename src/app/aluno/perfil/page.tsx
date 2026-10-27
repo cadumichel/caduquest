@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { Avatar } from "@/components/Avatar";
+import { medalhasDaTurmaDoAluno, temporadaAtualDoAluno } from "@/lib/aluno-dados";
 import { exigirAluno } from "@/lib/aluno-sessao";
-import { medalhasDaTurma } from "@/lib/medalhas";
 import { medalhasNecessarias, ORDEM_ESPECIAIS, PERSONAGENS, TOTAL_PERSONAGENS } from "@/lib/personagens";
 import { rankingParaAluno } from "@/lib/ranking";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
-import { rankingDaTemporada, temporadaAtual } from "@/lib/temporada-dados";
+import { rankingDaTemporada } from "@/lib/temporada-dados";
 import { EscolherAvatar } from "./EscolherAvatar";
 
 export const metadata: Metadata = { title: "Meu perfil" };
@@ -24,8 +24,8 @@ export default async function Perfil() {
   const aluno = await exigirAluno();
   const db = criarClienteAdmin();
   const [medalhasTurma, temporada] = await Promise.all([
-    medalhasDaTurma(db, aluno.turmaId),
-    temporadaAtual(db, aluno.turmaId),
+    medalhasDaTurmaDoAluno(aluno.turmaId),
+    temporadaAtualDoAluno(aluno.turmaId),
   ]);
   const medalhas = medalhasTurma.get(aluno.id) ?? 0;
   const ranking = temporada ? await rankingDaTemporada(db, temporada) : [];

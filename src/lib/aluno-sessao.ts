@@ -2,6 +2,7 @@ import "server-only";
 import { jwtVerify, SignJWT } from "jose";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { segredoSessaoAluno } from "@/lib/env";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 
@@ -75,9 +76,10 @@ export type AlunoSessao = {
 
 /**
  * Lê a sessão do aluno. Devolve null se não houver, se o aluno foi removido ou
- * se ele entrou em outro aparelho depois (um aparelho por vez).
+ * se ele entrou em outro aparelho depois (um aparelho por vez). Fica em cache
+ * durante a requisição: layout e página leem o banco uma vez só.
  */
-export async function obterAluno(): Promise<AlunoSessao | null> {
+export const obterAluno = cache(async (): Promise<AlunoSessao | null> => {
   const token = (await cookies()).get(COOKIE)?.value;
   if (!token) return null;
   let carga: Carga;
@@ -106,7 +108,7 @@ export async function obterAluno(): Promise<AlunoSessao | null> {
     turmaNome: turma.nome,
     escolaNome: turma.escolas.nome,
   };
-}
+});
 
 /** Aluno logado e já aprovado pelo professor. */
 export async function exigirAluno(): Promise<AlunoSessao> {
