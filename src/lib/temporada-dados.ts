@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { hojeEmBrasilia } from "@/lib/datas";
+import { agruparPorSemana, calcularConstancia } from "@/lib/constancia";
 import { montarRanking } from "@/lib/ranking";
 import type { Temporada } from "@/lib/tipos-banco";
 
@@ -21,6 +22,16 @@ export async function temporadaAtual(db: SupabaseClient, turmaId: string): Promi
   );
 }
 
+type TentativaRanking = {
+  id: string;
+  aluno_id: string;
+  desafio_id: string;
+  pontos: number;
+  concluida_em: string | null;
+  indice_atual: number;
+  ordem: string[];
+};
+
 /**
  * Ranking completo de uma temporada. O cliente precisa poder ler alunos,
  * desafios, tentativas e respostas da turma (RLS do professor ou cliente admin).
@@ -28,13 +39,16 @@ export async function temporadaAtual(db: SupabaseClient, turmaId: string): Promi
 export async function rankingDaTemporada(db: SupabaseClient, temporada: Pick<Temporada, "id" | "turma_id">) {
   const [{ data: alunos }, { data: desafios }] = await Promise.all([
     db.from("alunos").select("id, apelido, avatar, cor").eq("turma_id", temporada.turma_id).eq("aprovado", true),
-    db.from("desafios").select("id").eq("temporada_id", temporada.id),
+    db.from("desafios").select("id, tipo, abre_em, fecha_em").eq("temporada_id", temporada.id),
   ]);
   const idsDesafios = (desafios ?? []).map((d) => d.id);
 
   const { data: tentativas } = idsDesafios.length
-    ? await db.from("tentativas").select("id, aluno_id, pontos").in("desafio_id", idsDesafios)
-    : { data: [] as { id: string; aluno_id: string; pontos: number }[] };
+    ? await db
+        .from("tentativas")
+        .select("id, aluno_id, desafio_id, pontos, concluida_em, indice_atual, ordem")
+        .in("desafio_id", idsDesafios)
+    : { data: [] as TentativaRanking[] };
   const idsTentativas = (tentativas ?? []).map((t) => t.id);
 
   const { data: respostas } = idsTentativas.length
@@ -63,6 +77,19 @@ export async function rankingDaTemporada(db: SupabaseClient, temporada: Pick<Tem
       e.somaFracoes += Number(r.fracao);
       e.questoes += 1;
     }
+  }
+
+  // Constância: só os desafios semanais contam.
+  const semanas = agruparPorSemana((desafios ?? []).filter((d) => d.tipo !== "relampago"));
+  const concluidosPorAluno = new Map<string, Set<string>>();
+  for (const t of (tentativas ?? []) as TentativaRanking[]) {
+    if (!(t.concluida_em || t.indice_atual >= t.ordem.length)) continue;
+    const set = concluidosPorAluno.get(t.aluno_id) ?? new Set<string>();
+    set.add(t.desafio_id);
+    concluidosPorAluno.set(t.aluno_id, set);
+  }
+  for (const e of porAluno.values()) {
+    Object.assign(e, calcularConstancia(semanas, concluidosPorAluno.get(e.alunoId) ?? new Set()));
   }
   return montarRanking([...porAluno.values()]);
 }

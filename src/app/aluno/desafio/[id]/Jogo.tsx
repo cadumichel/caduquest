@@ -26,6 +26,8 @@ export function Jogo({
   jaComecou,
   tempoFixo,
   saidaZera,
+  relampago = false,
+  pontosPorAcerto,
 }: {
   desafioId: string;
   titulo: string;
@@ -33,8 +35,11 @@ export function Jogo({
   jaComecou: boolean;
   tempoFixo: number | null;
   saidaZera: boolean;
+  relampago?: boolean;
+  pontosPorAcerto: number;
 }) {
   const [estado, setEstado] = useState<EstadoJogo | null>(null);
+  const [codigo, setCodigo] = useState("");
   const [pendente, iniciar] = useTransition();
   const [erroRede, setErroRede] = useState(false);
 
@@ -53,10 +58,19 @@ export function Jogo({
     if (estado?.fase === "fim" || estado?.fase === "erro") sairDaTelaCheia();
   }, [estado]);
 
-  if (!estado) {
+  if (!estado || estado.fase === "codigo") {
+    const pedirCodigo = relampago && !jaComecou;
     return (
       <div className="space-y-5">
-        <h1 className="text-2xl font-bold">{titulo}</h1>
+        {relampago ? (
+          <div className="rounded-3xl bg-gradient-to-br from-amber-400 via-orange-500 to-rose-600 p-5 text-white shadow-lg">
+            <p className="text-xs font-bold tracking-widest uppercase">⚡ CaduRush · em sala</p>
+            <h1 className="mt-1 text-2xl font-extrabold">{titulo}</h1>
+            <p className="mt-1 text-sm text-white/90">Peso 3: cada acerto vale {pontosPorAcerto} pontos.</p>
+          </div>
+        ) : (
+          <h1 className="text-2xl font-bold">{titulo}</h1>
+        )}
         <ul className="space-y-2 rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-700">
           <li>📝 {totalQuestoes} questões, uma por vez.</li>
           <li>
@@ -71,13 +85,28 @@ export function Jogo({
           <li>↩️ Não dá para voltar à questão anterior.</li>
           <li>🎯 Uma tentativa só. O gabarito sai quando o desafio fechar.</li>
         </ul>
+        {pedirCodigo && (
+          <label className="block space-y-2">
+            <span className="block text-sm font-semibold">Código do dia (está no quadro)</span>
+            <input
+              value={codigo}
+              onChange={(e) => setCodigo(e.target.value.toUpperCase())}
+              maxLength={4}
+              autoCapitalize="characters"
+              autoComplete="off"
+              placeholder="????"
+              className="w-full rounded-xl border-2 border-orange-300 bg-white px-3 py-3 text-center font-mono text-3xl font-black tracking-[0.4em] uppercase focus:border-orange-500 focus:outline-none"
+            />
+          </label>
+        )}
+        {estado?.fase === "codigo" && estado.mensagem && <Aviso>{estado.mensagem}</Aviso>}
         {erroRede && <Aviso>Falha de conexão. Tente de novo.</Aviso>}
         <Botao
-          className="w-full py-4 text-base"
-          disabled={pendente}
+          className={`w-full py-4 text-base ${relampago ? "bg-orange-600 hover:bg-orange-700" : ""}`}
+          disabled={pendente || (pedirCodigo && codigo.trim().length < 4)}
           onClick={() => {
             entrarEmTelaCheia();
-            executar(() => carregarJogo(desafioId));
+            executar(() => carregarJogo(desafioId, pedirCodigo ? codigo : undefined));
           }}
         >
           {pendente ? "Carregando…" : jaComecou ? "Continuar" : "Começar"}

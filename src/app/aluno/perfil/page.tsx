@@ -60,6 +60,10 @@ export default async function Perfil() {
           <Numero valor={String(eu?.pontos ?? 0)} rotulo="pontos" />
           <Numero valor={`${medalhas} 🏅`} rotulo={medalhas === 1 ? "desafio vencido" : "desafios vencidos"} />
         </div>
+        <div className="relative mt-2 grid grid-cols-2 gap-2 text-center">
+          <Numero valor={`🔥 ${eu?.sequencia ?? 0}`} rotulo="semanas de ofensiva" />
+          <Numero valor={`+${eu?.bonus ?? 0}`} rotulo="pts de constância" />
+        </div>
         {eu && eu.questoes > 0 && (
           <div className="relative mt-3">
             <div className="flex justify-between text-xs text-marca-100">

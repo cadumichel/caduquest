@@ -7,6 +7,11 @@ export type LinhaRanking = {
   /** Taxa de acerto de 0 a 1 (média das frações de todas as questões respondidas). */
   acerto: number;
   questoes: number;
+  /** Bônus de constância já somado em pontos. */
+  bonus: number;
+  /** Ofensiva atual (semanas seguidas completas). */
+  sequencia: number;
+  semanasCompletas: number;
   posicao: number;
 };
 
@@ -18,10 +23,14 @@ type Entrada = {
   pontos: number;
   somaFracoes: number;
   questoes: number;
+  bonus?: number;
+  sequencia?: number;
+  semanasCompletas?: number;
 };
 
 /**
- * Ranking da temporada: soma de pontos; desempate pela maior taxa de acerto.
+ * Ranking da temporada: soma de pontos (com o bônus de constância); desempate pela
+ * maior taxa de acerto e depois por mais semanas de constância.
  * Empate completo divide a posição (1, 2, 2, 4).
  */
 export function montarRanking(entradas: Entrada[]): LinhaRanking[] {
@@ -30,15 +39,29 @@ export function montarRanking(entradas: Entrada[]): LinhaRanking[] {
     apelido: e.apelido,
     avatar: e.avatar ?? 0,
     cor: e.cor ?? 0,
-    pontos: Math.round(e.pontos * 100) / 100,
+    pontos: Math.round((e.pontos + (e.bonus ?? 0)) * 100) / 100,
     acerto: e.questoes > 0 ? e.somaFracoes / e.questoes : 0,
     questoes: e.questoes,
+    bonus: e.bonus ?? 0,
+    sequencia: e.sequencia ?? 0,
+    semanasCompletas: e.semanasCompletas ?? 0,
     posicao: 0,
   }));
-  linhas.sort((a, b) => b.pontos - a.pontos || b.acerto - a.acerto || a.apelido.localeCompare(b.apelido, "pt-BR"));
+  linhas.sort(
+    (a, b) =>
+      b.pontos - a.pontos ||
+      b.acerto - a.acerto ||
+      b.semanasCompletas - a.semanasCompletas ||
+      a.apelido.localeCompare(b.apelido, "pt-BR"),
+  );
   linhas.forEach((l, i) => {
     const anterior = linhas[i - 1];
-    l.posicao = anterior && anterior.pontos === l.pontos && anterior.acerto === l.acerto ? anterior.posicao : i + 1;
+    const empatado =
+      anterior &&
+      anterior.pontos === l.pontos &&
+      anterior.acerto === l.acerto &&
+      anterior.semanasCompletas === l.semanasCompletas;
+    l.posicao = empatado ? anterior.posicao : i + 1;
   });
   return linhas;
 }

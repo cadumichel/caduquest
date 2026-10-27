@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState, useTransition } from "react";
 import { Aviso, Botao, Campo, Cartao, Entrada, Etiqueta, Selecao } from "@/components/ui";
+import { PONTOS_RELAMPAGO } from "@/lib/cadurush";
 import { NOME_DIFICULDADE, NOME_TIPO, TEMPO_MAX_S, TEMPO_MIN_S, type TipoQuestao } from "@/lib/questoes/tipos";
 import { criarDesafio } from "../../actions";
 
@@ -17,12 +18,14 @@ type Opcao = {
 
 export function MontarDesafio({
   temporadaId,
+  tipo,
   questoes,
   capitulosTemporada,
   abrePadrao,
   fechaPadrao,
 }: {
   temporadaId: string;
+  tipo: "semanal" | "relampago";
   questoes: Opcao[];
   capitulosTemporada: string[];
   abrePadrao: string;
@@ -31,7 +34,8 @@ export function MontarDesafio({
   const [titulo, setTitulo] = useState("");
   const [abre, setAbre] = useState(abrePadrao);
   const [fecha, setFecha] = useState(fechaPadrao);
-  const [pontos, setPontos] = useState(10);
+  const relampago = tipo === "relampago";
+  const [pontos, setPontos] = useState(relampago ? PONTOS_RELAMPAGO : 10);
   const [tempoFixo, setTempoFixo] = useState("");
   const [saidaZera, setSaidaZera] = useState(false);
   const [escolhidas, setEscolhidas] = useState<string[]>([]);
@@ -64,6 +68,7 @@ export function MontarDesafio({
     iniciar(async () => {
       const r = await criarDesafio({
         temporada_id: temporadaId,
+        tipo,
         titulo,
         abre_em: abre,
         fecha_em: fecha,
@@ -132,16 +137,25 @@ export function MontarDesafio({
             <Entrada
               value={titulo}
               onChange={(e) => setTitulo(e.target.value)}
-              placeholder="Semana 1 – Antigo Regime"
+              placeholder={relampago ? "CaduRush – Antigo Regime" : "Semana 1 – Antigo Regime"}
             />
           </Campo>
-          <Campo rotulo="Abre em (horário de Brasília)">
+          {relampago && (
+            <Aviso tipo="info">
+              ⚡ Feito em sala: o app gera um código do dia, que você mostra à turma. Marque o horário da aula; ele
+              fecha sozinho no fim. Também dá para liberar na hora com o botão &quot;Liberar agora&quot;.
+            </Aviso>
+          )}
+          <Campo rotulo={relampago ? "Início da aula (horário de Brasília)" : "Abre em (horário de Brasília)"}>
             <Entrada type="datetime-local" value={abre} onChange={(e) => setAbre(e.target.value)} />
           </Campo>
-          <Campo rotulo="Fecha em" dica="Desafio semanal: de 5 a 7 dias.">
+          <Campo
+            rotulo={relampago ? "Fim da aula" : "Fecha em"}
+            dica={relampago ? "O CaduRush fecha sozinho neste horário." : "Desafio semanal: de 5 a 7 dias."}
+          >
             <Entrada type="datetime-local" value={fecha} onChange={(e) => setFecha(e.target.value)} />
           </Campo>
-          <Campo rotulo="Pontos por acerto">
+          <Campo rotulo="Pontos por acerto" dica={relampago ? "Peso 3: o padrão do CaduRush é 30." : undefined}>
             <Entrada
               type="number"
               min={1}
@@ -187,7 +201,7 @@ export function MontarDesafio({
           </div>
           {erro && <Aviso>{erro}</Aviso>}
           <Botao className="w-full" disabled={pendente || escolhidas.length < 5 || !titulo.trim()} onClick={salvar}>
-            {pendente ? "Criando…" : "Criar desafio"}
+            {pendente ? "Criando…" : relampago ? "Criar CaduRush" : "Criar desafio"}
           </Botao>
           <p className="text-xs text-slate-500">
             A ordem das questões e das alternativas é embaralhada para cada aluno.

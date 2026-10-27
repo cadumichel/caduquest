@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AlunoSessao } from "@/lib/aluno-sessao";
 import { montarVista } from "@/lib/questoes/apresentacao";
 import { calcularPontos, corrigir, FOLGA_SEGUNDOS, tempoEsgotado } from "@/lib/questoes/correcao";
+import { codigoConfere } from "@/lib/cadurush";
 import { embaralhar, permutacaoAleatoria } from "@/lib/questoes/embaralhar";
 import { tamanhoPermutacao, type Conteudo, type Resposta, type Vista } from "@/lib/questoes/tipos";
 import type { Desafio, RespostaBanco, Tentativa } from "@/lib/tipos-banco";
@@ -22,6 +23,8 @@ export type QuestaoServida = {
 export type EstadoJogo =
   | { fase: "questao"; questao: QuestaoServida; posicao: number; total: number; aviso?: string }
   | { fase: "fim"; aviso?: string }
+  /** CaduRush: falta o código do dia (ou o digitado não confere). */
+  | { fase: "codigo"; mensagem?: string; aviso?: string }
   | { fase: "erro"; mensagem: string };
 
 type QuestaoBanco = {
@@ -38,7 +41,7 @@ export async function desafioDoAluno(db: SupabaseClient, aluno: AlunoSessao, des
   const { data } = await db
     .from("desafios")
     .select(
-      "id, temporada_id, titulo, abre_em, fecha_em, pontos_por_acerto, tempo_por_questao_s, saida_zera_questao, temporadas!inner(turma_id)",
+      "id, temporada_id, tipo, codigo_dia, titulo, abre_em, fecha_em, pontos_por_acerto, tempo_por_questao_s, saida_zera_questao, temporadas!inner(turma_id)",
     )
     .eq("id", desafioId)
     .eq("temporadas.turma_id", aluno.turmaId)
@@ -145,9 +148,30 @@ async function obterOuCriarTentativa(db: SupabaseClient, desafioId: string, alun
  * Se a questão atual já estourou o tempo (o aluno saiu e voltou), ela vale zero
  * e o jogo avança: o cronômetro corre mesmo fora da tela.
  */
-export async function estadoAtual(db: SupabaseClient, aluno: AlunoSessao, desafioId: string): Promise<EstadoJogo> {
+export async function estadoAtual(
+  db: SupabaseClient,
+  aluno: AlunoSessao,
+  desafioId: string,
+  codigo?: string,
+): Promise<EstadoJogo> {
   const desafio = await desafioDoAluno(db, aluno, desafioId);
   if (!desafio) return { fase: "erro", mensagem: "Desafio não encontrado." };
+
+  // CaduRush: só começa com o código do dia mostrado pelo professor.
+  if (
+    desafio.tipo === "relampago" &&
+    situacaoDesafio(desafio) === "aberto" &&
+    !codigoConfere(codigo, desafio.codigo_dia)
+  ) {
+    const { count } = await db
+      .from("tentativas")
+      .select("id", { count: "exact", head: true })
+      .eq("desafio_id", desafio.id)
+      .eq("aluno_id", aluno.id);
+    if (!count) {
+      return { fase: "codigo", mensagem: codigo ? "Código errado. Confira o código no quadro." : undefined };
+    }
+  }
 
   for (let guarda = 0; guarda < 50; guarda++) {
     const situacao = situacaoDesafio(desafio);

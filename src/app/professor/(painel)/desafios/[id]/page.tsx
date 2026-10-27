@@ -13,6 +13,7 @@ import { NOME_TIPO } from "@/lib/questoes/tipos";
 import { resultadosDoDesafio } from "@/lib/resultados-desafio";
 import { situacaoDesafio, type Desafio, type Questao } from "@/lib/tipos-banco";
 import { atualizarJanelaDesafio, excluirDesafio } from "../../actions";
+import { PainelRelampago } from "./PainelRelampago";
 
 export const metadata: Metadata = { title: "Desafio" };
 
@@ -49,12 +50,25 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
             </BotaoLink>
           }
         >
+          {desafio.tipo === "relampago" && "⚡ "}
           {desafio.titulo}{" "}
           <Etiqueta cor={situacao === "aberto" ? "verde" : situacao === "agendado" ? "azul" : "cinza"}>
             {situacao}
           </Etiqueta>
         </Titulo>
       </div>
+
+      {desafio.tipo === "relampago" && desafio.codigo_dia && (
+        <PainelRelampago
+          id={id}
+          codigo={desafio.codigo_dia}
+          situacao={situacao}
+          abreEm={desafio.abre_em}
+          fechaEm={desafio.fecha_em}
+          concluiram={concluiram}
+          total={linhas.length}
+        />
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <Cartao className="overflow-x-auto">

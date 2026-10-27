@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Titulo } from "@/components/ui";
+import { DURACAO_PADRAO_MIN } from "@/lib/cadurush";
 import { isoParaDataHoraLocal } from "@/lib/datas";
 import { exigirProfessor } from "@/lib/professor";
 import type { TipoQuestao } from "@/lib/questoes/tipos";
@@ -10,7 +11,8 @@ import { MontarDesafio } from "./MontarDesafio";
 export const metadata: Metadata = { title: "Montar desafio" };
 
 export default async function NovoDesafio({ searchParams }: PageProps<"/professor/desafios/novo">) {
-  const { temporada: temporadaId } = await searchParams;
+  const { temporada: temporadaId, tipo } = await searchParams;
+  const relampago = tipo === "relampago";
   if (typeof temporadaId !== "string") notFound();
   const { supabase } = await exigirProfessor();
 
@@ -27,16 +29,19 @@ export default async function NovoDesafio({ searchParams }: PageProps<"/professo
 
   const agora = new Date();
   const fecha = new Date(agora.getTime() + 7 * 86_400_000);
-  const fechaLocal = `${isoParaDataHoraLocal(fecha).slice(0, 10)}T23:59`;
+  const fechaLocal = relampago
+    ? isoParaDataHoraLocal(new Date(agora.getTime() + DURACAO_PADRAO_MIN * 60_000))
+    : `${isoParaDataHoraLocal(fecha).slice(0, 10)}T23:59`;
 
   return (
     <div className="space-y-4">
       <Link href={`/professor/temporadas/${temporada.id}`} className="text-sm text-marca-700">
         ← {temporada.nome} · {(temporada.turmas as unknown as { nome: string }).nome}
       </Link>
-      <Titulo>Montar desafio semanal</Titulo>
+      <Titulo>{relampago ? "Montar CaduRush ⚡ (em sala)" : "Montar desafio semanal"}</Titulo>
       <MontarDesafio
         temporadaId={temporada.id}
+        tipo={relampago ? "relampago" : "semanal"}
         capitulosTemporada={temporada.capitulos}
         abrePadrao={isoParaDataHoraLocal(agora)}
         fechaPadrao={fechaLocal}

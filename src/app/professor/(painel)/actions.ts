@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { gerarCodigoDia, janelaLiberadaAgora } from "@/lib/cadurush";
 import { gerarCodigoTurma } from "@/lib/codigo";
 import { dataHoraLocalParaIso } from "@/lib/datas";
 import { exigirProfessor } from "@/lib/professor";
@@ -280,6 +281,7 @@ export async function excluirQuestao(id: string) {
 
 const schemaDesafio = z.object({
   temporada_id: z.uuid(),
+  tipo: z.enum(["semanal", "relampago"]).default("semanal"),
   titulo: z.string().trim().min(1, "Dê um título ao desafio."),
   abre_em: z.string().min(1, "Informe quando abre."),
   fecha_em: z.string().min(1, "Informe quando fecha."),
@@ -313,6 +315,8 @@ export async function criarDesafio(dados: z.input<typeof schemaDesafio>): Promis
     .from("desafios")
     .insert({
       temporada_id: r.data.temporada_id,
+      tipo: r.data.tipo,
+      codigo_dia: r.data.tipo === "relampago" ? gerarCodigoDia() : null,
       titulo: r.data.titulo,
       abre_em: abre,
       fecha_em: fecha,
@@ -346,6 +350,54 @@ export async function atualizarJanelaDesafio(_: EstadoForm, form: FormData): Pro
   if (error) return { erro: "Não foi possível salvar." };
   revalidatePath(`/professor/desafios/${id}`);
   return { ok: "Desafio atualizado." };
+}
+
+// CaduRush ------------------------------------------------------------------
+
+async function desafioRelampago(supabase: Awaited<ReturnType<typeof exigirProfessor>>["supabase"], id: string) {
+  const { data } = await supabase
+    .from("desafios")
+    .select("id, abre_em, fecha_em")
+    .eq("id", id)
+    .eq("tipo", "relampago")
+    .maybeSingle();
+  return data;
+}
+
+/** Abre o CaduRush agora, mantendo a duração planejada da aula. */
+export async function liberarRelampagoAgora(id: string): Promise<EstadoForm> {
+  const { supabase } = await exigirProfessor();
+  const d = await desafioRelampago(supabase, id);
+  if (!d) return { erro: "Desafio relâmpago não encontrado." };
+  const { error } = await supabase.from("desafios").update(janelaLiberadaAgora(d.abre_em, d.fecha_em)).eq("id", id);
+  if (error) return { erro: "Não foi possível liberar." };
+  revalidatePath(`/professor/desafios/${id}`);
+  return { ok: "CaduRush liberado! Mostre o código para a turma." };
+}
+
+/** Fecha o CaduRush antes do horário (quem está respondendo termina a questão atual). */
+export async function encerrarRelampagoAgora(id: string): Promise<EstadoForm> {
+  const { supabase } = await exigirProfessor();
+  const d = await desafioRelampago(supabase, id);
+  if (!d) return { erro: "Desafio relâmpago não encontrado." };
+  const agora = new Date();
+  if (agora <= new Date(d.abre_em)) return { erro: "O desafio ainda não abriu." };
+  const { error } = await supabase.from("desafios").update({ fecha_em: agora.toISOString() }).eq("id", id);
+  if (error) return { erro: "Não foi possível encerrar." };
+  revalidatePath(`/professor/desafios/${id}`);
+  return { ok: "CaduRush encerrado." };
+}
+
+export async function novoCodigoRelampago(id: string): Promise<EstadoForm> {
+  const { supabase } = await exigirProfessor();
+  const { error } = await supabase
+    .from("desafios")
+    .update({ codigo_dia: gerarCodigoDia() })
+    .eq("id", id)
+    .eq("tipo", "relampago");
+  if (error) return { erro: "Não foi possível trocar o código." };
+  revalidatePath(`/professor/desafios/${id}`);
+  return { ok: "Código trocado." };
 }
 
 export async function excluirDesafio(id: string) {
