@@ -8,9 +8,14 @@ import { estadoAtual, responderQuestao, type EstadoJogo } from "@/lib/jogo";
 import { schemaResposta } from "@/lib/questoes/tipos";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 
-export async function carregarJogo(desafioId: string): Promise<EstadoJogo> {
+export async function carregarJogo(desafioId: string, codigo?: string): Promise<EstadoJogo> {
   const aluno = await exigirAluno();
-  return estadoAtual(criarClienteAdmin(), aluno, desafioId);
+  return estadoAtual(
+    criarClienteAdmin(),
+    aluno,
+    desafioId,
+    typeof codigo === "string" ? codigo.slice(0, 10) : undefined,
+  );
 }
 
 export async function enviarResposta(

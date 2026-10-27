@@ -39,7 +39,10 @@ export default async function Ranking() {
             >
               <span className="w-8 text-center text-lg">{MEDALHAS[l.posicao - 1] ?? `${l.posicao}º`}</span>
               <Avatar avatar={l.avatar} cor={l.cor} medalhas={medalhas.get(l.alunoId) ?? 0} tamanho={36} />
-              <span className="flex-1">{l.apelido}</span>
+              <span className="flex-1">
+                {l.apelido}
+                {l.sequencia > 0 && <span className="ml-1 text-xs text-orange-600">🔥{l.sequencia}</span>}
+              </span>
               <span className="tabular-nums">{l.pontos} pts</span>
             </li>
           ))}
@@ -54,8 +57,8 @@ export default async function Ranking() {
         </Cartao>
       )}
       <p className="text-center text-xs text-slate-500">
-        {total} alunos na turma. Desempate pela maior taxa de acerto. Só o top 10 aparece para todos. 🏅 = desafios
-        vencidos.
+        {total} alunos na turma. Os pontos incluem o bônus de constância (🔥). Desempate pela maior taxa de acerto. Só o
+        top 10 aparece para todos. 🏅 = desafios vencidos.
       </p>
     </div>
   );

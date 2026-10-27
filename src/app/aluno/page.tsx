@@ -29,7 +29,7 @@ export default async function MapaTemporada() {
   const [{ data: desafiosBrutos }, ranking, medalhas] = await Promise.all([
     db
       .from("desafios")
-      .select("id, temporada_id, titulo, abre_em, fecha_em, pontos_por_acerto, desafio_questoes(count)")
+      .select("id, temporada_id, tipo, titulo, abre_em, fecha_em, pontos_por_acerto, desafio_questoes(count)")
       .eq("temporada_id", temporada.id)
       .order("abre_em"),
     rankingDaTemporada(db, temporada),
@@ -50,7 +50,10 @@ export default async function MapaTemporada() {
   const { top, eu, total } = rankingParaAluno(ranking, aluno.id);
   const faltam = diasAte(temporada.data_prova);
 
-  const abertos = desafios.filter((d) => situacaoDesafio(d) === "aberto");
+  // CaduRush aberto vem primeiro: é feito na hora, em sala.
+  const abertos = desafios
+    .filter((d) => situacaoDesafio(d) === "aberto")
+    .sort((a, b) => Number(b.tipo === "relampago") - Number(a.tipo === "relampago"));
   const outros = desafios.filter((d) => situacaoDesafio(d) !== "aberto").reverse();
 
   return (
@@ -73,6 +76,20 @@ export default async function MapaTemporada() {
           <div className="rounded-2xl bg-white/10 p-3">
             <p className="text-2xl font-bold">{faltam >= 0 ? faltam : "✓"}</p>
             <p className="text-xs text-marca-100">{faltam >= 0 ? "dias até a prova" : "temporada encerrada"}</p>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center gap-3 rounded-2xl bg-white/10 px-4 py-3">
+          <span className={`text-3xl ${eu?.sequencia ? "" : "opacity-40 grayscale"}`}>🔥</span>
+          <div className="text-sm">
+            <p className="font-bold">
+              {eu?.sequencia
+                ? `Ofensiva de ${eu.sequencia} ${eu.sequencia === 1 ? "semana" : "semanas seguidas"}`
+                : "Comece sua ofensiva!"}
+              {eu && eu.bonus > 0 && <span className="font-normal text-marca-100"> · +{eu.bonus} pts de bônus</span>}
+            </p>
+            <p className="text-xs text-marca-100">
+              Termine todos os desafios da semana: +20 pts, e +25 a partir da 2ª semana seguida.
+            </p>
           </div>
         </div>
       </section>
@@ -107,6 +124,34 @@ export default async function MapaTemporada() {
         {abertos.map((d) => {
           const t = tentativas.get(d.id);
           const concluido = Boolean(t && (t.concluida_em || t.indice_atual >= t.ordem.length));
+          if (d.tipo === "relampago") {
+            return (
+              <div
+                key={d.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-3xl bg-gradient-to-br from-amber-400 via-orange-500 to-rose-600 p-5 text-white shadow-lg"
+              >
+                <div>
+                  <p className="text-xs font-bold tracking-widest uppercase">⚡ CaduRush · em sala</p>
+                  <p className="text-lg font-extrabold">{d.titulo}</p>
+                  <p className="text-sm text-white/90">
+                    Peso 3 · {d.pontos_por_acerto} pts por acerto · fecha {formatarDataHora(d.fecha_em)}
+                  </p>
+                </div>
+                {concluido ? (
+                  <BotaoLink href={`/aluno/desafio/${d.id}/resultado`} variante="secundario">
+                    ✓ {Number(t!.pontos)} pts
+                  </BotaoLink>
+                ) : (
+                  <Link
+                    href={`/aluno/desafio/${d.id}`}
+                    className="rounded-xl bg-white px-5 py-2.5 font-bold text-orange-700 shadow hover:bg-orange-50"
+                  >
+                    {t ? "Continuar" : "Entrar com o código"}
+                  </Link>
+                )}
+              </div>
+            );
+          }
           return (
             <Cartao key={d.id} className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -136,7 +181,10 @@ export default async function MapaTemporada() {
             return (
               <Cartao key={d.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
                 <div>
-                  <p className="font-medium">{d.titulo}</p>
+                  <p className="font-medium">
+                    {d.tipo === "relampago" && "⚡ "}
+                    {d.titulo}
+                  </p>
                   <p className="text-sm text-slate-500">
                     {situacao === "agendado"
                       ? `Abre ${formatarDataHora(d.abre_em)}`

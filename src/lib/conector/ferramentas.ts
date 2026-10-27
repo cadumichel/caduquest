@@ -1,6 +1,7 @@
 import "server-only";
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { gerarCodigoDia, PONTOS_RELAMPAGO } from "@/lib/cadurush";
 import { dataHoraLocalParaIso, formatarData, formatarDataHora } from "@/lib/datas";
 import { HABILIDADES } from "@/lib/habilidades";
 import {
@@ -90,7 +91,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
       const { data: escolas } = await db
         .from("escolas")
         .select(
-          "nome, periodo, turmas(id, nome, serie, codigo, temporadas(id, nome, inicio, data_prova, capitulos, desafios(id, titulo, abre_em, fecha_em)))",
+          "nome, periodo, turmas(id, nome, serie, codigo, temporadas(id, nome, inicio, data_prova, capitulos, desafios(id, tipo, codigo_dia, titulo, abre_em, fecha_em)))",
         )
         .eq("professor_id", professorId)
         .order("nome");
@@ -204,16 +205,26 @@ export function registrarFerramentas(server: McpServer, origem: string) {
   server.registerTool(
     "criar_desafio",
     {
-      title: "Criar desafio semanal",
+      title: "Criar desafio (semanal ou CaduRush)",
       description:
-        "Cria um desafio para uma temporada, com 5 a 15 questões publicadas, na ordem dada. Em duas etapas: chame primeiro com confirmar=false para validar e mostrar a prévia ao professor; só chame com confirmar=true depois que ele aprovar, porque o desafio fica visível aos alunos na abertura.",
+        "Cria um desafio para uma temporada, com 5 a 15 questões publicadas, na ordem dada. tipo='relampago' cria um CaduRush (feito em sala, peso 3, liberado com um código do dia que o app gera; abre_em/fecha_em = horário da aula). Em duas etapas: chame primeiro com confirmar=false para validar e mostrar a prévia ao professor; só chame com confirmar=true depois que ele aprovar, porque o desafio fica visível aos alunos na abertura.",
       inputSchema: z.object({
         temporada_id: z.string().uuid(),
+        tipo: z
+          .enum(["semanal", "relampago"])
+          .optional()
+          .describe("semanal (em casa, padrão) ou relampago (CaduRush, em sala)."),
         titulo: z.string().min(1),
         abre_em: dataHora,
         fecha_em: dataHora,
         questoes: z.array(z.string().uuid()).min(5).max(15).describe("ids de questões publicadas"),
-        pontos_por_acerto: z.number().int().min(1).max(100).optional().describe("Padrão 10."),
+        pontos_por_acerto: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe("Padrão 10 no semanal e 30 no CaduRush."),
         tempo_por_questao_s: z
           .number()
           .int()
@@ -260,12 +271,15 @@ export function registrarFerramentas(server: McpServer, origem: string) {
       });
       if (problemas.length) return falha(`Questões inválidas:\n${problemas.join("\n")}`);
 
+      const relampago = args.tipo === "relampago";
+      const pontos = args.pontos_por_acerto ?? (relampago ? PONTOS_RELAMPAGO : 10);
       const previa = {
         temporada: temporada.nome,
+        tipo: relampago ? "CaduRush (em sala, com código do dia)" : "semanal",
         titulo: args.titulo,
         abre: formatarDataHora(abre),
         fecha: formatarDataHora(fecha),
-        pontos_por_acerto: args.pontos_por_acerto ?? 10,
+        pontos_por_acerto: pontos,
         tempo_por_questao: args.tempo_por_questao_s ? `${args.tempo_por_questao_s} s em todas` : "o de cada questão",
         sair_da_tela_zera: args.saida_zera_questao ?? false,
         questoes: args.questoes.map((id, i) => `${i + 1}. ${porId.get(id)!.enunciado}`),
@@ -277,10 +291,12 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         .insert({
           professor_id: professorId,
           temporada_id: args.temporada_id,
+          tipo: relampago ? "relampago" : "semanal",
+          codigo_dia: relampago ? gerarCodigoDia() : null,
           titulo: args.titulo.trim(),
           abre_em: abre,
           fecha_em: fecha,
-          pontos_por_acerto: args.pontos_por_acerto ?? 10,
+          pontos_por_acerto: pontos,
           tempo_por_questao_s: args.tempo_por_questao_s ?? null,
           saida_zera_questao: args.saida_zera_questao ?? false,
         })
@@ -294,7 +310,11 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         await db.from("desafios").delete().eq("id", desafio.id);
         return falha("Não foi possível salvar as questões do desafio. Nada foi criado.");
       }
-      return resultado({ criado: previa, ver_em: `${origem}/professor/desafios/${desafio.id}` });
+      return resultado({
+        criado: previa,
+        ver_em: `${origem}/professor/desafios/${desafio.id}`,
+        ...(relampago && { aviso: "O código do dia aparece na página do desafio, junto do botão Liberar agora." }),
+      });
     },
   );
   server.registerTool(

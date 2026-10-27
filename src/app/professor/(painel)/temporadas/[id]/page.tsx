@@ -31,7 +31,7 @@ export default async function PaginaTemporada({ params }: PageProps<"/professor/
     supabase
       .from("desafios")
       .select(
-        "id, temporada_id, titulo, abre_em, fecha_em, pontos_por_acerto, desafio_questoes(count), tentativas(concluida_em)",
+        "id, temporada_id, tipo, titulo, abre_em, fecha_em, pontos_por_acerto, desafio_questoes(count), tentativas(concluida_em)",
       )
       .eq("temporada_id", id)
       .order("abre_em"),
@@ -48,7 +48,16 @@ export default async function PaginaTemporada({ params }: PageProps<"/professor/
         <Link href={`/professor/turmas/${temporada.turmas.id}`} className="text-sm text-marca-700">
           ← Turma {temporada.turmas.nome}
         </Link>
-        <Titulo acao={<BotaoLink href={`/professor/desafios/novo?temporada=${id}`}>+ Montar desafio</BotaoLink>}>
+        <Titulo
+          acao={
+            <div className="flex flex-wrap gap-2">
+              <BotaoLink href={`/professor/desafios/novo?temporada=${id}&tipo=relampago`} variante="secundario">
+                ⚡ Novo CaduRush
+              </BotaoLink>
+              <BotaoLink href={`/professor/desafios/novo?temporada=${id}`}>+ Desafio semanal</BotaoLink>
+            </div>
+          }
+        >
           {temporada.nome}
         </Titulo>
       </div>
@@ -71,7 +80,10 @@ export default async function PaginaTemporada({ params }: PageProps<"/professor/
                       className="flex flex-wrap items-center justify-between gap-2 py-3 hover:text-marca-700"
                     >
                       <span>
-                        <span className="font-medium">{d.titulo}</span>
+                        <span className="font-medium">
+                          {d.tipo === "relampago" && "⚡ "}
+                          {d.titulo}
+                        </span>
                         <span className="block text-sm text-slate-500">
                           {d.desafio_questoes[0]?.count ?? 0} questões · {formatarDataHora(d.abre_em)} →{" "}
                           {formatarDataHora(d.fecha_em)}

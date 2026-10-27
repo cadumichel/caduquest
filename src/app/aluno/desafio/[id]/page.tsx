@@ -36,6 +36,8 @@ export default async function PaginaDesafio({ params }: PageProps<"/aluno/desafi
       jaComecou={Boolean(tentativa)}
       tempoFixo={desafio.tempo_por_questao_s}
       saidaZera={desafio.saida_zera_questao}
+      relampago={desafio.tipo === "relampago"}
+      pontosPorAcerto={desafio.pontos_por_acerto}
     />
   );
 }

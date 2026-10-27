@@ -40,9 +40,14 @@ export type Questao = {
   origem: "manual" | "claude";
   criado_em: string;
 };
+export type TipoDesafio = "semanal" | "relampago";
 export type Desafio = {
   id: string;
   temporada_id: string;
+  /** Nem toda consulta traz; ausente = semanal. */
+  tipo?: TipoDesafio;
+  /** Código do dia do CaduRush (só relâmpago). */
+  codigo_dia?: string | null;
   titulo: string;
   abre_em: string;
   fecha_em: string;
