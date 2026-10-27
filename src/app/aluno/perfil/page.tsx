@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { Avatar } from "@/components/Avatar";
 import { exigirAluno } from "@/lib/aluno-sessao";
 import { medalhasDaTurma } from "@/lib/medalhas";
@@ -10,13 +11,13 @@ import { EscolherAvatar } from "./EscolherAvatar";
 
 export const metadata: Metadata = { title: "Meu perfil" };
 
-/** Título do aluno conforme os desafios vencidos. */
+/** Título do aluno conforme os desafios vencidos, com a medalha do guia visual. */
 function titulo(medalhas: number) {
-  if (medalhas >= 10) return "Lenda da História";
-  if (medalhas >= 5) return "Mestre do tempo";
-  if (medalhas >= 3) return "Historiador";
-  if (medalhas >= 1) return "Explorador";
-  return "Aprendiz";
+  if (medalhas >= 10) return { nome: "Lenda da História", medalha: "diamante" };
+  if (medalhas >= 5) return { nome: "Mestre do tempo", medalha: "coroa" };
+  if (medalhas >= 3) return { nome: "Historiador", medalha: "ouro" };
+  if (medalhas >= 1) return { nome: "Explorador", medalha: "prata" };
+  return { nome: "Aprendiz", medalha: "bronze" };
 }
 
 export default async function Perfil() {
@@ -33,10 +34,11 @@ export default async function Perfil() {
   const liberados = Math.min(medalhas, ORDEM_ESPECIAIS.length);
   const proximo = ORDEM_ESPECIAIS.find((i) => medalhasNecessarias(i) > medalhas);
   const personagem = PERSONAGENS[Math.abs(aluno.avatar) % TOTAL_PERSONAGENS];
+  const nivel = titulo(medalhas);
 
   return (
     <div className="space-y-5">
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-marca-600 via-marca-700 to-marca-900 p-6 text-white shadow-lg">
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-marca-600 via-marca-800 to-marca-950 p-6 text-white shadow-lg">
         <div className="pointer-events-none absolute -top-16 -right-16 size-48 rounded-full bg-white/10" />
         <div className="pointer-events-none absolute -bottom-20 -left-10 size-40 rounded-full bg-ouro/20" />
         <div className="relative flex flex-col items-center text-center">
@@ -44,8 +46,9 @@ export default async function Perfil() {
             <Avatar avatar={aluno.avatar} cor={aluno.cor} medalhas={medalhas} tamanho={120} />
           </div>
           <h1 className="mt-3 text-2xl font-extrabold">{aluno.apelido}</h1>
-          <span className="mt-1 rounded-full bg-ouro px-3 py-0.5 text-xs font-bold tracking-wide text-amber-950 uppercase">
-            {titulo(medalhas)}
+          <span className="mt-1 flex items-center gap-1.5 rounded-full bg-gradient-to-b from-ouro-claro to-ouro py-0.5 pr-3 pl-1 text-xs font-bold tracking-wide text-marca-950 uppercase">
+            <Image src={`/ilustracoes/medalha-${nivel.medalha}.png`} alt="" width={24} height={24} className="size-6" />
+            {nivel.nome}
           </span>
           <p className="mt-2 text-sm text-marca-100">
             {personagem.nome} · {personagem.epoca}
@@ -77,7 +80,14 @@ export default async function Perfil() {
         )}
       </section>
 
-      <section className="flex items-center gap-4 rounded-3xl border border-amber-200 bg-gradient-to-r from-amber-50 to-white p-4">
+      <section className="relative flex items-center gap-4 overflow-hidden rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100/70 p-4 pr-24">
+        <Image
+          src="/ilustracoes/bau.png"
+          alt=""
+          width={120}
+          height={86}
+          className="pointer-events-none absolute -right-2 bottom-1 h-16 w-auto opacity-90"
+        />
         {proximo !== undefined ? (
           <>
             <div className="relative">
@@ -85,7 +95,7 @@ export default async function Perfil() {
               <span className="absolute inset-0 flex items-center justify-center text-xl">🔒</span>
             </div>
             <div className="flex-1">
-              <p className="text-sm font-bold text-amber-900">Próximo especial: {PERSONAGENS[proximo].nome}</p>
+              <p className="text-sm font-bold text-marca-900">Próximo especial: {PERSONAGENS[proximo].nome}</p>
               <p className="text-xs text-amber-800">
                 Vença mais {medalhasNecessarias(proximo) - medalhas}{" "}
                 {medalhasNecessarias(proximo) - medalhas === 1 ? "desafio" : "desafios"} para liberar.

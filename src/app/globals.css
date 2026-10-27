@@ -1,19 +1,28 @@
 @import "tailwindcss";
 
 @theme {
-  --color-marca-50: #eef2ff;
-  --color-marca-100: #e0e7ff;
-  --color-marca-500: #6366f1;
-  --color-marca-600: #4f46e5;
-  --color-marca-700: #4338ca;
-  --color-marca-900: #312e81;
-  --color-ouro: #f59e0b;
+  /* Roxo e dourado do logo (capacete espartano). */
+  --color-marca-50: #f3f0ff;
+  --color-marca-100: #e6defe;
+  --color-marca-200: #cdbffc;
+  --color-marca-300: #a991f7;
+  --color-marca-400: #8263f1;
+  --color-marca-500: #6141e6;
+  --color-marca-600: #4724d0;
+  --color-marca-700: #3815ad;
+  --color-marca-800: #2a0f8a;
+  --color-marca-900: #1f0a6b;
+  --color-marca-950: #140548;
+  --color-ouro: #f5a913;
+  --color-ouro-claro: #fdd34c;
+  --color-ouro-escuro: #d9860b;
+  --color-tinta: #1e1550;
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
 body {
-  background: #f8fafc;
-  color: #0f172a;
+  background: #f6f4fd;
+  color: var(--color-tinta);
 }
 
 /* Tela do desafio: dificulta copiar o enunciado para outra ferramenta. */

@@ -4,8 +4,12 @@ import type { ComponentProps, ReactNode } from "react";
 const base =
   "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50";
 const variantes = {
-  primario: "bg-marca-600 text-white hover:bg-marca-700",
-  secundario: "border border-slate-300 bg-white text-slate-800 hover:bg-slate-50",
+  primario:
+    "bg-gradient-to-b from-marca-500 to-marca-700 text-white shadow-md shadow-marca-700/25 hover:from-marca-600 hover:to-marca-800",
+  secundario: "border border-marca-100 bg-marca-50 text-marca-800 hover:bg-marca-100",
+  sucesso:
+    "bg-gradient-to-b from-emerald-500 to-emerald-700 text-white shadow-md shadow-emerald-700/25 hover:from-emerald-600 hover:to-emerald-800",
+  ouro: "bg-gradient-to-b from-ouro-claro to-ouro text-marca-950 shadow-md shadow-ouro-escuro/30 hover:to-ouro-escuro",
   perigo: "border border-red-200 bg-white text-red-700 hover:bg-red-50",
   fantasma: "text-marca-700 hover:bg-marca-50",
 };
@@ -34,7 +38,7 @@ export function Cartao({ className = "", ...props }: ComponentProps<"section">) 
 export function Titulo({ children, acao }: { children: ReactNode; acao?: ReactNode }) {
   return (
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <h1 className="text-2xl font-bold tracking-tight">{children}</h1>
+      <h1 className="text-2xl font-extrabold tracking-tight text-marca-900">{children}</h1>
       {acao}
     </div>
   );

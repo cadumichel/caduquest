@@ -267,6 +267,7 @@ function TelaQuestao({
 
       {erroRede && <Aviso>Falha de conexão. Toque em confirmar de novo.</Aviso>}
       <Botao
+        variante="sucesso"
         className="sticky bottom-4 w-full py-4 text-base shadow-lg"
         disabled={pendente || (!completa && resposta.tipo === "multipla_escolha")}
         onClick={() => {
