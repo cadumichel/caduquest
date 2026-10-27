@@ -17,8 +17,12 @@ export function FormEntrar({ aviso, lembrado }: { aviso?: string; lembrado: Lemb
 
   const campoPin = (cadastro: boolean) => (
     <Campo
-      rotulo={cadastro ? "Crie um PIN de 4 números" : "PIN"}
-      dica={cadastro ? "Guarde bem: você vai usá-lo sempre para entrar." : undefined}
+      rotulo={cadastro ? "Crie sua senha (PIN de 4 números)" : "Sua senha (PIN)"}
+      dica={
+        cadastro
+          ? "O PIN é a sua senha: 4 números que só você sabe. Você vai digitá-lo toda vez que entrar. Anote em lugar seguro e não conte para ninguém."
+          : "São os 4 números que você criou no primeiro acesso."
+      }
     >
       <Entrada
         name="pin"
