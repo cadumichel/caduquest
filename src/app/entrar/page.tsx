@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Logo } from "@/components/Marca";
 import { Cartao } from "@/components/ui";
 import { alunoLembrado, obterAluno } from "@/lib/aluno-sessao";
 import { FormEntrar } from "./FormEntrar";
@@ -15,8 +16,8 @@ export default async function PaginaEntrar({ searchParams }: PageProps<"/entrar"
 
   return (
     <main className="mx-auto w-full max-w-sm flex-1 px-4 py-10">
-      <Link href="/" className="mb-6 block text-center text-2xl font-extrabold tracking-tight">
-        CaduQuest
+      <Link href="/" className="mb-6 flex justify-center">
+        <Logo largura={230} prioridade />
       </Link>
       <Cartao>
         <FormEntrar aviso={aviso} lembrado={await alunoLembrado()} />

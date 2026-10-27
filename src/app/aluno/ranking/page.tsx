@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { Avatar } from "@/components/Avatar";
 import { Cartao, Vazio } from "@/components/ui";
 import { exigirAluno } from "@/lib/aluno-sessao";
@@ -26,10 +27,22 @@ export default async function Ranking() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <p className="text-sm text-slate-500">{temporada.nome}</p>
-        <h1 className="text-2xl font-bold">Ranking da temporada</h1>
-      </div>
+      <section className="relative overflow-hidden rounded-3xl bg-marca-900 text-white shadow-lg shadow-marca-900/20">
+        <Image
+          src="/ilustracoes/cartao-ranking.webp"
+          alt=""
+          fill
+          sizes="(max-width: 672px) 100vw, 672px"
+          className="object-cover object-top opacity-70"
+          priority
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-marca-950/90 via-marca-900/60 to-transparent" />
+        <div className="relative px-6 py-8">
+          <p className="text-sm font-medium text-ouro-claro">{temporada.nome}</p>
+          <h1 className="text-2xl font-extrabold">Ranking da temporada</h1>
+          <p className="mt-1 text-sm text-marca-100">Veja sua posição e compare seu desempenho.</p>
+        </div>
+      </section>
       <Cartao className="p-0">
         <ol className="divide-y divide-slate-100">
           {top.map((l) => (

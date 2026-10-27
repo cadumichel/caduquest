@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { MuralRanking } from "@/components/MuralRanking";
 import { BotaoLink, Cartao, Etiqueta, Vazio } from "@/components/ui";
@@ -58,51 +59,87 @@ export default async function MapaTemporada() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl bg-gradient-to-br from-marca-600 to-marca-900 p-6 text-white shadow-lg">
-        <p className="text-sm text-marca-100">
-          {aluno.turmaNome} · {aluno.escolaNome}
-        </p>
-        <h1 className="mt-1 text-2xl font-extrabold">{temporada.nome}</h1>
-        {temporada.narrativa && <p className="mt-2 text-sm text-marca-100">{temporada.narrativa}</p>}
-        <div className="mt-5 grid grid-cols-3 gap-3 text-center">
-          <div className="rounded-2xl bg-white/10 p-3">
-            <p className="text-2xl font-bold">{eu?.pontos ?? 0}</p>
-            <p className="text-xs text-marca-100">pontos</p>
-          </div>
-          <Link href="/aluno/ranking" className="rounded-2xl bg-white/10 p-3">
-            <p className="text-2xl font-bold">{eu ? `${eu.posicao}º` : "–"}</p>
-            <p className="text-xs text-marca-100">de {total}</p>
-          </Link>
-          <div className="rounded-2xl bg-white/10 p-3">
-            <p className="text-2xl font-bold">{faltam >= 0 ? faltam : "✓"}</p>
-            <p className="text-xs text-marca-100">{faltam >= 0 ? "dias até a prova" : "temporada encerrada"}</p>
-          </div>
-        </div>
-        <div className="mt-3 flex items-center gap-3 rounded-2xl bg-white/10 px-4 py-3">
-          <span className={`text-3xl ${eu?.sequencia ? "" : "opacity-40 grayscale"}`}>🔥</span>
-          <div className="text-sm">
-            <p className="font-bold">
-              {eu?.sequencia
-                ? `Ofensiva de ${eu.sequencia} ${eu.sequencia === 1 ? "semana" : "semanas seguidas"}`
-                : "Comece sua ofensiva!"}
-              {eu && eu.bonus > 0 && <span className="font-normal text-marca-100"> · +{eu.bonus} pts de bônus</span>}
-            </p>
-            <p className="text-xs text-marca-100">
-              Termine todos os desafios da semana: +20 pts, e +25 a partir da 2ª semana seguida.
-            </p>
+      <section className="relative overflow-hidden rounded-3xl bg-marca-900 text-white shadow-lg shadow-marca-900/20">
+        <Image
+          src="/ilustracoes/cartao-mapa.webp"
+          alt=""
+          fill
+          sizes="(max-width: 672px) 100vw, 672px"
+          className="object-cover opacity-60"
+          priority
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-marca-950/40 via-marca-900/75 to-marca-900" />
+        <div className="relative p-6">
+          <p className="text-sm font-medium text-ouro-claro drop-shadow">
+            {aluno.turmaNome} · {aluno.escolaNome}
+          </p>
+          <h1 className="mt-1 text-2xl font-extrabold drop-shadow">{temporada.nome}</h1>
+          {temporada.narrativa && <p className="mt-2 text-sm text-marca-100">{temporada.narrativa}</p>}
+          <div className="mt-5 grid grid-cols-3 gap-3 text-center">
+            <div className="rounded-2xl bg-white/10 p-3 ring-1 ring-white/15 backdrop-blur-sm">
+              <p className="text-2xl font-bold">{eu?.pontos ?? 0}</p>
+              <p className="text-xs text-marca-100">pontos</p>
+            </div>
+            <Link href="/aluno/ranking" className="rounded-2xl bg-white/10 p-3 ring-1 ring-white/15 backdrop-blur-sm">
+              <p className="text-2xl font-bold">{eu ? `${eu.posicao}º` : "–"}</p>
+              <p className="text-xs text-marca-100">de {total}</p>
+            </Link>
+            <div className="rounded-2xl bg-white/10 p-3 ring-1 ring-white/15 backdrop-blur-sm">
+              <p className="text-2xl font-bold">{faltam >= 0 ? faltam : "✓"}</p>
+              <p className="text-xs text-marca-100">{faltam >= 0 ? "dias até a prova" : "temporada encerrada"}</p>
+            </div>
           </div>
         </div>
       </section>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <section className="flex items-center gap-3 rounded-3xl bg-gradient-to-br from-marca-700 to-marca-900 p-4 text-white shadow-md">
+          <Image
+            src="/ilustracoes/sequencia.png"
+            alt=""
+            width={64}
+            height={76}
+            className={`h-16 w-auto shrink-0 ${eu?.sequencia ? "" : "opacity-50 grayscale"}`}
+          />
+          <div className="min-w-0 text-sm">
+            <p className="text-base font-extrabold text-ouro-claro">Ofensiva</p>
+            <p className="font-bold">
+              {eu?.sequencia
+                ? `${eu.sequencia} ${eu.sequencia === 1 ? "semana" : "semanas seguidas"}!`
+                : "Comece sua ofensiva!"}
+              {eu && eu.bonus > 0 && <span className="font-normal text-marca-100"> · +{eu.bonus} pts</span>}
+            </p>
+            <Sequencia semanas={eu?.sequencia ?? 0} />
+            <p className="mt-1 text-xs text-marca-100">
+              Termine todos os desafios da semana: +20 pts, e +25 a partir da 2ª semana seguida.
+            </p>
+          </div>
+        </section>
+
+        <Link
+          href="/aluno/perfil"
+          className="flex items-center gap-3 rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100/70 p-4 shadow-sm transition hover:shadow-md"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-base font-extrabold text-marca-900">Recompensas</p>
+            <p className="text-sm text-marca-900/80">Vença desafios e desbloqueie novos personagens!</p>
+          </div>
+          <Image src="/ilustracoes/bau.png" alt="" width={120} height={86} className="h-16 w-auto shrink-0" />
+        </Link>
+      </div>
 
       <MuralRanking top={top} eu={eu} total={total} medalhas={medalhas} alunoId={aluno.id} />
 
       {temporada.capitulos.length > 0 && (
         <Cartao>
-          <h2 className="mb-4 font-semibold">Trilha da temporada</h2>
-          <ol className="relative ml-3 space-y-4 border-l-2 border-dashed border-marca-200 pl-6">
+          <h2 className="mb-4 flex items-center gap-2 font-extrabold text-marca-900">
+            <Image src="/ilustracoes/icone-mapa.png" alt="" width={32} height={24} className="h-6 w-auto" />
+            Trilha da temporada
+          </h2>
+          <ol className="relative ml-3 space-y-4 border-l-2 border-dashed border-marca-300 pl-6">
             {temporada.capitulos.map((cap, i) => (
               <li key={i} className="relative">
-                <span className="absolute -left-[35px] flex h-6 w-6 items-center justify-center rounded-full bg-marca-600 text-xs font-bold text-white">
+                <span className="absolute -left-[35px] flex h-6 w-6 items-center justify-center rounded-full bg-marca-600 text-xs font-bold text-white ring-2 ring-marca-100">
                   {i + 1}
                 </span>
                 {cap}
@@ -119,7 +156,10 @@ export default async function MapaTemporada() {
       )}
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Desafios abertos</h2>
+        <h2 className="flex items-center gap-2 text-lg font-extrabold text-marca-900">
+          <Image src="/ilustracoes/icone-desafios.png" alt="" width={36} height={28} className="h-7 w-auto" />
+          Desafios abertos
+        </h2>
         {abertos.length === 0 && <Vazio>Nenhum desafio aberto agora.</Vazio>}
         {abertos.map((d) => {
           const t = tentativas.get(d.id);
@@ -165,7 +205,7 @@ export default async function MapaTemporada() {
                   ✓ {Number(t!.pontos)} pts
                 </BotaoLink>
               ) : (
-                <BotaoLink href={`/aluno/desafio/${d.id}`}>{t ? "Continuar" : "Jogar"}</BotaoLink>
+                <BotaoLink href={`/aluno/desafio/${d.id}`}>▶ {t ? "Continuar" : "Começar desafio"}</BotaoLink>
               )}
             </Cartao>
           );
@@ -174,7 +214,7 @@ export default async function MapaTemporada() {
 
       {outros.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold">Outros desafios</h2>
+          <h2 className="text-lg font-extrabold text-marca-900">Outros desafios</h2>
           {outros.map((d) => {
             const situacao = situacaoDesafio(d);
             const t = tentativas.get(d.id);
@@ -205,6 +245,25 @@ export default async function MapaTemporada() {
           })}
         </section>
       )}
+    </div>
+  );
+}
+
+/** Bolinhas da ofensiva, como no guia visual: até 5 marcadas e a próxima em aberto. */
+function Sequencia({ semanas }: { semanas: number }) {
+  const marcadas = Math.min(semanas, 5);
+  return (
+    <div className="mt-1.5 flex gap-1" aria-hidden>
+      {Array.from({ length: 6 }, (_, i) => (
+        <span
+          key={i}
+          className={`flex size-5 items-center justify-center rounded-full text-[11px] font-black ${
+            i < marcadas ? "bg-ouro-claro text-marca-900" : "border-2 border-white/40"
+          }`}
+        >
+          {i < marcadas ? "✓" : ""}
+        </span>
+      ))}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
 import type { LinhaRanking } from "@/lib/ranking";
@@ -30,7 +31,10 @@ export function MuralRanking({
   return (
     <section className="overflow-hidden rounded-3xl border border-amber-200 bg-gradient-to-b from-amber-50 to-white shadow-sm">
       <div className="flex items-center justify-between px-5 pt-4">
-        <h2 className="text-lg font-extrabold text-amber-900">🏆 Mural da turma</h2>
+        <h2 className="flex items-center gap-2 text-lg font-extrabold text-marca-900">
+          <Image src="/ilustracoes/icone-ranking.png" alt="" width={28} height={28} className="size-7 object-contain" />
+          Mural da turma
+        </h2>
         <Link href="/aluno/ranking" className="text-sm font-semibold text-marca-700 underline">
           Ver ranking
         </Link>

@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { BASICOS, medalhasNecessarias, ORDEM_ESPECIAIS, PERSONAGENS, TOTAL_PERSONAGENS } from "../personagens";
 
@@ -22,5 +24,9 @@ describe("personagens", () => {
     expect(medalhasNecessarias(35)).toBe(0);
     expect(medalhasNecessarias(20)).toBe(1);
     expect(medalhasNecessarias(ORDEM_ESPECIAIS[14])).toBe(15);
+  });
+
+  it("tem uma ilustração para cada personagem", () => {
+    for (const p of PERSONAGENS) expect(existsSync(join(process.cwd(), "public", p.imagem)), p.nome).toBe(true);
   });
 });

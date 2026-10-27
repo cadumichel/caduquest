@@ -66,7 +66,7 @@ export function EscolherAvatar({
       </section>
 
       <section>
-        <h3 className="mb-2 font-semibold">Cor de fundo</h3>
+        <h3 className="mb-2 font-semibold">Cor da moldura</h3>
         <div className="flex flex-wrap gap-2">
           {CORES_AVATAR.map((c, i) => (
             <button

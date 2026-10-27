@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Logo } from "@/components/Marca";
 import { Aviso, Botao, Cartao } from "@/components/ui";
 import { entrarComGoogle } from "./actions";
 import { FormLogin } from "./FormLogin";
@@ -15,8 +16,8 @@ export default async function LoginProfessor({ searchParams }: PageProps<"/profe
   const { erro } = await searchParams;
   return (
     <main className="mx-auto w-full max-w-sm flex-1 px-4 py-10">
-      <Link href="/" className="mb-1 block text-center text-2xl font-extrabold tracking-tight">
-        CaduQuest
+      <Link href="/" className="mb-2 flex justify-center">
+        <Logo largura={230} prioridade />
       </Link>
       <p className="mb-6 text-center text-sm text-slate-500">Área do professor</p>
       <Cartao className="space-y-4">

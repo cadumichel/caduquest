@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Revisão gamificada de História",
     start_url: "/aluno",
     display: "standalone",
-    background_color: "#f8fafc",
-    theme_color: "#4f46e5",
+    background_color: "#f6f4fd",
+    theme_color: "#1f0a6b",
     lang: "pt-BR",
     icons: [
       { src: "/icone-192.png", sizes: "192x192", type: "image/png" },
