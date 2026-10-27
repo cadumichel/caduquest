@@ -1,7 +1,7 @@
 import "server-only";
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { dataHoraLocalParaIso, formatarDataHora } from "@/lib/datas";
+import { dataHoraLocalParaIso, formatarData, formatarDataHora } from "@/lib/datas";
 import { HABILIDADES } from "@/lib/habilidades";
 import {
   NOME_TIPO,
@@ -24,6 +24,11 @@ const dataHora = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Use AAAA-MM-DDTHH:MM")
   .describe("Horário de Brasília, formato AAAA-MM-DDTHH:MM");
+
+const data = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use AAAA-MM-DD")
+  .describe("Data no formato AAAA-MM-DD");
 
 const schemaQuestao = z.object({
   tipo: z.enum(TIPOS),
@@ -75,7 +80,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
     {
       title: "Listar escolas, turmas e temporadas",
       description:
-        "Lista as escolas, turmas e temporadas do CaduQuest, com os capítulos de cada temporada e os desafios já criados. Use antes de criar questões (para usar o nome exato do capítulo) e antes de criar desafios (para obter o temporada_id).",
+        "Lista as escolas, turmas e temporadas do CaduQuest, com os capítulos de cada temporada e os desafios já criados. Use antes de criar questões (para usar o nome exato do capítulo), antes de criar temporadas (turma_id) e antes de criar ou editar desafios (temporada_id, desafio id).",
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
@@ -85,7 +90,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
       const { data: escolas } = await db
         .from("escolas")
         .select(
-          "nome, periodo, turmas(nome, serie, codigo, temporadas(id, nome, inicio, data_prova, capitulos, desafios(titulo, abre_em, fecha_em)))",
+          "nome, periodo, turmas(id, nome, serie, codigo, temporadas(id, nome, inicio, data_prova, capitulos, desafios(id, titulo, abre_em, fecha_em)))",
         )
         .eq("professor_id", professorId)
         .order("nome");
@@ -290,6 +295,247 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         return falha("Não foi possível salvar as questões do desafio. Nada foi criado.");
       }
       return resultado({ criado: previa, ver_em: `${origem}/professor/desafios/${desafio.id}` });
+    },
+  );
+  server.registerTool(
+    "criar_temporada",
+    {
+      title: "Criar temporada",
+      description:
+        "Cria uma temporada (o período de revisão de uma turma, que termina na prova). Em duas etapas: chame primeiro com confirmar=false e mostre a prévia ao professor; só chame com confirmar=true depois que ele aprovar. Pegue o turma_id em listar_turmas.",
+      inputSchema: z.object({
+        turma_id: z.string().uuid(),
+        nome: z.string().min(1).max(120).describe('Ex.: "1º trimestre: Brasil Colônia".'),
+        inicio: data,
+        data_prova: data.describe("Dia da prova, que encerra a temporada (AAAA-MM-DD)."),
+        capitulos: z
+          .array(z.string().min(1).max(200))
+          .max(30)
+          .describe("Capítulos ou conteúdos da temporada; as questões usam estes nomes."),
+        narrativa: z.string().max(2000).optional().describe("Texto opcional de abertura que os alunos veem."),
+        confirmar: z.boolean(),
+      }),
+    },
+    async (args) => {
+      const professorId = await professorDoConector();
+      const db = criarClienteAdmin();
+      if (args.data_prova < args.inicio) return falha("A data da prova deve ser depois do início.");
+      const { data: turma } = await db
+        .from("turmas")
+        .select("id, nome, escolas!inner(nome, professor_id), temporadas(nome, inicio, data_prova)")
+        .eq("id", args.turma_id)
+        .eq("escolas.professor_id", professorId)
+        .maybeSingle();
+      if (!turma) return falha("Turma não encontrada. Use listar_turmas para obter o turma_id.");
+
+      const escola = turma.escolas as unknown as { nome: string };
+      const sobrepostas = ((turma.temporadas ?? []) as { nome: string; inicio: string; data_prova: string }[])
+        .filter((t) => t.inicio <= args.data_prova && args.inicio <= t.data_prova)
+        .map((t) => `${t.nome} (${formatarData(t.inicio)} a ${formatarData(t.data_prova)})`);
+      const capitulos = [...new Set(args.capitulos.map((c) => c.trim()).filter(Boolean))];
+      const previa = {
+        turma: `${turma.nome} · ${escola.nome}`,
+        nome: args.nome.trim(),
+        inicio: formatarData(args.inicio),
+        prova: formatarData(args.data_prova),
+        capitulos,
+        narrativa: args.narrativa?.trim() || null,
+        ...(sobrepostas.length && {
+          aviso: `Esta turma já tem temporada no mesmo período: ${sobrepostas.join("; ")}.`,
+        }),
+      };
+      if (!args.confirmar) return resultado({ previa, proximo_passo: "Mostre a prévia e confirme com o professor." });
+
+      const { data: temporada, error } = await db
+        .from("temporadas")
+        .insert({
+          professor_id: professorId,
+          turma_id: args.turma_id,
+          nome: previa.nome,
+          inicio: args.inicio,
+          data_prova: args.data_prova,
+          capitulos,
+          narrativa: previa.narrativa,
+        })
+        .select("id")
+        .single();
+      if (error || !temporada) return falha("Não foi possível criar a temporada.");
+      return resultado({
+        criada: previa,
+        temporada_id: temporada.id,
+        ver_em: `${origem}/professor/temporadas/${temporada.id}`,
+      });
+    },
+  );
+
+  server.registerTool(
+    "editar_temporada",
+    {
+      title: "Editar temporada",
+      description:
+        "Altera nome, datas, capítulos ou narrativa de uma temporada. Só os campos enviados mudam; capitulos substitui a lista inteira. Em duas etapas: confirmar=false mostra o antes e depois; confirmar=true grava, só depois da aprovação do professor.",
+      inputSchema: z.object({
+        temporada_id: z.string().uuid(),
+        nome: z.string().min(1).max(120).optional(),
+        inicio: data.optional(),
+        data_prova: data.optional(),
+        capitulos: z.array(z.string().min(1).max(200)).max(30).optional(),
+        narrativa: z.string().max(2000).optional().describe('Envie "" para apagar.'),
+        confirmar: z.boolean(),
+      }),
+    },
+    async (args) => {
+      const professorId = await professorDoConector();
+      const db = criarClienteAdmin();
+      const { data: atual } = await db
+        .from("temporadas")
+        .select("id, nome, inicio, data_prova, capitulos, narrativa")
+        .eq("id", args.temporada_id)
+        .eq("professor_id", professorId)
+        .maybeSingle();
+      if (!atual) return falha("Temporada não encontrada. Use listar_turmas para obter o id.");
+
+      const novo = {
+        nome: args.nome?.trim() ?? atual.nome,
+        inicio: args.inicio ?? atual.inicio,
+        data_prova: args.data_prova ?? atual.data_prova,
+        capitulos: args.capitulos ? [...new Set(args.capitulos.map((c) => c.trim()).filter(Boolean))] : atual.capitulos,
+        narrativa: args.narrativa === undefined ? atual.narrativa : args.narrativa.trim() || null,
+      };
+      if (novo.data_prova < novo.inicio) return falha("A data da prova deve ser depois do início.");
+      const resumo = (t: typeof novo) => ({
+        nome: t.nome,
+        inicio: formatarData(t.inicio),
+        prova: formatarData(t.data_prova),
+        capitulos: t.capitulos,
+        narrativa: t.narrativa,
+      });
+      const previa = { antes: resumo(atual), depois: resumo(novo) };
+      if (!args.confirmar) return resultado({ previa, proximo_passo: "Mostre a prévia e confirme com o professor." });
+
+      const { error } = await db.from("temporadas").update(novo).eq("id", atual.id);
+      if (error) return falha("Não foi possível salvar a temporada.");
+      return resultado({ salvo: previa.depois, ver_em: `${origem}/professor/temporadas/${atual.id}` });
+    },
+  );
+
+  server.registerTool(
+    "editar_desafio",
+    {
+      title: "Editar desafio",
+      description:
+        "Altera título, datas, pontos, tempo por questão, regra de saída de tela ou as questões de um desafio. Só os campos enviados mudam. As questões só podem ser trocadas enquanto nenhum aluno tiver começado o desafio. Em duas etapas: confirmar=false mostra o antes e depois; confirmar=true grava, só depois da aprovação do professor.",
+      inputSchema: z.object({
+        desafio_id: z.string().uuid(),
+        titulo: z.string().min(1).optional(),
+        abre_em: dataHora.optional(),
+        fecha_em: dataHora.optional(),
+        pontos_por_acerto: z.number().int().min(1).max(100).optional(),
+        tempo_por_questao_s: z
+          .number()
+          .int()
+          .min(0)
+          .max(TEMPO_MAX_S)
+          .optional()
+          .describe(`Segundos (${TEMPO_MIN_S} a ${TEMPO_MAX_S}); 0 volta a usar o tempo de cada questão.`),
+        saida_zera_questao: z.boolean().optional(),
+        questoes: z
+          .array(z.string().uuid())
+          .min(5)
+          .max(15)
+          .optional()
+          .describe("Nova lista completa de questões publicadas, na ordem."),
+        confirmar: z.boolean(),
+      }),
+    },
+    async (args) => {
+      const professorId = await professorDoConector();
+      const db = criarClienteAdmin();
+      const { data: atual } = await db
+        .from("desafios")
+        .select(
+          "id, titulo, abre_em, fecha_em, pontos_por_acerto, tempo_por_questao_s, saida_zera_questao, desafio_questoes(posicao, questoes(id, enunciado))",
+        )
+        .eq("id", args.desafio_id)
+        .eq("professor_id", professorId)
+        .maybeSingle();
+      if (!atual) return falha("Desafio não encontrado. Use listar_turmas para obter o id.");
+      if (args.tempo_por_questao_s && args.tempo_por_questao_s < TEMPO_MIN_S) {
+        return falha(
+          `O tempo por questão vai de ${TEMPO_MIN_S} a ${TEMPO_MAX_S} s (ou 0 para o tempo de cada questão).`,
+        );
+      }
+
+      const questoesAtuais = (
+        (atual.desafio_questoes ?? []) as unknown as {
+          posicao: number;
+          questoes: { id: string; enunciado: string };
+        }[]
+      )
+        .sort((a, b) => a.posicao - b.posicao)
+        .map((dq) => dq.questoes);
+      let novasQuestoes = questoesAtuais;
+      if (args.questoes) {
+        const { count } = await db
+          .from("tentativas")
+          .select("id", { count: "exact", head: true })
+          .eq("desafio_id", atual.id);
+        if (count)
+          return falha(`${count} aluno(s) já começaram este desafio; as questões não podem mais ser trocadas.`);
+        if (new Set(args.questoes).size !== args.questoes.length) return falha("Há questões repetidas na lista.");
+        const { data: encontradas } = await db
+          .from("questoes")
+          .select("id, status, enunciado")
+          .in("id", args.questoes)
+          .eq("professor_id", professorId);
+        const porId = new Map((encontradas ?? []).map((q) => [q.id, q]));
+        const problemas = args.questoes.flatMap((id) => {
+          const q = porId.get(id);
+          if (!q) return [`${id}: não existe`];
+          if (q.status !== "publicada") return [`${id}: está como ${q.status}, publique antes`];
+          return [];
+        });
+        if (problemas.length) return falha(`Questões inválidas:\n${problemas.join("\n")}`);
+        novasQuestoes = args.questoes.map((id) => porId.get(id)!);
+      }
+
+      const novo = {
+        titulo: args.titulo?.trim() ?? atual.titulo,
+        abre_em: args.abre_em ? dataHoraLocalParaIso(args.abre_em) : atual.abre_em,
+        fecha_em: args.fecha_em ? dataHoraLocalParaIso(args.fecha_em) : atual.fecha_em,
+        pontos_por_acerto: args.pontos_por_acerto ?? atual.pontos_por_acerto,
+        tempo_por_questao_s:
+          args.tempo_por_questao_s === undefined ? atual.tempo_por_questao_s : args.tempo_por_questao_s || null,
+        saida_zera_questao: args.saida_zera_questao ?? atual.saida_zera_questao,
+      };
+      if (new Date(novo.fecha_em) <= new Date(novo.abre_em)) return falha("O fechamento deve ser depois da abertura.");
+      const resumo = (d: typeof novo, qs: { enunciado: string }[]) => ({
+        titulo: d.titulo,
+        abre: formatarDataHora(d.abre_em),
+        fecha: formatarDataHora(d.fecha_em),
+        pontos_por_acerto: d.pontos_por_acerto,
+        tempo_por_questao: d.tempo_por_questao_s ? `${d.tempo_por_questao_s} s em todas` : "o de cada questão",
+        sair_da_tela_zera: d.saida_zera_questao,
+        questoes: qs.map((q, i) => `${i + 1}. ${q.enunciado}`),
+      });
+      const previa = { antes: resumo(atual, questoesAtuais), depois: resumo(novo, novasQuestoes) };
+      if (!args.confirmar) return resultado({ previa, proximo_passo: "Mostre a prévia e confirme com o professor." });
+
+      const { error } = await db.from("desafios").update(novo).eq("id", atual.id);
+      if (error) return falha("Não foi possível salvar o desafio.");
+      if (args.questoes) {
+        await db.from("desafio_questoes").delete().eq("desafio_id", atual.id);
+        const { error: erroQuestoes } = await db
+          .from("desafio_questoes")
+          .insert(args.questoes.map((questao_id, posicao) => ({ desafio_id: atual.id, questao_id, posicao })));
+        if (erroQuestoes) {
+          await db
+            .from("desafio_questoes")
+            .insert(questoesAtuais.map((q, posicao) => ({ desafio_id: atual.id, questao_id: q.id, posicao })));
+          return falha("Não foi possível trocar as questões; as anteriores foram mantidas.");
+        }
+      }
+      return resultado({ salvo: previa.depois, ver_em: `${origem}/professor/desafios/${atual.id}` });
     },
   );
 }
