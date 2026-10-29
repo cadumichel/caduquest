@@ -3,6 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { gerarCodigoDia, PONTOS_RELAMPAGO } from "@/lib/cadurush";
 import { dataHoraLocalParaIso, formatarData, formatarDataHora } from "@/lib/datas";
+import { cartasDaTurma } from "@/lib/carta-coringa";
 import { HABILIDADES } from "@/lib/habilidades";
 import {
   NOME_TIPO,
@@ -85,7 +86,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
     {
       title: "Listar escolas, turmas e temporadas",
       description:
-        "Lista as escolas, turmas e temporadas do CaduQuest, com os capítulos de cada temporada e os desafios já criados. Use antes de criar questões (para usar o nome exato do capítulo), antes de criar temporadas (turma_id) e antes de criar ou editar desafios (temporada_id, desafio id).",
+        "Lista as escolas, turmas e temporadas do CaduQuest, com os capítulos de cada temporada e os desafios já criados. Use antes de criar questões (para usar o nome exato do capítulo), antes de criar temporadas (turma_id) e antes de criar ou editar desafios (temporada_id, desafio id). Também traz, em cartas_coringa, os temas que os campeões da última temporada escolheram para a próxima prova: quando o professor pedir a prova, inclua uma questão sobre cada tema e avise que ela é a carta coringa.",
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
@@ -99,7 +100,20 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         )
         .eq("professor_id", professorId)
         .order("nome");
-      return resultado({ escolas: escolas ?? [] });
+      const turmas = (escolas ?? []).flatMap((e) => (e.turmas ?? []) as { id: string; nome: string }[]);
+      const cartas = (
+        await Promise.all(
+          turmas.map(async (t) =>
+            (await cartasDaTurma(db, t.id)).map((c) => ({
+              turma: t.nome,
+              aluno: c.apelido,
+              temporada_vencida: c.temporadaNome,
+              tema: c.tema,
+            })),
+          ),
+        )
+      ).flat();
+      return resultado({ escolas: escolas ?? [], cartas_coringa: cartas });
     },
   );
 
