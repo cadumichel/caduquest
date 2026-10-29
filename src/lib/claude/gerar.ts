@@ -56,7 +56,7 @@ Regras de conteúdo:
 - Alternativas com tamanho e estilo parecidos, para que a correta não se destaque.
 - Prefira questões que exigem raciocínio (relação, contexto, interpretação) a decoreba solta.
 - Português do Brasil, linguagem clara para a série informada. Enunciados curtos: o aluno tem 40 a 60 segundos.
-- Explicação: 1 ou 2 frases dizendo por que a resposta certa é certa, para quem errou.
+- Explicação: 2 a 4 frases dizendo por que a resposta certa é certa e, na múltipla escolha, o erro de cada distrator.
 
 Regras por tipo:
 - multipla_escolha: 4 alternativas em "alternativas" e o índice (0 a 3) em "indice_correta". Varie a posição da correta.

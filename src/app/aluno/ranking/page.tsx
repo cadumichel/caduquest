@@ -6,7 +6,9 @@ import { medalhasDaTurmaDoAluno, temporadaAtualDoAluno } from "@/lib/aluno-dados
 import { exigirAluno } from "@/lib/aluno-sessao";
 import { rankingParaAluno } from "@/lib/ranking";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
-import { rankingDaTemporada } from "@/lib/temporada-dados";
+import { situacaoDaTemporada } from "@/lib/temporada-dados";
+import { MetaTurma } from "@/components/MetaTurma";
+import type { Divisao } from "@/lib/ligas";
 
 export const metadata: Metadata = { title: "Ranking" };
 
@@ -18,12 +20,14 @@ export default async function Ranking() {
   const temporada = await temporadaAtualDoAluno(aluno.turmaId);
   if (!temporada) return <Vazio>Ainda não há temporada.</Vazio>;
 
-  const [ranking, medalhas] = await Promise.all([
-    rankingDaTemporada(db, temporada),
+  const [{ ranking, meta, ligas }, medalhas] = await Promise.all([
+    situacaoDaTemporada(db, temporada),
     medalhasDaTurmaDoAluno(aluno.turmaId),
   ]);
   const { top, eu, total } = rankingParaAluno(ranking, aluno.id);
   const euNoTop = eu && top.some((l) => l.alunoId === eu.alunoId);
+  const minhaLiga = ligas.find((l) => l.membros.some((m) => m.alunoId === aluno.id));
+  const linhaDe = new Map(ranking.map((l) => [l.alunoId, l]));
 
   return (
     <div className="space-y-5">
@@ -43,6 +47,11 @@ export default async function Ranking() {
           <p className="mt-1 text-sm text-marca-100">Veja sua posição e compare seu desempenho.</p>
         </div>
       </section>
+      {minhaLiga && <LigaDaSemana liga={minhaLiga} alunoId={aluno.id} linhaDe={linhaDe} medalhas={medalhas} />}
+
+      <MetaTurma meta={meta} />
+
+      <h2 className="text-lg font-extrabold text-marca-900">Ranking geral da temporada</h2>
       <Cartao className="p-0">
         <ol className="divide-y divide-slate-100">
           {top.map((l) => (
@@ -70,9 +79,67 @@ export default async function Ranking() {
         </Cartao>
       )}
       <p className="text-center text-xs text-slate-500">
-        {total} alunos na turma. Os pontos incluem o bônus de constância (🔥). Desempate pela maior taxa de acerto. Só o
-        top 10 aparece para todos. 🏅 = desafios vencidos.
+        {total} alunos na turma. Os pontos incluem o bônus de constância (🔥) e o da meta da turma (🤝). Desempate pela
+        maior taxa de acerto. Só o top 10 aparece para todos. 🏅 = desafios vencidos.
       </p>
     </div>
+  );
+}
+
+const ESTILO_DIVISAO: Record<Divisao, { fundo: string; icone: string }> = {
+  Ouro: { fundo: "from-amber-300 to-amber-500 text-marca-950", icone: "🥇" },
+  Prata: { fundo: "from-slate-200 to-slate-400 text-marca-950", icone: "🥈" },
+  Bronze: { fundo: "from-orange-300 to-orange-500 text-marca-950", icone: "🥉" },
+  Turma: { fundo: "from-marca-500 to-marca-700 text-white", icone: "🏟️" },
+};
+
+/** Liga da semana: só a divisão do aluno, com o top 5 e a posição dele. */
+function LigaDaSemana({
+  liga,
+  alunoId,
+  linhaDe,
+  medalhas,
+}: {
+  liga: { divisao: Divisao; membros: { alunoId: string; pontosSemana: number; posicao: number }[] };
+  alunoId: string;
+  linhaDe: Map<string, { apelido: string; avatar: number; cor: number }>;
+  medalhas: Map<string, number>;
+}) {
+  const estilo = ESTILO_DIVISAO[liga.divisao];
+  const top = liga.membros.slice(0, 5);
+  const eu = liga.membros.find((m) => m.alunoId === alunoId);
+  const euNoTop = top.some((m) => m.alunoId === alunoId);
+  const linha = (m: (typeof liga.membros)[number]) => {
+    const l = linhaDe.get(m.alunoId);
+    return (
+      <li
+        key={m.alunoId}
+        className={`flex items-center gap-3 px-4 py-2.5 ${m.alunoId === alunoId ? "bg-marca-50 font-semibold" : ""}`}
+      >
+        <span className="w-8 text-center font-bold">{m.posicao}º</span>
+        {l && <Avatar avatar={l.avatar} cor={l.cor} medalhas={medalhas.get(m.alunoId) ?? 0} tamanho={32} />}
+        <span className="flex-1">{m.alunoId === alunoId ? `Você (${l?.apelido})` : l?.apelido}</span>
+        <span className="tabular-nums">{m.pontosSemana} pts</span>
+      </li>
+    );
+  };
+  return (
+    <Cartao className="overflow-hidden p-0">
+      <div className={`bg-gradient-to-r ${estilo.fundo} px-4 py-3`}>
+        <p className="text-xs font-bold tracking-widest uppercase opacity-80">Liga da semana</p>
+        <p className="text-lg font-extrabold">
+          {estilo.icone} {liga.divisao === "Turma" ? "Liga da turma" : `Divisão ${liga.divisao}`}
+        </p>
+        <p className="text-xs opacity-80">
+          {liga.divisao === "Turma"
+            ? "Quando mais alunos pontuarem, a turma se divide em Ouro, Prata e Bronze."
+            : "Você disputa com quem tem pontuação parecida. Só valem os pontos desta semana!"}
+        </p>
+      </div>
+      <ol className="divide-y divide-slate-100">
+        {top.map(linha)}
+        {eu && !euNoTop && linha(eu)}
+      </ol>
+    </Cartao>
   );
 }

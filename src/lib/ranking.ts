@@ -9,9 +9,12 @@ export type LinhaRanking = {
   questoes: number;
   /** Bônus de constância já somado em pontos. */
   bonus: number;
+  /** Bônus da meta coletiva da turma, já somado em pontos. */
+  bonusTurma: number;
   /** Ofensiva atual (semanas seguidas completas). */
   sequencia: number;
   semanasCompletas: number;
+  maiorSequencia: number;
   posicao: number;
 };
 
@@ -24,8 +27,10 @@ type Entrada = {
   somaFracoes: number;
   questoes: number;
   bonus?: number;
+  bonusTurma?: number;
   sequencia?: number;
   semanasCompletas?: number;
+  maiorSequencia?: number;
 };
 
 /**
@@ -39,12 +44,14 @@ export function montarRanking(entradas: Entrada[]): LinhaRanking[] {
     apelido: e.apelido,
     avatar: e.avatar ?? 0,
     cor: e.cor ?? 0,
-    pontos: Math.round((e.pontos + (e.bonus ?? 0)) * 100) / 100,
+    pontos: Math.round((e.pontos + (e.bonus ?? 0) + (e.bonusTurma ?? 0)) * 100) / 100,
     acerto: e.questoes > 0 ? e.somaFracoes / e.questoes : 0,
     questoes: e.questoes,
     bonus: e.bonus ?? 0,
+    bonusTurma: e.bonusTurma ?? 0,
     sequencia: e.sequencia ?? 0,
     semanasCompletas: e.semanasCompletas ?? 0,
+    maiorSequencia: e.maiorSequencia ?? 0,
     posicao: 0,
   }));
   linhas.sort(

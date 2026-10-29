@@ -111,8 +111,10 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
                   permutacao={r?.permutacao}
                   resposta={(r?.resposta as Resposta | null) ?? null}
                 />
-                {q.explicacao && fracao !== 1 && (
-                  <p className="rounded-lg bg-marca-50 px-3 py-2 text-sm text-marca-900">💡 {q.explicacao}</p>
+                {q.explicacao && (
+                  <p className="rounded-lg bg-marca-50 px-3 py-2 text-sm whitespace-pre-line text-marca-900">
+                    💡 {q.explicacao}
+                  </p>
                 )}
               </Cartao>
             );

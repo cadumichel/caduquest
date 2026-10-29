@@ -1,7 +1,8 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { hojeEmBrasilia } from "@/lib/datas";
-import { agruparPorSemana, calcularConstancia } from "@/lib/constancia";
+import { agruparPorSemana, calcularConstancia, segundaDaSemana } from "@/lib/constancia";
+import { calcularMetaTurma, montarLigas } from "@/lib/ligas";
 import { montarRanking } from "@/lib/ranking";
 import type { Temporada } from "@/lib/tipos-banco";
 
@@ -9,7 +10,7 @@ import type { Temporada } from "@/lib/tipos-banco";
 export async function temporadaAtual(db: SupabaseClient, turmaId: string): Promise<Temporada | null> {
   const { data } = await db
     .from("temporadas")
-    .select("id, turma_id, nome, narrativa, inicio, data_prova, capitulos")
+    .select("id, turma_id, professor_id, nome, narrativa, inicio, data_prova, capitulos")
     .eq("turma_id", turmaId)
     .order("inicio", { ascending: true });
   const temporadas = (data ?? []) as Temporada[];
@@ -37,6 +38,11 @@ type TentativaRanking = {
  * desafios, tentativas e respostas da turma (RLS do professor ou cliente admin).
  */
 export async function rankingDaTemporada(db: SupabaseClient, temporada: Pick<Temporada, "id" | "turma_id">) {
+  return (await situacaoDaTemporada(db, temporada)).ranking;
+}
+
+/** Ranking, liga da semana e meta coletiva da turma, com as mesmas consultas. */
+export async function situacaoDaTemporada(db: SupabaseClient, temporada: Pick<Temporada, "id" | "turma_id">) {
   const [{ data: alunos }, { data: desafios }] = await Promise.all([
     db.from("alunos").select("id, apelido, avatar, cor").eq("turma_id", temporada.turma_id).eq("aprovado", true),
     db.from("desafios").select("id, tipo, abre_em, fecha_em").eq("temporada_id", temporada.id),
@@ -66,10 +72,19 @@ export async function rankingDaTemporada(db: SupabaseClient, temporada: Pick<Tem
     ]),
   );
   const alunoDaTentativa = new Map<string, string>();
+  const semanaAtual = segundaDaSemana(new Date().toISOString());
+  const semanaDoDesafio = new Map((desafios ?? []).map((d) => [d.id as string, segundaDaSemana(d.abre_em)]));
+  const liga = new Map(
+    (alunos ?? []).map((a) => [a.id as string, { alunoId: a.id as string, pontosAntes: 0, pontosSemana: 0 }]),
+  );
   for (const t of tentativas ?? []) {
     alunoDaTentativa.set(t.id, t.aluno_id);
     const e = porAluno.get(t.aluno_id);
     if (e) e.pontos += Number(t.pontos);
+    const l = liga.get(t.aluno_id);
+    const semana = semanaDoDesafio.get(t.desafio_id) ?? "";
+    if (l && semana < semanaAtual) l.pontosAntes += Number(t.pontos);
+    if (l && semana === semanaAtual) l.pontosSemana += Number(t.pontos);
   }
   for (const r of respostas ?? []) {
     const e = porAluno.get(alunoDaTentativa.get(r.tentativa_id) ?? "");
@@ -88,8 +103,11 @@ export async function rankingDaTemporada(db: SupabaseClient, temporada: Pick<Tem
     set.add(t.desafio_id);
     concluidosPorAluno.set(t.aluno_id, set);
   }
+  const meta = calcularMetaTurma(semanas, concluidosPorAluno, [...porAluno.keys()]);
   for (const e of porAluno.values()) {
-    Object.assign(e, calcularConstancia(semanas, concluidosPorAluno.get(e.alunoId) ?? new Set()));
+    Object.assign(e, calcularConstancia(semanas, concluidosPorAluno.get(e.alunoId) ?? new Set()), {
+      bonusTurma: meta.bonus,
+    });
   }
-  return montarRanking([...porAluno.values()]);
+  return { ranking: montarRanking([...porAluno.values()]), meta, ligas: montarLigas([...liga.values()]) };
 }

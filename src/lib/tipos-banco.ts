@@ -18,6 +18,8 @@ export type Aluno = {
 export type Temporada = {
   id: string;
   turma_id: string;
+  /** Nem toda consulta traz. */
+  professor_id?: string;
   nome: string;
   narrativa: string | null;
   inicio: string;

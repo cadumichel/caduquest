@@ -34,6 +34,7 @@ describe("calcularConstancia", () => {
       bonus: 20 + 25 + 25,
       sequencia: 3,
       semanasCompletas: 3,
+      maiorSequencia: 3,
     });
   });
 
@@ -42,6 +43,7 @@ describe("calcularConstancia", () => {
       bonus: 20,
       sequencia: 1,
       semanasCompletas: 1,
+      maiorSequencia: 1,
     });
   });
 
@@ -50,6 +52,7 @@ describe("calcularConstancia", () => {
       bonus: 45,
       sequencia: 2,
       semanasCompletas: 2,
+      maiorSequencia: 2,
     });
   });
 });

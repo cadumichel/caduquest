@@ -30,3 +30,11 @@ describe("personagens", () => {
     for (const p of PERSONAGENS) expect(existsSync(join(process.cwd(), "public", p.imagem)), p.nome).toBe(true);
   });
 });
+
+describe("curiosidades dos personagens", () => {
+  it("todo personagem tem uma curiosidade no álbum", async () => {
+    const { PERSONAGENS } = await import("../personagens");
+    const { CURIOSIDADE_PERSONAGEM } = await import("../personagens-curiosidades");
+    for (const p of PERSONAGENS) expect(CURIOSIDADE_PERSONAGEM[p.nome], p.nome).toBeTruthy();
+  });
+});
