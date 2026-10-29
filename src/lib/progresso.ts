@@ -164,12 +164,12 @@ export function calcularConquistas(
     extra.medalhas >= 1,
   );
   add(
-    { id: "ofensiva2", nome: "Ofensiva de 2 semanas", descricao: "Complete 2 semanas seguidas.", icone: "🔥" },
-    extra.maiorSequencia >= 2,
+    { id: "ofensiva2", nome: "Ofensiva de 3", descricao: "Conclua 3 desafios seguidos.", icone: "🔥" },
+    extra.maiorSequencia >= 3,
   );
   add(
-    { id: "ofensiva4", nome: "Ofensiva de 4 semanas", descricao: "Complete 4 semanas seguidas.", icone: "☄️" },
-    extra.maiorSequencia >= 4,
+    { id: "ofensiva4", nome: "Ofensiva de 6", descricao: "Conclua 6 desafios seguidos.", icone: "☄️" },
+    extra.maiorSequencia >= 6,
   );
   add(
     { id: "revisor", nome: "Revisor", descricao: "Acerte 10 questões na revisão de erros.", icone: "📚" },

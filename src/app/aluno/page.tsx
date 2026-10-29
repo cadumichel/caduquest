@@ -7,6 +7,7 @@ import { curiosidadeDoDia, medalhasDaTurmaDoAluno, temporadaAtualDoAluno } from 
 import { exigirAluno } from "@/lib/aluno-sessao";
 import { diasAte, formatarData, formatarDataHora } from "@/lib/datas";
 import { calcularMissao, proximoCaduRush, type Missao } from "@/lib/missao";
+import { passosDaOfensiva, type PassoOfensiva } from "@/lib/constancia";
 import { chaveCapitulo, dominioCapitulo } from "@/lib/progresso";
 import { progressoDoAluno } from "@/lib/progresso-dados";
 import { rankingParaAluno } from "@/lib/ranking";
@@ -66,6 +67,10 @@ export default async function Inicio() {
     diasAteProva: faltam,
   });
   const rush = proximoCaduRush(desafios);
+  const passos = passosDaOfensiva(
+    desafios.filter((d) => d.tipo !== "relampago"),
+    concluidos,
+  );
 
   // CaduRush aberto vem primeiro: é feito na hora, em sala.
   const abertos = desafios
@@ -117,27 +122,35 @@ export default async function Inicio() {
       )}
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <section className="flex items-center gap-3 rounded-3xl bg-gradient-to-br from-marca-700 to-marca-900 p-4 text-white shadow-md">
-          <Image
-            src="/ilustracoes/sequencia.png"
-            alt=""
-            width={64}
-            height={76}
-            className={`h-16 w-auto shrink-0 ${eu?.sequencia ? "" : "opacity-50 grayscale"}`}
-          />
-          <div className="min-w-0 text-sm">
-            <p className="text-base font-extrabold text-ouro-claro">Ofensiva</p>
-            <p className="font-bold">
-              {eu?.sequencia
-                ? `${eu.sequencia} ${eu.sequencia === 1 ? "semana" : "semanas seguidas"}!`
-                : "Comece sua ofensiva!"}
-              {eu && eu.bonus > 0 && <span className="font-normal text-marca-100"> · +{eu.bonus} pts</span>}
-            </p>
-            <Sequencia semanas={eu?.sequencia ?? 0} />
-            <p className="mt-1 text-xs text-marca-100">
-              Termine todos os desafios da semana: +20 pts, e +25 a partir da 2ª semana seguida.
-            </p>
+        <section className="rounded-3xl bg-gradient-to-br from-marca-700 to-marca-900 p-4 text-white shadow-md sm:col-span-2">
+          <div className="flex items-center gap-3">
+            <Image
+              src="/ilustracoes/sequencia.png"
+              alt=""
+              width={64}
+              height={76}
+              className={`h-14 w-auto shrink-0 ${eu?.sequencia ? "" : "opacity-50 grayscale"}`}
+            />
+            <div className="min-w-0 text-sm">
+              <p className="text-base font-extrabold text-ouro-claro">Ofensiva rumo à prova</p>
+              <p className="font-bold">
+                {eu?.sequencia
+                  ? `${eu.sequencia} ${eu.sequencia === 1 ? "desafio" : "desafios seguidos"}!`
+                  : "Comece sua ofensiva!"}
+                {eu && eu.bonus > 0 && <span className="font-normal text-marca-100"> · +{eu.bonus} pts de bônus</span>}
+              </p>
+              <p className="text-xs text-marca-100">
+                {passos.filter((p) => p.passo === "feito").length} de {passos.length}{" "}
+                {passos.length === 1 ? "desafio feito" : "desafios feitos"}
+                {faltam >= 0 && ` · ${faltam === 0 ? "a prova é hoje" : `faltam ${faltam} dias para a prova`}`}
+              </p>
+            </div>
           </div>
+          <TrilhaOfensiva passos={passos} />
+          <p className="mt-2 text-xs text-marca-100">
+            A ofensiva vai até a prova. Cada desafio feito em sequência dá de +10 a +20 pts de bônus; perder um desafio
+            zera a sequência, mas não os pontos.
+          </p>
         </section>
 
         <Link
@@ -365,21 +378,32 @@ function CartaoMissao({ missao }: { missao: Missao }) {
   );
 }
 
-/** Bolinhas da ofensiva, como no guia visual: até 5 marcadas e a próxima em aberto. */
-function Sequencia({ semanas }: { semanas: number }) {
-  const marcadas = Math.min(semanas, 5);
+const ESTILO_PASSO: Record<PassoOfensiva, { classe: string; marca: string; rotulo: string }> = {
+  feito: { classe: "bg-ouro-claro text-marca-900", marca: "✓", rotulo: "feito" },
+  perdido: { classe: "bg-white/15 text-white/60", marca: "✕", rotulo: "perdido" },
+  aberto: { classe: "animate-pulse border-2 border-ouro-claro text-ouro-claro", marca: "!", rotulo: "aberto agora" },
+  futuro: { classe: "border-2 border-white/30", marca: "", rotulo: "em breve" },
+};
+
+/** Um passo por desafio da temporada, até a bandeira da prova. */
+function TrilhaOfensiva({ passos }: { passos: { id: string; passo: PassoOfensiva }[] }) {
   return (
-    <div className="mt-1.5 flex gap-1" aria-hidden>
-      {Array.from({ length: 6 }, (_, i) => (
-        <span
-          key={i}
-          className={`flex size-5 items-center justify-center rounded-full text-[11px] font-black ${
-            i < marcadas ? "bg-ouro-claro text-marca-900" : "border-2 border-white/40"
-          }`}
-        >
-          {i < marcadas ? "✓" : ""}
-        </span>
-      ))}
-    </div>
+    <ol className="mt-3 flex flex-wrap items-center gap-1.5">
+      {passos.map((p, i) => {
+        const e = ESTILO_PASSO[p.passo];
+        return (
+          <li
+            key={p.id}
+            title={`Desafio ${i + 1}: ${e.rotulo}`}
+            className={`flex size-6 items-center justify-center rounded-full text-xs font-black ${e.classe}`}
+          >
+            {e.marca}
+          </li>
+        );
+      })}
+      <li title="Prova" className="ml-1 text-lg leading-none">
+        🏁
+      </li>
+    </ol>
   );
 }

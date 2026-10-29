@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agruparPorSemana, calcularConstancia, segundaDaSemana } from "../constancia";
+import { agruparPorSemana, calcularConstancia, passosDaOfensiva, segundaDaSemana } from "../constancia";
 
 const agora = new Date("2026-11-20T12:00:00Z");
 // Semanas de novembro de 2026: 02, 09, 16 (em andamento).
@@ -17,42 +17,53 @@ describe("segundaDaSemana", () => {
   });
 });
 
-describe("calcularConstancia", () => {
-  const semanas = agruparPorSemana([
-    d("a", "2026-11-02"),
-    d("b", "2026-11-04"),
-    d("c", "2026-11-09"),
-    d("e", "2026-11-16", false),
-  ]);
-
+describe("agruparPorSemana", () => {
   it("agrupa por semana", () => {
-    expect(semanas.map((s) => s.map((x) => x.id))).toEqual([["a", "b"], ["c"], ["e"]]);
+    const semanas = agruparPorSemana([d("a", "2026-11-02"), d("b", "2026-11-04"), d("c", "2026-11-09")]);
+    expect(semanas.map((s) => s.map((x) => x.id))).toEqual([["a", "b"], ["c"]]);
   });
+});
 
-  it("dá 20 na primeira semana e 25 nas seguidas", () => {
-    expect(calcularConstancia(semanas, new Set(["a", "b", "c", "e"]), agora)).toEqual({
-      bonus: 20 + 25 + 25,
-      sequencia: 3,
-      semanasCompletas: 3,
-      maiorSequencia: 3,
+describe("calcularConstancia (ofensiva até a prova)", () => {
+  const desafios = [d("a", "2026-11-02"), d("b", "2026-11-04"), d("c", "2026-11-09"), d("e", "2026-11-16", false)];
+
+  it("dá +10 no primeiro desafio e +2 a mais a cada desafio seguido", () => {
+    expect(calcularConstancia(desafios, new Set(["a", "b", "c", "e"]), agora)).toEqual({
+      bonus: 10 + 12 + 14 + 16,
+      sequencia: 4,
+      desafiosCompletos: 4,
+      maiorSequencia: 4,
     });
   });
 
-  it("semana incompleta zera a sequência, não os pontos", () => {
-    expect(calcularConstancia(semanas, new Set(["a", "c"]), agora)).toEqual({
-      bonus: 20,
+  it("desafio perdido zera a sequência, não os pontos", () => {
+    expect(calcularConstancia(desafios, new Set(["a", "c"]), agora)).toEqual({
+      bonus: 10 + 10,
       sequencia: 1,
-      semanasCompletas: 1,
+      desafiosCompletos: 2,
       maiorSequencia: 1,
     });
   });
 
-  it("semana em andamento não quebra a ofensiva", () => {
-    expect(calcularConstancia(semanas, new Set(["a", "b", "c"]), agora)).toEqual({
-      bonus: 45,
-      sequencia: 2,
-      semanasCompletas: 2,
-      maiorSequencia: 2,
-    });
+  it("desafio aberto não quebra a ofensiva", () => {
+    expect(calcularConstancia(desafios, new Set(["a", "b", "c"]), agora)).toMatchObject({ sequencia: 3 });
+  });
+
+  it("o bônus por desafio não passa de +20", () => {
+    const muitos = Array.from({ length: 10 }, (_, i) => d(`x${i}`, `2026-10-${String(10 + i).padStart(2, "0")}`));
+    const r = calcularConstancia(muitos, new Set(muitos.map((x) => x.id)), agora);
+    expect(r.bonus).toBe(10 + 12 + 14 + 16 + 18 + 20 * 5);
+  });
+});
+
+describe("passosDaOfensiva", () => {
+  it("marca feito, perdido, aberto e futuro", () => {
+    const futuro = { id: "f", abre_em: "2026-11-30T11:00:00Z", fecha_em: "2026-12-04T23:00:00Z" };
+    const passos = passosDaOfensiva(
+      [d("a", "2026-11-02"), d("c", "2026-11-09"), d("e", "2026-11-16", false), futuro],
+      new Set(["a"]),
+      agora,
+    );
+    expect(passos.map((p) => p.passo)).toEqual(["feito", "perdido", "aberto", "futuro"]);
   });
 });

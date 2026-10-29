@@ -79,7 +79,7 @@ export default async function Ranking() {
         </Cartao>
       )}
       <p className="text-center text-xs text-slate-500">
-        {total} alunos na turma. Os pontos incluem o bônus de constância (🔥) e o da meta da turma (🤝). Desempate pela
+        {total} alunos na turma. Os pontos incluem o bônus da ofensiva (🔥) e o da meta da turma (🤝). Desempate pela
         maior taxa de acerto. Só o top 10 aparece para todos. 🏅 = desafios vencidos.
       </p>
     </div>

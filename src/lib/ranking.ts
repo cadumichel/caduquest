@@ -11,9 +11,9 @@ export type LinhaRanking = {
   bonus: number;
   /** Bônus da meta coletiva da turma, já somado em pontos. */
   bonusTurma: number;
-  /** Ofensiva atual (semanas seguidas completas). */
+  /** Ofensiva atual (desafios seguidos concluídos). */
   sequencia: number;
-  semanasCompletas: number;
+  desafiosCompletos: number;
   maiorSequencia: number;
   posicao: number;
 };
@@ -29,13 +29,13 @@ type Entrada = {
   bonus?: number;
   bonusTurma?: number;
   sequencia?: number;
-  semanasCompletas?: number;
+  desafiosCompletos?: number;
   maiorSequencia?: number;
 };
 
 /**
  * Ranking da temporada: soma de pontos (com o bônus de constância); desempate pela
- * maior taxa de acerto e depois por mais semanas de constância.
+ * maior taxa de acerto e depois por mais desafios concluídos na ofensiva.
  * Empate completo divide a posição (1, 2, 2, 4).
  */
 export function montarRanking(entradas: Entrada[]): LinhaRanking[] {
@@ -50,7 +50,7 @@ export function montarRanking(entradas: Entrada[]): LinhaRanking[] {
     bonus: e.bonus ?? 0,
     bonusTurma: e.bonusTurma ?? 0,
     sequencia: e.sequencia ?? 0,
-    semanasCompletas: e.semanasCompletas ?? 0,
+    desafiosCompletos: e.desafiosCompletos ?? 0,
     maiorSequencia: e.maiorSequencia ?? 0,
     posicao: 0,
   }));
@@ -58,7 +58,7 @@ export function montarRanking(entradas: Entrada[]): LinhaRanking[] {
     (a, b) =>
       b.pontos - a.pontos ||
       b.acerto - a.acerto ||
-      b.semanasCompletas - a.semanasCompletas ||
+      b.desafiosCompletos - a.desafiosCompletos ||
       a.apelido.localeCompare(b.apelido, "pt-BR"),
   );
   linhas.forEach((l, i) => {
@@ -67,7 +67,7 @@ export function montarRanking(entradas: Entrada[]): LinhaRanking[] {
       anterior &&
       anterior.pontos === l.pontos &&
       anterior.acerto === l.acerto &&
-      anterior.semanasCompletas === l.semanasCompletas;
+      anterior.desafiosCompletos === l.desafiosCompletos;
     l.posicao = empatado ? anterior.posicao : i + 1;
   });
   return linhas;

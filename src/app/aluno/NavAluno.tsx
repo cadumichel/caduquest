@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const ITENS = [
-  { href: "/aluno", rotulo: "Início", icone: "/ilustracoes/icone-desafios.png" },
-  { href: "/aluno/ranking", rotulo: "Ranking", icone: "/ilustracoes/icone-ranking.png" },
-  { href: "/aluno/perfil", rotulo: "Perfil", icone: "/ilustracoes/icone-personagens.png" },
+  { href: "/aluno", rotulo: "Início", icone: "/ilustracoes/menu-inicio.svg" },
+  { href: "/aluno/ranking", rotulo: "Ranking", icone: "/ilustracoes/menu-ranking.svg" },
+  { href: "/aluno/perfil", rotulo: "Perfil", icone: "/ilustracoes/menu-perfil.svg" },
 ];
 
 /** Menu do aluno com os ícones ilustrados do guia visual. */

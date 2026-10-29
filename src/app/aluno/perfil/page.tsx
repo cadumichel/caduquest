@@ -121,8 +121,8 @@ export default async function Perfil() {
           <Numero valor={`${medalhas} 🏅`} rotulo={medalhas === 1 ? "desafio vencido" : "desafios vencidos"} />
         </div>
         <div className="relative mt-2 grid grid-cols-2 gap-2 text-center">
-          <Numero valor={`🔥 ${eu?.sequencia ?? 0}`} rotulo="semanas de ofensiva" />
-          <Numero valor={`+${eu?.bonus ?? 0}`} rotulo="pts de constância" />
+          <Numero valor={`🔥 ${eu?.sequencia ?? 0}`} rotulo="desafios seguidos na ofensiva" />
+          <Numero valor={`+${eu?.bonus ?? 0}`} rotulo="pts de bônus da ofensiva" />
         </div>
       </section>
 
@@ -142,7 +142,7 @@ export default async function Perfil() {
           />
           <Dado rotulo="Habilidade mais forte" valor={forte ? forte.nome : "–"} />
           <Dado rotulo="Erros revisados" valor={`📚 ${progresso.revisoesAcertadas}`} />
-          <Dado rotulo="Maior ofensiva" valor={`🔥 ${eu?.maiorSequencia ?? 0} sem.`} />
+          <Dado rotulo="Maior ofensiva" valor={`🔥 ${eu?.maiorSequencia ?? 0} seguidos`} />
           <Dado rotulo="Conquistas" valor={`${conquistadas.length} de ${conquistas.length}`} />
           <Dado rotulo="Personagens" valor={`${basicosLiberados + especiaisLiberados} de ${TOTAL_PERSONAGENS}`} />
           {visual.criado_em && <Dado rotulo="Na turma desde" valor={formatarData(visual.criado_em.slice(0, 10))} />}
