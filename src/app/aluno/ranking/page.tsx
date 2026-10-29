@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import { Avatar } from "@/components/Avatar";
 import { Cartao, Vazio } from "@/components/ui";
+import { medalhasDaTurmaDoAluno, temporadaAtualDoAluno } from "@/lib/aluno-dados";
 import { exigirAluno } from "@/lib/aluno-sessao";
-import { medalhasDaTurma } from "@/lib/medalhas";
 import { rankingParaAluno } from "@/lib/ranking";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
-import { rankingDaTemporada, temporadaAtual } from "@/lib/temporada-dados";
+import { rankingDaTemporada } from "@/lib/temporada-dados";
 
 export const metadata: Metadata = { title: "Ranking" };
 
@@ -15,12 +15,12 @@ const MEDALHAS = ["🥇", "🥈", "🥉"];
 export default async function Ranking() {
   const aluno = await exigirAluno();
   const db = criarClienteAdmin();
-  const temporada = await temporadaAtual(db, aluno.turmaId);
+  const temporada = await temporadaAtualDoAluno(aluno.turmaId);
   if (!temporada) return <Vazio>Ainda não há temporada.</Vazio>;
 
   const [ranking, medalhas] = await Promise.all([
     rankingDaTemporada(db, temporada),
-    medalhasDaTurma(db, aluno.turmaId),
+    medalhasDaTurmaDoAluno(aluno.turmaId),
   ]);
   const { top, eu, total } = rankingParaAluno(ranking, aluno.id);
   const euNoTop = eu && top.some((l) => l.alunoId === eu.alunoId);

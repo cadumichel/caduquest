@@ -3,12 +3,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { MuralRanking } from "@/components/MuralRanking";
 import { BotaoLink, Cartao, Etiqueta, Vazio } from "@/components/ui";
+import { medalhasDaTurmaDoAluno, temporadaAtualDoAluno } from "@/lib/aluno-dados";
 import { exigirAluno } from "@/lib/aluno-sessao";
 import { diasAte, formatarData, formatarDataHora } from "@/lib/datas";
-import { medalhasDaTurma } from "@/lib/medalhas";
 import { rankingParaAluno } from "@/lib/ranking";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
-import { rankingDaTemporada, temporadaAtual } from "@/lib/temporada-dados";
+import { rankingDaTemporada } from "@/lib/temporada-dados";
 import { situacaoDesafio, type Desafio, type Tentativa } from "@/lib/tipos-banco";
 
 export const metadata: Metadata = { title: "Mapa da temporada" };
@@ -16,7 +16,7 @@ export const metadata: Metadata = { title: "Mapa da temporada" };
 export default async function MapaTemporada() {
   const aluno = await exigirAluno();
   const db = criarClienteAdmin();
-  const temporada = await temporadaAtual(db, aluno.turmaId);
+  const temporada = await temporadaAtualDoAluno(aluno.turmaId);
 
   if (!temporada) {
     return (
@@ -27,26 +27,22 @@ export default async function MapaTemporada() {
     );
   }
 
-  const [{ data: desafiosBrutos }, ranking, medalhas] = await Promise.all([
+  // Tudo em paralelo: as tentativas do aluno vêm filtradas pela temporada via join.
+  const [{ data: desafiosBrutos }, { data: tentativasBrutas }, ranking, medalhas] = await Promise.all([
     db
       .from("desafios")
       .select("id, temporada_id, tipo, titulo, abre_em, fecha_em, pontos_por_acerto, desafio_questoes(count)")
       .eq("temporada_id", temporada.id)
       .order("abre_em"),
+    db
+      .from("tentativas")
+      .select("*, desafios!inner(temporada_id)")
+      .eq("aluno_id", aluno.id)
+      .eq("desafios.temporada_id", temporada.id),
     rankingDaTemporada(db, temporada),
-    medalhasDaTurma(db, aluno.turmaId),
+    medalhasDaTurmaDoAluno(aluno.turmaId),
   ]);
   const desafios = (desafiosBrutos ?? []) as (Desafio & { desafio_questoes: { count: number }[] })[];
-  const { data: tentativasBrutas } = desafios.length
-    ? await db
-        .from("tentativas")
-        .select("*")
-        .eq("aluno_id", aluno.id)
-        .in(
-          "desafio_id",
-          desafios.map((d) => d.id),
-        )
-    : { data: [] };
   const tentativas = new Map(((tentativasBrutas ?? []) as Tentativa[]).map((t) => [t.desafio_id, t]));
   const { top, eu, total } = rankingParaAluno(ranking, aluno.id);
   const faltam = diasAte(temporada.data_prova);

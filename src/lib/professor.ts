@@ -1,10 +1,14 @@
 import "server-only";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { emailsProfessores } from "@/lib/env";
 import { criarClienteServidor } from "@/lib/supabase/server";
 
-/** Garante que há um professor logado e autorizado; devolve o cliente com RLS. */
-export async function exigirProfessor() {
+/**
+ * Garante que há um professor logado e autorizado; devolve o cliente com RLS.
+ * Fica em cache durante a requisição (layout e página conferem uma vez só).
+ */
+export const exigirProfessor = cache(async () => {
   const supabase = await criarClienteServidor();
   const { data } = await supabase.auth.getClaims();
   const claims = data?.claims;
@@ -18,4 +22,4 @@ export async function exigirProfessor() {
   }
 
   return { supabase, professorId: claims.sub as string, email };
-}
+});
