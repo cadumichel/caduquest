@@ -64,7 +64,7 @@ export function Revisao({ pendentes }: { pendentes: number }) {
             </Botao>
           )}
           <BotaoLink href="/aluno" variante="secundario">
-            Voltar ao mapa
+            Voltar ao início
           </BotaoLink>
         </div>
       </div>

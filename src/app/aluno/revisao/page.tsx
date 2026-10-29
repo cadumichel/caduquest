@@ -18,7 +18,7 @@ export default async function PaginaRevisao() {
           Nada para revisar agora. As questões que você errar aparecem aqui quando o desafio fechar e o gabarito sair.
         </Vazio>
         <BotaoLink href="/aluno" variante="secundario">
-          Voltar ao mapa
+          Voltar ao início
         </BotaoLink>
       </div>
     );

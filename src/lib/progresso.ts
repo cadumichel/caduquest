@@ -107,6 +107,7 @@ export function calcularProgresso({
     desafiosConcluidos: concluidos.length,
     caduRushConcluidos: concluidos.filter((d) => d.tipo === "relampago").length,
     questoesRespondidas: respostas.length,
+    acertoGeral: respostas.length ? respostas.reduce((s, r) => s + r.fracao, 0) / respostas.length : 0,
     revisoesAcertadas,
   };
 }

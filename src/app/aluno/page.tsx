@@ -16,9 +16,9 @@ import { situacaoDaTemporada } from "@/lib/temporada-dados";
 import { MetaTurma } from "@/components/MetaTurma";
 import { situacaoDesafio, type Desafio, type Tentativa } from "@/lib/tipos-banco";
 
-export const metadata: Metadata = { title: "Mapa da temporada" };
+export const metadata: Metadata = { title: "Início" };
 
-export default async function MapaTemporada() {
+export default async function Inicio() {
   const aluno = await exigirAluno();
   const db = criarClienteAdmin();
   const temporada = await temporadaAtualDoAluno(aluno.turmaId);
@@ -146,7 +146,9 @@ export default async function MapaTemporada() {
         >
           <div className="min-w-0 flex-1">
             <p className="text-base font-extrabold text-marca-900">Recompensas</p>
-            <p className="text-sm text-marca-900/80">Vença desafios e desbloqueie novos personagens!</p>
+            <p className="text-sm text-marca-900/80">
+              Suba de nível para liberar personagens e vença desafios para ganhar lendários!
+            </p>
           </div>
           <Image src="/ilustracoes/bau.png" alt="" width={120} height={86} className="h-16 w-auto shrink-0" />
         </Link>

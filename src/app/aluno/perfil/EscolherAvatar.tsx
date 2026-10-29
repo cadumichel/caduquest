@@ -2,17 +2,26 @@
 import { useState, useTransition } from "react";
 import { Avatar, CORES_AVATAR } from "@/components/Avatar";
 import { Aviso, Botao } from "@/components/ui";
-import { BASICOS, medalhasNecessarias, ORDEM_ESPECIAIS, PERSONAGENS, TOTAL_PERSONAGENS } from "@/lib/personagens";
+import {
+  medalhasNecessarias,
+  nivelNecessario,
+  ORDEM_BASICOS,
+  ORDEM_ESPECIAIS,
+  PERSONAGENS,
+  TOTAL_PERSONAGENS,
+} from "@/lib/personagens";
 import { salvarPerfil } from "../actions";
 
 export function EscolherAvatar({
   avatarAtual,
   corAtual,
   medalhas,
+  nivel,
 }: {
   avatarAtual: number;
   corAtual: number;
   medalhas: number;
+  nivel: number;
 }) {
   const [avatar, setAvatar] = useState(avatarAtual);
   const [cor, setCor] = useState(corAtual);
@@ -33,35 +42,49 @@ export function EscolherAvatar({
       </div>
 
       <section>
-        <h3 className="mb-2 font-semibold">Personagens</h3>
-        <div className="grid grid-cols-5 gap-2">
-          {BASICOS.map((i) => (
-            <OpcaoPersonagem key={i} indice={i} cor={cor} escolhido={avatar === i} onEscolher={setAvatar} />
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <h3 className="font-semibold">Especiais 🏅</h3>
+        <h3 className="font-semibold">Personagens</h3>
         <p className="mb-2 text-sm text-slate-600">
-          Cada desafio vencido libera um personagem especial. Você já liberou{" "}
-          {Math.min(medalhas, ORDEM_ESPECIAIS.length)} de {ORDEM_ESPECIAIS.length}.
+          Você começa com 8. A cada nível novo, mais 2 personagens são liberados.
         </p>
         <div className="grid grid-cols-5 gap-2">
-          {ORDEM_ESPECIAIS.map((i) => {
-            return medalhasNecessarias(i) <= medalhas ? (
+          {ORDEM_BASICOS.map((i) =>
+            nivelNecessario(i) <= nivel || i === avatarAtual ? (
               <OpcaoPersonagem key={i} indice={i} cor={cor} escolhido={avatar === i} onEscolher={setAvatar} />
             ) : (
               <div
                 key={i}
-                title={`Vença ${medalhasNecessarias(i)} ${medalhasNecessarias(i) === 1 ? "desafio" : "desafios"} para liberar`}
-                className="flex aspect-square flex-col items-center justify-center rounded-xl border border-dashed border-amber-200 bg-amber-50/60 text-amber-700/70"
+                title={`Chegue ao nível ${nivelNecessario(i)} para liberar`}
+                className="flex aspect-square flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-slate-500"
               >
-                <span className="text-xl">🔒</span>
+                <span className="text-lg">🔒</span>
+                <span className="text-[10px] font-semibold">Nív. {nivelNecessario(i)}</span>
+              </div>
+            ),
+          )}
+        </div>
+      </section>
+
+      <section className="-mx-2 rounded-2xl bg-gradient-to-br from-marca-950 via-marca-900 to-amber-900 p-3 text-white">
+        <h3 className="font-extrabold text-amber-300">✦ Lendários</h3>
+        <p className="mb-3 text-sm text-amber-50">
+          Só para quem vence desafios: cada vez que você faz a maior pontuação de um desafio, libera um lendário. Você
+          já liberou {Math.min(medalhas, ORDEM_ESPECIAIS.length)} de {ORDEM_ESPECIAIS.length}.
+        </p>
+        <div className="grid grid-cols-5 gap-2">
+          {ORDEM_ESPECIAIS.map((i) =>
+            medalhasNecessarias(i) <= medalhas ? (
+              <OpcaoPersonagem key={i} indice={i} cor={cor} escolhido={avatar === i} onEscolher={setAvatar} lendario />
+            ) : (
+              <div
+                key={i}
+                title={`Vença ${medalhasNecessarias(i)} ${medalhasNecessarias(i) === 1 ? "desafio" : "desafios"} para liberar`}
+                className="relative flex aspect-square flex-col items-center justify-center overflow-hidden rounded-xl bg-gradient-to-b from-amber-300/25 to-amber-700/30 text-amber-200 ring-1 ring-amber-300/50"
+              >
+                <span className="text-lg">🔒</span>
                 <span className="text-[10px] font-semibold">{medalhasNecessarias(i)} 🏅</span>
               </div>
-            );
-          })}
+            ),
+          )}
         </div>
       </section>
 
@@ -104,11 +127,13 @@ function OpcaoPersonagem({
   cor,
   escolhido,
   onEscolher,
+  lendario = false,
 }: {
   indice: number;
   cor: number;
   escolhido: boolean;
   onEscolher: (i: number) => void;
+  lendario?: boolean;
 }) {
   return (
     <button
@@ -117,7 +142,15 @@ function OpcaoPersonagem({
       aria-label={PERSONAGENS[indice].nome}
       title={`${PERSONAGENS[indice].nome} · ${PERSONAGENS[indice].epoca}`}
       aria-pressed={escolhido}
-      className={`flex justify-center rounded-xl p-1.5 transition ${escolhido ? "bg-marca-100 ring-2 ring-marca-600" : "hover:bg-slate-100"}`}
+      className={`flex justify-center rounded-xl p-1.5 transition ${
+        escolhido
+          ? lendario
+            ? "bg-amber-300/30 ring-2 ring-amber-300"
+            : "bg-marca-100 ring-2 ring-marca-600"
+          : lendario
+            ? "hover:bg-white/10"
+            : "hover:bg-slate-100"
+      }`}
     >
       <Avatar avatar={indice} cor={cor} tamanho={48} />
     </button>

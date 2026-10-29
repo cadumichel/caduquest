@@ -144,5 +144,35 @@ export const BASICOS = Array.from({ length: 10 }, (_, k) => [2 * k, 2 * k + 1, 3
 
 export const ehEspecial = (avatar: number) => ORDEM_ESPECIAIS.includes(avatar);
 
+/** Personagens com que todo aluno começa (4 e 4, um de cada época). */
+export const INICIAIS = [
+  "Caçador pré-histórico",
+  "Faraó",
+  "Hoplita grego",
+  "Viking",
+  "Escudeira viking",
+  "Mulher ateniense",
+  "Camponesa medieval",
+  "Operária",
+].map(indice);
+
+/** Básicos na ordem de desbloqueio: os iniciais e depois os demais, na ordem da tela. */
+export const ORDEM_BASICOS = [...INICIAIS, ...BASICOS.filter((i) => !INICIAIS.includes(i))];
+
+/** A cada nível novo, mais personagens básicos são liberados para o aluno. */
+export const BASICOS_POR_NIVEL = 2;
+
+/** Nível do aluno em que um básico é liberado (1 = desde o início). */
+export function nivelNecessario(avatar: number): number {
+  const pos = ORDEM_BASICOS.indexOf(avatar);
+  if (pos < INICIAIS.length) return 1;
+  return 2 + Math.floor((pos - INICIAIS.length) / BASICOS_POR_NIVEL);
+}
+
+/** O aluno pode usar este personagem? Básicos pelo nível, especiais pelos desafios vencidos. */
+export function personagemLiberado(avatar: number, { nivel, medalhas }: { nivel: number; medalhas: number }) {
+  return ehEspecial(avatar) ? medalhasNecessarias(avatar) <= medalhas : nivelNecessario(avatar) <= nivel;
+}
+
 /** Quantas medalhas o aluno precisa para usar este avatar (0 para os básicos). */
 export const medalhasNecessarias = (avatar: number) => ORDEM_ESPECIAIS.indexOf(avatar) + 1;

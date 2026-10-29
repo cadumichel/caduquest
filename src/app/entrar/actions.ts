@@ -5,7 +5,7 @@ import { z } from "zod";
 import { encerrarSessaoAluno, esquecerAluno, iniciarSessaoAluno, lembrarAluno } from "@/lib/aluno-sessao";
 import { apelidoImproprio } from "@/lib/apelido";
 import { CORES_AVATAR } from "@/components/Avatar";
-import { BASICOS } from "@/lib/personagens";
+import { INICIAIS } from "@/lib/personagens";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 
 const LIMITE_TENTATIVAS = 5;
@@ -39,7 +39,7 @@ export async function entrar(_: EstadoEntrar, form: FormData): Promise<EstadoEnt
   if (!dados.success) return { erro: dados.error.issues[0].message };
   const { modo, codigo, apelido, pin, nome_real } = dados.data;
   // No cadastro o aluno escolhe entre os personagens básicos; especial só com medalha.
-  const avatarEscolhido = BASICOS.includes(dados.data.avatar ?? -1) ? dados.data.avatar! : sorteio(BASICOS);
+  const avatarEscolhido = INICIAIS.includes(dados.data.avatar ?? -1) ? dados.data.avatar! : sorteio(INICIAIS);
   const corEscolhida =
     dados.data.cor !== undefined && dados.data.cor >= 0 && dados.data.cor < CORES_AVATAR.length
       ? dados.data.cor

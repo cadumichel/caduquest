@@ -28,7 +28,7 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
         <h1 className="text-2xl font-bold">{desafio.titulo}</h1>
         <Aviso tipo="info">Você não fez este desafio.</Aviso>
         <BotaoLink href="/aluno" variante="secundario">
-          Voltar ao mapa
+          Voltar ao início
         </BotaoLink>
       </div>
     );
@@ -122,7 +122,7 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
         </section>
       )}
       <BotaoLink href="/aluno" variante="secundario">
-        Voltar ao mapa
+        Voltar ao início
       </BotaoLink>
     </div>
   );

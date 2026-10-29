@@ -3,7 +3,12 @@ import { revalidatePath } from "next/cache";
 import { CORES_AVATAR, TOTAL_AVATARES } from "@/components/Avatar";
 import { exigirAluno } from "@/lib/aluno-sessao";
 import { medalhasDaTurma } from "@/lib/medalhas";
-import { medalhasNecessarias } from "@/lib/personagens";
+import { personagemLiberado } from "@/lib/personagens";
+import { calcularConquistas } from "@/lib/progresso";
+import { progressoDoAluno } from "@/lib/progresso-dados";
+import { rankingParaAluno } from "@/lib/ranking";
+import { rankingDaTemporada, temporadaAtual } from "@/lib/temporada-dados";
+import { fundoLiberado, FUNDOS } from "@/lib/visual-perfil";
 import { estadoAtual, responderQuestao, type EstadoJogo } from "@/lib/jogo";
 import { montarVista } from "@/lib/questoes/apresentacao";
 import { corrigir } from "@/lib/questoes/correcao";
@@ -46,13 +51,47 @@ export async function salvarPerfil(avatar: number, cor: number): Promise<{ erro?
   if (!Number.isInteger(avatar) || avatar < 0 || avatar >= TOTAL_AVATARES) return { erro: "Avatar inválido." };
   if (!Number.isInteger(cor) || cor < 0 || cor >= CORES_AVATAR.length) return { erro: "Cor inválida." };
   const db = criarClienteAdmin();
-  const precisa = medalhasNecessarias(avatar);
-  if (precisa > 0 && ((await medalhasDaTurma(db, aluno.turmaId)).get(aluno.id) ?? 0) < precisa) {
-    return { erro: "Esse personagem ainda está bloqueado. Vença mais desafios para liberar!" };
+  // O personagem atual sempre pode ficar (quem escolheu antes das regras de desbloqueio).
+  if (avatar !== aluno.avatar) {
+    const [medalhas, { nivel }] = await Promise.all([
+      medalhasDaTurma(db, aluno.turmaId),
+      progressoDoAluno(aluno.id, aluno.turmaId),
+    ]);
+    if (!personagemLiberado(avatar, { nivel, medalhas: medalhas.get(aluno.id) ?? 0 })) {
+      return { erro: "Esse personagem ainda está bloqueado. Suba de nível ou vença desafios para liberar!" };
+    }
   }
   const { error } = await db.from("alunos").update({ avatar, cor }).eq("id", aluno.id);
   if (error) return { erro: "Não foi possível salvar." };
   revalidatePath("/aluno", "layout");
+  return {};
+}
+
+/** Fundo do cartão e título do perfil. título null = nome do nível. */
+export async function salvarVisual(fundo: number, titulo: string | null): Promise<{ erro?: string }> {
+  const aluno = await exigirAluno();
+  if (!Number.isInteger(fundo) || fundo < 0 || fundo >= FUNDOS.length) return { erro: "Fundo inválido." };
+  const db = criarClienteAdmin();
+  const [medalhasTurma, progresso, temporada] = await Promise.all([
+    medalhasDaTurma(db, aluno.turmaId),
+    progressoDoAluno(aluno.id, aluno.turmaId),
+    temporadaAtual(db, aluno.turmaId),
+  ]);
+  const medalhas = medalhasTurma.get(aluno.id) ?? 0;
+  if (!fundoLiberado(fundo, { nivel: progresso.nivel, medalhas })) return { erro: "Esse fundo ainda está bloqueado." };
+  if (titulo !== null) {
+    const { eu } = rankingParaAluno(temporada ? await rankingDaTemporada(db, temporada) : [], aluno.id);
+    const conquistas = calcularConquistas(progresso, {
+      posicao: eu?.posicao ?? null,
+      pontos: eu?.pontos ?? 0,
+      medalhas,
+      maiorSequencia: eu?.maiorSequencia ?? 0,
+    });
+    if (!conquistas.some((c) => c.id === titulo && c.conquistada)) return { erro: "Título ainda não conquistado." };
+  }
+  const { error } = await db.from("alunos").update({ fundo, titulo }).eq("id", aluno.id);
+  if (error) return { erro: "Não foi possível salvar. Peça ao professor para atualizar o app." };
+  revalidatePath("/aluno/perfil");
   return {};
 }
 
