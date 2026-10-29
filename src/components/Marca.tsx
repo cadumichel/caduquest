@@ -1,10 +1,10 @@
 import Image from "next/image";
 import Link from "next/link";
-import capacete from "../../public/marca/capacete.png";
+import emblema from "../../public/marca/emblema.png";
 import logoClaro from "../../public/marca/logo-claro.png";
 import logo from "../../public/marca/logo.png";
 
-/** Logo completo (capacete + CaduQuest + "História em desafios"). `claro` é a versão para fundo escuro. */
+/** Logo completo (emblema do professor + CaduQuest + "História em desafios"). `claro` é a versão para fundo escuro. */
 export function Logo({
   claro = false,
   largura = 280,
@@ -28,11 +28,11 @@ export function Logo({
   );
 }
 
-/** Capacete + nome em texto, para cabeçalhos. */
+/** Emblema + nome em texto, para cabeçalhos. */
 export function MarcaCabecalho({ href, claro = false, sufixo }: { href: string; claro?: boolean; sufixo?: string }) {
   return (
     <Link href={href} className="flex items-center gap-1.5" aria-label="CaduQuest">
-      <Image src={capacete} alt="" style={{ height: 34, width: "auto" }} sizes="40px" priority />
+      <Image src={emblema} alt="" style={{ height: 44, width: "auto" }} sizes="44px" priority />
       <span className="text-xl leading-none font-black tracking-tight">
         <span className={claro ? "text-white" : "text-marca-900"}>Cadu</span>
         <span className="text-ouro">Quest</span>

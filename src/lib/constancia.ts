@@ -1,23 +1,24 @@
 /**
- * Ofensiva semanal (constância): +20 em cada semana em que o aluno conclui todos os
- * desafios semanais, +5 por semana seguida, até +25 por semana. Faltar uma semana
- * zera só a sequência, não os pontos. O CaduRush (em sala) não conta.
+ * Ofensiva da temporada: dura do início da temporada até a prova. Cada desafio
+ * concluído em sequência dá +10, e +2 a mais a cada desafio seguido, até +20 por
+ * desafio. Perder um desafio (fechou sem fazer) zera só a sequência, não os
+ * pontos. O CaduRush (em sala) não conta.
  */
 
-export const BONUS_SEMANA = 20;
-export const BONUS_SEQUENCIA = 5;
-export const BONUS_MAXIMO = 25;
+export const BONUS_DESAFIO = 10;
+export const BONUS_SEQUENCIA = 2;
+export const BONUS_MAXIMO = 20;
 
 export type DesafioDaSemana = { id: string; abre_em: string; fecha_em: string };
 
 export type Constancia = {
   /** Pontos de bônus somados na temporada. */
   bonus: number;
-  /** Semanas seguidas completas até agora (a ofensiva atual). */
+  /** Desafios seguidos concluídos até agora (a ofensiva atual). */
   sequencia: number;
-  /** Total de semanas completas na temporada. */
-  semanasCompletas: number;
-  /** Maior ofensiva da temporada (para as conquistas). */
+  /** Total de desafios concluídos na ofensiva. */
+  desafiosCompletos: number;
+  /** Maior sequência da temporada (para as conquistas). */
   maiorSequencia: number;
 };
 
@@ -38,29 +39,47 @@ export function agruparPorSemana<D extends DesafioDaSemana>(desafios: D[]): D[][
   return [...semanas.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, ds]) => ds);
 }
 
-/**
- * Semana completa: o aluno concluiu todos os desafios dela. Semana ainda em andamento
- * (algum desafio aberto ou por abrir) não quebra a sequência; ela só conta quando completa.
- */
+/** Situação de cada desafio da ofensiva para o aluno, na ordem em que abrem. */
+export type PassoOfensiva = "feito" | "perdido" | "aberto" | "futuro";
+
+export function passosDaOfensiva(
+  desafios: DesafioDaSemana[],
+  concluidos: Set<string>,
+  agora = new Date(),
+): { id: string; passo: PassoOfensiva }[] {
+  return [...desafios]
+    .sort((a, b) => a.abre_em.localeCompare(b.abre_em))
+    .map((d) => ({
+      id: d.id,
+      passo: concluidos.has(d.id)
+        ? "feito"
+        : new Date(d.fecha_em) < agora
+          ? "perdido"
+          : new Date(d.abre_em) > agora
+            ? "futuro"
+            : "aberto",
+    }));
+}
+
+/** Desafio aberto ou por abrir não quebra a sequência: só conta quando é feito ou fecha. */
 export function calcularConstancia(
-  semanas: DesafioDaSemana[][],
+  desafios: DesafioDaSemana[],
   concluidos: Set<string>,
   agora = new Date(),
 ): Constancia {
   let bonus = 0;
   let sequencia = 0;
-  let semanasCompletas = 0;
+  let desafiosCompletos = 0;
   let maiorSequencia = 0;
-  for (const desafios of semanas) {
-    if (!desafios.length) continue;
-    if (desafios.every((d) => concluidos.has(d.id))) {
+  for (const { passo } of passosDaOfensiva(desafios, concluidos, agora)) {
+    if (passo === "feito") {
       sequencia += 1;
-      semanasCompletas += 1;
+      desafiosCompletos += 1;
       maiorSequencia = Math.max(maiorSequencia, sequencia);
-      bonus += Math.min(BONUS_SEMANA + BONUS_SEQUENCIA * (sequencia - 1), BONUS_MAXIMO);
-    } else if (desafios.every((d) => new Date(d.fecha_em) < agora)) {
+      bonus += Math.min(BONUS_DESAFIO + BONUS_SEQUENCIA * (sequencia - 1), BONUS_MAXIMO);
+    } else if (passo === "perdido") {
       sequencia = 0;
     }
   }
-  return { bonus, sequencia, semanasCompletas, maiorSequencia };
+  return { bonus, sequencia, desafiosCompletos, maiorSequencia };
 }

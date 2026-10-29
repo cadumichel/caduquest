@@ -94,8 +94,9 @@ export async function situacaoDaTemporada(db: SupabaseClient, temporada: Pick<Te
     }
   }
 
-  // Constância: só os desafios semanais contam.
-  const semanas = agruparPorSemana((desafios ?? []).filter((d) => d.tipo !== "relampago"));
+  // Ofensiva e meta da turma: só os desafios semanais contam.
+  const semanais = (desafios ?? []).filter((d) => d.tipo !== "relampago");
+  const semanas = agruparPorSemana(semanais);
   const concluidosPorAluno = new Map<string, Set<string>>();
   for (const t of (tentativas ?? []) as TentativaRanking[]) {
     if (!(t.concluida_em || t.indice_atual >= t.ordem.length)) continue;
@@ -105,7 +106,7 @@ export async function situacaoDaTemporada(db: SupabaseClient, temporada: Pick<Te
   }
   const meta = calcularMetaTurma(semanas, concluidosPorAluno, [...porAluno.keys()]);
   for (const e of porAluno.values()) {
-    Object.assign(e, calcularConstancia(semanas, concluidosPorAluno.get(e.alunoId) ?? new Set()), {
+    Object.assign(e, calcularConstancia(semanais, concluidosPorAluno.get(e.alunoId) ?? new Set()), {
       bonusTurma: meta.bonus,
     });
   }
