@@ -3,10 +3,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { MuralRanking } from "@/components/MuralRanking";
 import { BotaoLink, Cartao, Etiqueta, Vazio } from "@/components/ui";
-import { medalhasDaTurmaDoAluno, temporadaAtualDoAluno } from "@/lib/aluno-dados";
+import { curiosidadeDoDia, medalhasDaTurmaDoAluno, temporadaAtualDoAluno } from "@/lib/aluno-dados";
 import { exigirAluno } from "@/lib/aluno-sessao";
 import { diasAte, formatarData, formatarDataHora } from "@/lib/datas";
+import { calcularMissao, proximoCaduRush, type Missao } from "@/lib/missao";
 import { rankingParaAluno } from "@/lib/ranking";
+import { errosParaRevisar } from "@/lib/revisao";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { rankingDaTemporada } from "@/lib/temporada-dados";
 import { situacaoDesafio, type Desafio, type Tentativa } from "@/lib/tipos-banco";
@@ -28,24 +30,38 @@ export default async function MapaTemporada() {
   }
 
   // Tudo em paralelo: as tentativas do aluno vêm filtradas pela temporada via join.
-  const [{ data: desafiosBrutos }, { data: tentativasBrutas }, ranking, medalhas] = await Promise.all([
-    db
-      .from("desafios")
-      .select("id, temporada_id, tipo, titulo, abre_em, fecha_em, pontos_por_acerto, desafio_questoes(count)")
-      .eq("temporada_id", temporada.id)
-      .order("abre_em"),
-    db
-      .from("tentativas")
-      .select("*, desafios!inner(temporada_id)")
-      .eq("aluno_id", aluno.id)
-      .eq("desafios.temporada_id", temporada.id),
-    rankingDaTemporada(db, temporada),
-    medalhasDaTurmaDoAluno(aluno.turmaId),
-  ]);
+  const [{ data: desafiosBrutos }, { data: tentativasBrutas }, ranking, medalhas, erros, curiosidade] =
+    await Promise.all([
+      db
+        .from("desafios")
+        .select("id, temporada_id, tipo, titulo, abre_em, fecha_em, pontos_por_acerto, desafio_questoes(count)")
+        .eq("temporada_id", temporada.id)
+        .order("abre_em"),
+      db
+        .from("tentativas")
+        .select("*, desafios!inner(temporada_id)")
+        .eq("aluno_id", aluno.id)
+        .eq("desafios.temporada_id", temporada.id),
+      rankingDaTemporada(db, temporada),
+      medalhasDaTurmaDoAluno(aluno.turmaId),
+      errosParaRevisar(db, aluno.id, aluno.turmaId),
+      curiosidadeDoDia(temporada),
+    ]);
   const desafios = (desafiosBrutos ?? []) as (Desafio & { desafio_questoes: { count: number }[] })[];
   const tentativas = new Map(((tentativasBrutas ?? []) as Tentativa[]).map((t) => [t.desafio_id, t]));
   const { top, eu, total } = rankingParaAluno(ranking, aluno.id);
   const faltam = diasAte(temporada.data_prova);
+  const concluidos = new Set(
+    [...tentativas.values()].filter((t) => t.concluida_em || t.indice_atual >= t.ordem.length).map((t) => t.desafio_id),
+  );
+  const missao = calcularMissao({
+    desafios,
+    concluidos,
+    iniciados: new Set(tentativas.keys()),
+    errosParaRevisar: erros.length,
+    diasAteProva: faltam,
+  });
+  const rush = proximoCaduRush(desafios);
 
   // CaduRush aberto vem primeiro: é feito na hora, em sala.
   const abertos = desafios
@@ -88,6 +104,14 @@ export default async function MapaTemporada() {
         </div>
       </section>
 
+      <CartaoMissao missao={missao} />
+
+      {rush && (
+        <p className="rounded-2xl bg-gradient-to-r from-amber-100 to-orange-100 px-4 py-3 text-sm font-semibold text-orange-900">
+          ⚡ Próximo CaduRush: {rush.titulo}, {formatarDataHora(rush.abre_em)}. Fique atento ao código no quadro!
+        </p>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-2">
         <section className="flex items-center gap-3 rounded-3xl bg-gradient-to-br from-marca-700 to-marca-900 p-4 text-white shadow-md">
           <Image
@@ -123,6 +147,28 @@ export default async function MapaTemporada() {
           <Image src="/ilustracoes/bau.png" alt="" width={120} height={86} className="h-16 w-auto shrink-0" />
         </Link>
       </div>
+
+      {erros.length > 0 && missao.tipo !== "revisao" && (
+        <Link
+          href="/aluno/revisao"
+          className="flex items-center gap-3 rounded-3xl border border-marca-100 bg-white p-4 shadow-sm transition hover:shadow-md"
+        >
+          <span className="text-3xl">📚</span>
+          <div className="min-w-0 flex-1">
+            <p className="font-extrabold text-marca-900">Revisão de erros</p>
+            <p className="text-sm text-slate-600">
+              {erros.length} {erros.length === 1 ? "questão errada" : "questões erradas"} para revisar. É onde você mais
+              aprende!
+            </p>
+          </div>
+          <span className="font-bold text-marca-700">Revisar ›</span>
+        </Link>
+      )}
+
+      <section className="rounded-3xl border border-amber-200 bg-amber-50 p-4">
+        <p className="text-xs font-bold tracking-widest text-amber-800 uppercase">🏛️ Curiosidade do dia</p>
+        <p className="mt-1 text-sm text-marca-950">{curiosidade}</p>
+      </section>
 
       <MuralRanking top={top} eu={eu} total={total} medalhas={medalhas} alunoId={aluno.id} />
 
@@ -242,6 +288,40 @@ export default async function MapaTemporada() {
         </section>
       )}
     </div>
+  );
+}
+
+const ESTILO_MISSAO: Record<Missao["tipo"], { fundo: string; icone: string }> = {
+  cadurush: { fundo: "from-amber-400 via-orange-500 to-rose-600", icone: "⚡" },
+  desafio: { fundo: "from-emerald-500 to-emerald-700", icone: "🎯" },
+  revisao: { fundo: "from-marca-500 to-marca-700", icone: "📚" },
+  aguardar: { fundo: "from-sky-500 to-marca-700", icone: "✅" },
+  prova: { fundo: "from-sky-500 to-marca-700", icone: "🏁" },
+  encerrada: { fundo: "from-slate-500 to-slate-700", icone: "🏛️" },
+};
+
+/** Missão do dia: uma ação só, com botão grande. */
+function CartaoMissao({ missao }: { missao: Missao }) {
+  const estilo = ESTILO_MISSAO[missao.tipo];
+  return (
+    <section className={`rounded-3xl bg-gradient-to-br ${estilo.fundo} p-5 text-white shadow-lg`}>
+      <p className="text-xs font-bold tracking-widest uppercase opacity-90">Missão do dia</p>
+      <div className="mt-1 flex items-start gap-3">
+        <span className="text-4xl leading-none">{estilo.icone}</span>
+        <div className="min-w-0">
+          <h2 className="text-xl font-extrabold">{missao.titulo}</h2>
+          <p className="text-sm text-white/90">{missao.texto}</p>
+        </div>
+      </div>
+      {missao.href && (
+        <Link
+          href={missao.href}
+          className="mt-4 block rounded-2xl bg-white px-5 py-3.5 text-center text-base font-extrabold text-marca-900 shadow hover:bg-white/90"
+        >
+          {missao.botao} ›
+        </Link>
+      )}
+    </section>
   );
 }
 

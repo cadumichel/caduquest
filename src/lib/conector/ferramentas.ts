@@ -37,7 +37,11 @@ const schemaQuestao = z.object({
   capitulo: z.string().describe("Use o mesmo nome do capítulo cadastrado na temporada (veja listar_turmas)."),
   habilidades: z.array(z.string()).describe(`Use só nomes desta lista: ${HABILIDADES.join(", ")}.`),
   dificuldade: z.number().int().min(1).max(3).describe("1 fácil, 2 média, 3 difícil"),
-  explicacao: z.string().describe("1 ou 2 frases: por que a resposta certa é certa. Aparece no gabarito."),
+  explicacao: z
+    .string()
+    .describe(
+      "Aparece no gabarito depois que o desafio fecha. 2 a 4 frases: por que a resposta certa é certa e, na múltipla escolha, o erro de cada distrator (ex.: 'A) ... B) ...').",
+    ),
   fonte: z.string().optional().describe("Origem do texto ou da imagem citada, se houver."),
   tempo_limite_s: z
     .number()
@@ -141,13 +145,24 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         `Tipos: ${TIPOS.map((t) => `${t} (${NOME_TIPO[t]})`).join(", ")}. Preencha só os campos do tipo da questão.`,
         "Questões inválidas são recusadas uma a uma, com o motivo, e as válidas são gravadas: corrija e reenvie só as recusadas.",
         "Antes de gravar, mostre as questões ao professor e grave só depois que ele aprovar.",
+        "Sempre envie junto, em curiosidades, 2 a 4 curiosidades históricas curtas e verdadeiras sobre os capítulos do lote, sem o professor precisar pedir: elas viram a Curiosidade do dia na tela dos alunos.",
       ].join(" "),
       inputSchema: z.object({
         questoes: z.array(schemaQuestao).min(1).max(30),
         publicar: z.boolean().optional().describe("true publica direto, sem passar por rascunho."),
+        curiosidades: z
+          .array(
+            z.object({
+              capitulo: z.string().describe("Mesmo nome do capítulo das questões."),
+              texto: z.string().min(10).max(500).describe("1 ou 2 frases, fato verificável, linguagem do aluno."),
+            }),
+          )
+          .max(10)
+          .optional()
+          .describe("Curiosidades do dia ligadas aos capítulos do lote."),
       }),
     },
-    async ({ questoes, publicar }) => {
+    async ({ questoes, publicar, curiosidades }) => {
       const professorId = await professorDoConector();
       const permitidas = new Set<string>(HABILIDADES);
       const linhas = [];
@@ -188,9 +203,18 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         if (error) return falha("Não foi possível gravar as questões. Nada foi salvo.");
         gravadas = data;
       }
+      let curiosidadesGravadas = 0;
+      const novasCuriosidades = (curiosidades ?? [])
+        .map((c) => ({ professor_id: professorId, capitulo: c.capitulo.trim() || null, texto: c.texto.trim() }))
+        .filter((c) => c.texto.length >= 10);
+      if (novasCuriosidades.length) {
+        const { error } = await criarClienteAdmin().from("curiosidades").insert(novasCuriosidades);
+        if (!error) curiosidadesGravadas = novasCuriosidades.length;
+      }
       const capitulos = [...new Set(linhas.map((l) => l.capitulo))];
       return resultado({
         gravadas: gravadas.length,
+        curiosidades_gravadas: curiosidadesGravadas,
         status: publicar ? "publicada" : "rascunho",
         questoes: gravadas,
         recusadas,
