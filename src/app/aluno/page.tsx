@@ -12,7 +12,8 @@ import { progressoDoAluno } from "@/lib/progresso-dados";
 import { rankingParaAluno } from "@/lib/ranking";
 import { errosParaRevisar } from "@/lib/revisao";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
-import { rankingDaTemporada } from "@/lib/temporada-dados";
+import { situacaoDaTemporada } from "@/lib/temporada-dados";
+import { MetaTurma } from "@/components/MetaTurma";
 import { situacaoDesafio, type Desafio, type Tentativa } from "@/lib/tipos-banco";
 
 export const metadata: Metadata = { title: "Mapa da temporada" };
@@ -32,7 +33,7 @@ export default async function MapaTemporada() {
   }
 
   // Tudo em paralelo: as tentativas do aluno vêm filtradas pela temporada via join.
-  const [{ data: desafiosBrutos }, { data: tentativasBrutas }, ranking, medalhas, erros, curiosidade, progresso] =
+  const [{ data: desafiosBrutos }, { data: tentativasBrutas }, situacao, medalhas, erros, curiosidade, progresso] =
     await Promise.all([
       db
         .from("desafios")
@@ -44,7 +45,7 @@ export default async function MapaTemporada() {
         .select("*, desafios!inner(temporada_id)")
         .eq("aluno_id", aluno.id)
         .eq("desafios.temporada_id", temporada.id),
-      rankingDaTemporada(db, temporada),
+      situacaoDaTemporada(db, temporada),
       medalhasDaTurmaDoAluno(aluno.turmaId),
       errosParaRevisar(db, aluno.id, aluno.turmaId),
       curiosidadeDoDia(temporada),
@@ -52,7 +53,7 @@ export default async function MapaTemporada() {
     ]);
   const desafios = (desafiosBrutos ?? []) as (Desafio & { desafio_questoes: { count: number }[] })[];
   const tentativas = new Map(((tentativasBrutas ?? []) as Tentativa[]).map((t) => [t.desafio_id, t]));
-  const { top, eu, total } = rankingParaAluno(ranking, aluno.id);
+  const { top, eu, total } = rankingParaAluno(situacao.ranking, aluno.id);
   const faltam = diasAte(temporada.data_prova);
   const concluidos = new Set(
     [...tentativas.values()].filter((t) => t.concluida_em || t.indice_atual >= t.ordem.length).map((t) => t.desafio_id),
@@ -172,6 +173,8 @@ export default async function MapaTemporada() {
         <p className="text-xs font-bold tracking-widest text-amber-800 uppercase">🏛️ Curiosidade do dia</p>
         <p className="mt-1 text-sm text-marca-950">{curiosidade}</p>
       </section>
+
+      <MetaTurma meta={situacao.meta} />
 
       <MuralRanking top={top} eu={eu} total={total} medalhas={medalhas} alunoId={aluno.id} />
 
