@@ -31,3 +31,30 @@ body {
   user-select: none;
   -webkit-touch-callout: none;
 }
+
+/* Personagens especiais: aura dourada girando e um brilho que passa pela imagem. */
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes brilho {
+  0%,
+  55% {
+    transform: translateX(-120%) rotate(25deg);
+  }
+  100% {
+    transform: translateX(120%) rotate(25deg);
+  }
+}
+@keyframes cintilar {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}

@@ -38,3 +38,20 @@ describe("curiosidades dos personagens", () => {
     for (const p of PERSONAGENS) expect(CURIOSIDADE_PERSONAGEM[p.nome], p.nome).toBeTruthy();
   });
 });
+
+describe("desbloqueio dos personagens", async () => {
+  const { INICIAIS, ORDEM_BASICOS, nivelNecessario, personagemLiberado } = await import("../personagens");
+  it("começa com 8 básicos e libera 2 por nível até todos", () => {
+    expect(INICIAIS).toHaveLength(8);
+    expect(new Set(ORDEM_BASICOS).size).toBe(30);
+    expect(ORDEM_BASICOS.filter((i) => nivelNecessario(i) === 1)).toHaveLength(8);
+    expect(ORDEM_BASICOS.filter((i) => nivelNecessario(i) === 2)).toHaveLength(2);
+    expect(Math.max(...ORDEM_BASICOS.map(nivelNecessario))).toBe(12);
+  });
+  it("lendários só com desafios vencidos, básicos só com nível", () => {
+    expect(personagemLiberado(ORDEM_ESPECIAIS[0], { nivel: 50, medalhas: 0 })).toBe(false);
+    expect(personagemLiberado(ORDEM_ESPECIAIS[0], { nivel: 1, medalhas: 1 })).toBe(true);
+    expect(personagemLiberado(ORDEM_BASICOS[8], { nivel: 1, medalhas: 10 })).toBe(false);
+    expect(personagemLiberado(ORDEM_BASICOS[8], { nivel: 2, medalhas: 0 })).toBe(true);
+  });
+});

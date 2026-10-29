@@ -4,7 +4,7 @@ import { Avatar, CORES_AVATAR } from "@/components/Avatar";
 import { BotaoEnviar, PendenteForm } from "@/components/BotaoEnviar";
 import { useAcaoSemReset } from "@/components/useAcaoSemReset";
 import { Aviso, Campo, Entrada } from "@/components/ui";
-import { BASICOS, PERSONAGENS } from "@/lib/personagens";
+import { INICIAIS, PERSONAGENS } from "@/lib/personagens";
 import { entrar, trocarConta } from "./actions";
 
 type Lembrado = { codigo: string; apelido: string; avatar: number; cor: number };
@@ -12,7 +12,7 @@ type Lembrado = { codigo: string; apelido: string; avatar: number; cor: number }
 export function FormEntrar({ aviso, lembrado }: { aviso?: string; lembrado: Lembrado | null }) {
   const { estado, onSubmit, pendente } = useAcaoSemReset(entrar);
   const [modo, setModo] = useState<"entrar" | "cadastrar">("entrar");
-  const [avatar, setAvatar] = useState(BASICOS[0]);
+  const [avatar, setAvatar] = useState(INICIAIS[0]);
   const [cor, setCor] = useState(0);
 
   const campoPin = (cadastro: boolean) => (
@@ -117,7 +117,7 @@ export function FormEntrar({ aviso, lembrado }: { aviso?: string; lembrado: Lemb
                 <span className="text-sm font-semibold">{PERSONAGENS[avatar].nome}</span>
               </div>
               <div className="grid max-h-56 grid-cols-5 gap-1 overflow-y-auto rounded-xl bg-slate-50 p-1">
-                {BASICOS.map((i) => (
+                {INICIAIS.map((i) => (
                   <button
                     key={i}
                     type="button"

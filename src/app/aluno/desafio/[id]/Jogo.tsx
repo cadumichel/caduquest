@@ -120,7 +120,7 @@ export function Jogo({
       <div className="space-y-4">
         <Aviso>{estado.mensagem}</Aviso>
         <BotaoLink href="/aluno" variante="secundario">
-          Voltar ao mapa
+          Voltar ao início
         </BotaoLink>
       </div>
     );
@@ -135,7 +135,7 @@ export function Jogo({
         <div className="flex flex-col gap-3">
           <BotaoLink href={`/aluno/desafio/${desafioId}/resultado`}>Ver meu resultado</BotaoLink>
           <BotaoLink href="/aluno" variante="secundario">
-            Voltar ao mapa
+            Voltar ao início
           </BotaoLink>
         </div>
       </div>
