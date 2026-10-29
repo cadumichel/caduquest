@@ -7,6 +7,8 @@ import { curiosidadeDoDia, medalhasDaTurmaDoAluno, temporadaAtualDoAluno } from 
 import { exigirAluno } from "@/lib/aluno-sessao";
 import { diasAte, formatarData, formatarDataHora } from "@/lib/datas";
 import { calcularMissao, proximoCaduRush, type Missao } from "@/lib/missao";
+import { chaveCapitulo, dominioCapitulo } from "@/lib/progresso";
+import { progressoDoAluno } from "@/lib/progresso-dados";
 import { rankingParaAluno } from "@/lib/ranking";
 import { errosParaRevisar } from "@/lib/revisao";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
@@ -30,7 +32,7 @@ export default async function MapaTemporada() {
   }
 
   // Tudo em paralelo: as tentativas do aluno vêm filtradas pela temporada via join.
-  const [{ data: desafiosBrutos }, { data: tentativasBrutas }, ranking, medalhas, erros, curiosidade] =
+  const [{ data: desafiosBrutos }, { data: tentativasBrutas }, ranking, medalhas, erros, curiosidade, progresso] =
     await Promise.all([
       db
         .from("desafios")
@@ -46,6 +48,7 @@ export default async function MapaTemporada() {
       medalhasDaTurmaDoAluno(aluno.turmaId),
       errosParaRevisar(db, aluno.id, aluno.turmaId),
       curiosidadeDoDia(temporada),
+      progressoDoAluno(aluno.id, aluno.turmaId),
     ]);
   const desafios = (desafiosBrutos ?? []) as (Desafio & { desafio_questoes: { count: number }[] })[];
   const tentativas = new Map(((tentativasBrutas ?? []) as Tentativa[]).map((t) => [t.desafio_id, t]));
@@ -179,14 +182,23 @@ export default async function MapaTemporada() {
             Trilha da temporada
           </h2>
           <ol className="relative ml-3 space-y-4 border-l-2 border-dashed border-marca-300 pl-6">
-            {temporada.capitulos.map((cap, i) => (
-              <li key={i} className="relative">
-                <span className="absolute -left-[35px] flex h-6 w-6 items-center justify-center rounded-full bg-marca-600 text-xs font-bold text-white ring-2 ring-marca-100">
-                  {i + 1}
-                </span>
-                {cap}
-              </li>
-            ))}
+            {temporada.capitulos.map((cap, i) => {
+              const d = progresso.capitulos.get(chaveCapitulo(cap));
+              const estilo = DOMINIO[dominioCapitulo(d)];
+              return (
+                <li key={i} className="relative">
+                  <span
+                    className={`absolute -left-[35px] flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ring-2 ${estilo.bola}`}
+                  >
+                    {estilo.marca ?? i + 1}
+                  </span>
+                  <span className="font-medium">{cap}</span>
+                  <span className={`ml-2 text-xs ${estilo.texto}`}>
+                    {d ? `${estilo.rotulo} · ${Math.round(d.acerto * 100)}%` : estilo.rotulo}
+                  </span>
+                </li>
+              );
+            })}
             <li className="relative font-semibold text-marca-700">
               <span className="absolute -left-[35px] flex h-6 w-6 items-center justify-center rounded-full bg-ouro text-xs">
                 🏁
@@ -290,6 +302,29 @@ export default async function MapaTemporada() {
     </div>
   );
 }
+
+/** Cores da trilha conforme o domínio do capítulo. */
+const DOMINIO = {
+  novo: {
+    bola: "bg-slate-200 text-slate-600 ring-slate-100",
+    texto: "text-slate-400",
+    rotulo: "a explorar",
+    marca: null,
+  },
+  comecando: { bola: "bg-rose-500 text-white ring-rose-100", texto: "text-rose-600", rotulo: "começando", marca: null },
+  avancando: {
+    bola: "bg-amber-400 text-marca-950 ring-amber-100",
+    texto: "text-amber-700",
+    rotulo: "avançando",
+    marca: null,
+  },
+  dominado: {
+    bola: "bg-emerald-500 text-white ring-emerald-100",
+    texto: "text-emerald-700",
+    rotulo: "dominado",
+    marca: "✓",
+  },
+} as const;
 
 const ESTILO_MISSAO: Record<Missao["tipo"], { fundo: string; icone: string }> = {
   cadurush: { fundo: "from-amber-400 via-orange-500 to-rose-600", icone: "⚡" },

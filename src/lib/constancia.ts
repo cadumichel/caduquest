@@ -17,6 +17,8 @@ export type Constancia = {
   sequencia: number;
   /** Total de semanas completas na temporada. */
   semanasCompletas: number;
+  /** Maior ofensiva da temporada (para as conquistas). */
+  maiorSequencia: number;
 };
 
 /** Segunda-feira (AAAA-MM-DD, horário de Brasília) da semana de um instante. */
@@ -48,15 +50,17 @@ export function calcularConstancia(
   let bonus = 0;
   let sequencia = 0;
   let semanasCompletas = 0;
+  let maiorSequencia = 0;
   for (const desafios of semanas) {
     if (!desafios.length) continue;
     if (desafios.every((d) => concluidos.has(d.id))) {
       sequencia += 1;
       semanasCompletas += 1;
+      maiorSequencia = Math.max(maiorSequencia, sequencia);
       bonus += Math.min(BONUS_SEMANA + BONUS_SEQUENCIA * (sequencia - 1), BONUS_MAXIMO);
     } else if (desafios.every((d) => new Date(d.fecha_em) < agora)) {
       sequencia = 0;
     }
   }
-  return { bonus, sequencia, semanasCompletas };
+  return { bonus, sequencia, semanasCompletas, maiorSequencia };
 }

@@ -12,6 +12,7 @@ export type LinhaRanking = {
   /** Ofensiva atual (semanas seguidas completas). */
   sequencia: number;
   semanasCompletas: number;
+  maiorSequencia: number;
   posicao: number;
 };
 
@@ -26,6 +27,7 @@ type Entrada = {
   bonus?: number;
   sequencia?: number;
   semanasCompletas?: number;
+  maiorSequencia?: number;
 };
 
 /**
@@ -45,6 +47,7 @@ export function montarRanking(entradas: Entrada[]): LinhaRanking[] {
     bonus: e.bonus ?? 0,
     sequencia: e.sequencia ?? 0,
     semanasCompletas: e.semanasCompletas ?? 0,
+    maiorSequencia: e.maiorSequencia ?? 0,
     posicao: 0,
   }));
   linhas.sort(
