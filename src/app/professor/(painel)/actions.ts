@@ -81,6 +81,13 @@ export async function removerAluno(alunoId: string) {
   if (data) revalidatePath(`/professor/turmas/${data.turma_id}`);
 }
 
+/** Carta coringa: o professor pode apagar um tema impróprio ou fora do conteúdo. */
+export async function apagarCarta(cartaId: string, turmaId: string) {
+  const { supabase } = await exigirProfessor();
+  await supabase.from("cartas_coringa").delete().eq("id", cartaId);
+  revalidatePath(`/professor/turmas/${turmaId}`);
+}
+
 export async function aprovarAluno(alunoId: string) {
   const { supabase } = await exigirProfessor();
   const { data } = await supabase

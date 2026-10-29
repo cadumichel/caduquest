@@ -3,6 +3,8 @@ import { revalidatePath } from "next/cache";
 import { CORES_AVATAR, TOTAL_AVATARES } from "@/components/Avatar";
 import { exigirAluno } from "@/lib/aluno-sessao";
 import { medalhasDaTurma } from "@/lib/medalhas";
+import { apelidoImproprio } from "@/lib/apelido";
+import { cartaDoAluno } from "@/lib/carta-coringa";
 import { personagemLiberado } from "@/lib/personagens";
 import { calcularConquistas } from "@/lib/progresso";
 import { progressoDoAluno } from "@/lib/progresso-dados";
@@ -171,4 +173,27 @@ export async function responderRevisao(
   await registrarRevisao(db, aluno.id, questaoId, fracao === 1);
   revalidatePath("/aluno");
   return { fracao, conteudo, explicacao: q.explicacao };
+}
+
+/** Carta coringa: o campeão registra (ou muda) o tema da questão da próxima prova. */
+export async function salvarCarta(temaBruto: string): Promise<{ erro?: string; ok?: string }> {
+  const aluno = await exigirAluno();
+  const tema = String(temaBruto ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (tema.length < 3 || tema.length > 160) return { erro: "Escreva o tema em 3 a 160 caracteres." };
+  if (apelidoImproprio(tema)) return { erro: "Esse texto não pode ser usado. Escreva só o tema da apostila." };
+  const db = criarClienteAdmin();
+  const carta = await cartaDoAluno(db, aluno.id, aluno.turmaId);
+  if (!carta) return { erro: "Só o campeão da última temporada pode usar a carta coringa." };
+  if (!carta.aberta) return { erro: "O prazo para escolher o tema já terminou." };
+  const { error } = await db
+    .from("cartas_coringa")
+    .upsert(
+      { temporada_id: carta.temporada.id, aluno_id: aluno.id, tema, atualizado_em: new Date().toISOString() },
+      { onConflict: "temporada_id,aluno_id" },
+    );
+  if (error) return { erro: "Não foi possível salvar. Peça ao professor para atualizar o app." };
+  revalidatePath("/aluno");
+  return { ok: "Tema registrado! O professor vai transformar esse tema em uma questão da próxima prova." };
 }

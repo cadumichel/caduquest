@@ -12,7 +12,9 @@ import { medalhasDaTurma } from "@/lib/medalhas";
 import { exigirProfessor } from "@/lib/professor";
 import { rankingDaTemporada, temporadaAtual } from "@/lib/temporada-dados";
 import type { Aluno, Temporada } from "@/lib/tipos-banco";
+import { cartasParaAProxima } from "@/lib/carta-coringa";
 import {
+  apagarCarta,
   alternarAprovacao,
   aprovarAluno,
   aprovarTodos,
@@ -54,7 +56,10 @@ export default async function PaginaTurma({ params }: PageProps<"/professor/turm
   const alunos = todos.filter((a) => a.aprovado);
   const pendentes = todos.filter((a) => !a.aprovado);
   const temporadas = (temporadasBrutas ?? []) as Temporada[];
-  const ranking = atual ? await rankingDaTemporada(supabase, atual) : [];
+  const [ranking, cartas] = await Promise.all([
+    atual ? rankingDaTemporada(supabase, atual) : [],
+    cartasParaAProxima(supabase, id),
+  ]);
   const hoje = hojeEmBrasilia();
 
   return (
@@ -82,6 +87,36 @@ export default async function PaginaTurma({ params }: PageProps<"/professor/turm
           Gerar novo código
         </BotaoConfirmar>
       </Cartao>
+
+      {cartas.length > 0 && (
+        <Cartao className="border-amber-300 bg-amber-50">
+          <Subtitulo>🃏 Cartas coringa para a próxima prova</Subtitulo>
+          <p className="mb-3 text-sm text-slate-600">
+            Temas escolhidos pelos campeões da última temporada (desta turma e das turmas da mesma série). Cada um vira
+            uma questão da próxima prova; você decide o formato e a dificuldade. O Claude também vê estes temas pelo
+            conector.
+          </p>
+          <ul className="space-y-2">
+            {cartas.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-center gap-3 rounded-xl bg-white p-3">
+                <Avatar avatar={c.avatar} cor={c.cor} tamanho={36} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-slate-500">
+                    {c.apelido} · {c.turmaNome} · campeão de {c.temporadaNome}
+                  </p>
+                  <p className="font-semibold">“{c.tema}”</p>
+                </div>
+                <BotaoConfirmar
+                  acao={apagarCarta.bind(null, c.id, id)}
+                  pergunta={`Apagar o tema escolhido por ${c.apelido}? O aluno poderá escolher outro enquanto o prazo estiver aberto.`}
+                >
+                  Apagar
+                </BotaoConfirmar>
+              </li>
+            ))}
+          </ul>
+        </Cartao>
+      )}
 
       {pendentes.length > 0 && (
         <Cartao className="border-amber-300 bg-amber-50">

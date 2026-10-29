@@ -7,7 +7,9 @@ import { curiosidadeDoDia, medalhasDaTurmaDoAluno, temporadaAtualDoAluno } from 
 import { exigirAluno } from "@/lib/aluno-sessao";
 import { diasAte, formatarData, formatarDataHora } from "@/lib/datas";
 import { calcularMissao, proximoCaduRush, type Missao } from "@/lib/missao";
+import { cartaDoAluno, cartasParaAProxima, type CartaCoringa } from "@/lib/carta-coringa";
 import { passosDaOfensiva, type PassoOfensiva } from "@/lib/constancia";
+import { Avatar } from "@/components/Avatar";
 import { chaveCapitulo, dominioCapitulo } from "@/lib/progresso";
 import { progressoDoAluno } from "@/lib/progresso-dados";
 import { rankingParaAluno } from "@/lib/ranking";
@@ -52,6 +54,10 @@ export default async function Inicio() {
       curiosidadeDoDia(temporada),
       progressoDoAluno(aluno.id, aluno.turmaId),
     ]);
+  const [cartas, minhaCarta] = await Promise.all([
+    cartasParaAProxima(db, aluno.turmaId),
+    cartaDoAluno(db, aluno.id, aluno.turmaId),
+  ]);
   const desafios = (desafiosBrutos ?? []) as (Desafio & { desafio_questoes: { count: number }[] })[];
   const tentativas = new Map(((tentativasBrutas ?? []) as Tentativa[]).map((t) => [t.desafio_id, t]));
   const { top, eu, total } = rankingParaAluno(situacao.ranking, aluno.id);
@@ -119,6 +125,23 @@ export default async function Inicio() {
         <p className="rounded-2xl bg-gradient-to-r from-amber-100 to-orange-100 px-4 py-3 text-sm font-semibold text-orange-900">
           ⚡ Próximo CaduRush: {rush.titulo}, {formatarDataHora(rush.abre_em)}. Fique atento ao código no quadro!
         </p>
+      )}
+
+      {minhaCarta?.aberta && !minhaCarta.tema && (
+        <Link
+          href="/aluno/coringa"
+          className="block rounded-3xl bg-gradient-to-br from-marca-950 via-marca-900 to-amber-900 p-5 text-white shadow-lg ring-2 ring-amber-300"
+        >
+          <p className="text-xs font-bold tracking-widest text-amber-300 uppercase">✦ Você ganhou a carta coringa ✦</p>
+          <p className="mt-1 text-lg font-extrabold">Campeão da temporada {minhaCarta.temporada.nome}! 🏆</p>
+          <p className="text-sm text-amber-50">
+            Escolha o tema de uma questão da próxima prova: uma página ou um subtítulo da apostila. ›
+          </p>
+        </Link>
+      )}
+
+      {cartas.length > 0 && (
+        <CartasCoringa cartas={cartas} prova={faltam >= 0 ? temporada.data_prova : null} meuId={aluno.id} />
       )}
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -374,6 +397,37 @@ function CartaoMissao({ missao }: { missao: Missao }) {
           {missao.botao} ›
         </Link>
       )}
+    </section>
+  );
+}
+
+/** Temas escolhidos pelos campeões (desta turma e das turmas da mesma série) para a próxima prova. */
+function CartasCoringa({ cartas, prova, meuId }: { cartas: CartaCoringa[]; prova: string | null; meuId: string }) {
+  return (
+    <section className="rounded-3xl bg-gradient-to-br from-marca-950 via-marca-900 to-amber-900 p-5 text-white shadow-lg ring-1 ring-amber-300/50">
+      <p className="text-xs font-bold tracking-widest text-amber-300 uppercase">🃏 Cartas coringa</p>
+      <p className="text-sm text-amber-50">
+        Os campeões da última temporada escolheram estes temas: cada um vira uma questão da próxima prova
+        {prova ? ` (${formatarData(prova)})` : ""}.
+      </p>
+      <ul className="mt-3 space-y-2">
+        {cartas.map((c) => (
+          <li key={c.id} className="flex items-center gap-3 rounded-2xl bg-white/10 p-3">
+            <Avatar avatar={c.avatar} cor={c.cor} tamanho={48} />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-amber-200">
+                {c.apelido} · campeão da {c.turmaNome}
+              </p>
+              <p className="font-bold">“{c.tema}”</p>
+            </div>
+            {c.alunoId === meuId && (
+              <Link href="/aluno/coringa" className="text-xs font-bold text-amber-300 underline">
+                mudar
+              </Link>
+            )}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
