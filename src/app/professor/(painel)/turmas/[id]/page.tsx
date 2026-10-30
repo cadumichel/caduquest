@@ -11,7 +11,9 @@ import { AreaTexto, Botao, Campo, Cartao, Entrada, Etiqueta, Subtitulo, Titulo, 
 import { formatarData, formatarDataHora, hojeEmBrasilia } from "@/lib/datas";
 import { medalhasDaTurma } from "@/lib/medalhas";
 import { exigirProfessor } from "@/lib/professor";
-import { rankingDaTemporada, temporadaAtual } from "@/lib/temporada-dados";
+import { rankingsDaTurma } from "@/lib/rankings-turma";
+import { temporadaAtual } from "@/lib/temporada-dados";
+import { situacaoDesafio } from "@/lib/tipos-banco";
 import type { Aluno, Temporada } from "@/lib/tipos-banco";
 import { cartasParaAProxima } from "@/lib/carta-coringa";
 import {
@@ -60,11 +62,12 @@ export default async function PaginaTurma({ params }: PageProps<"/professor/turm
   const alunos = todos.filter((a) => a.aprovado);
   const pendentes = todos.filter((a) => !a.aprovado);
   const temporadas = (temporadasBrutas ?? []) as Temporada[];
-  const [ranking, cartas] = await Promise.all([
-    atual ? rankingDaTemporada(supabase, atual) : [],
+  const [rankings, cartas] = await Promise.all([
+    rankingsDaTurma(supabase, temporadas, alunos),
     cartasParaAProxima(supabase, id, { todas: true }),
   ]);
   const hoje = hojeEmBrasilia();
+  const nomes = new Map(alunos.map((a) => [a.id, a.nome_real]));
 
   return (
     <div className="space-y-6">
@@ -238,12 +241,64 @@ export default async function PaginaTurma({ params }: PageProps<"/professor/turm
 
         <div className="space-y-6">
           <Cartao>
-            <Subtitulo>Ranking {atual ? `· ${atual.nome}` : ""}</Subtitulo>
-            <TabelaRanking
-              ranking={ranking}
-              nomes={new Map(alunos.map((a) => [a.id, a.nome_real]))}
-              medalhas={medalhas}
-            />
+            <Subtitulo>Rankings</Subtitulo>
+            {!rankings.length && <Vazio>Crie uma temporada para ver o ranking.</Vazio>}
+            <div className="space-y-2">
+              {rankings.map(({ temporada, ranking, desafios }) => (
+                <details
+                  key={temporada.id}
+                  open={temporada.id === atual?.id}
+                  className="group rounded-xl border border-slate-200 p-3"
+                >
+                  <summary className="cursor-pointer font-semibold text-marca-800">
+                    🏆 {temporada.nome}{" "}
+                    {temporada.encerrada_em ? (
+                      <Etiqueta cor="cinza">encerrada</Etiqueta>
+                    ) : (
+                      temporada.id === atual?.id && <Etiqueta cor="verde">atual</Etiqueta>
+                    )}
+                  </summary>
+                  <div className="mt-2">
+                    <TabelaRanking ranking={ranking} nomes={nomes} medalhas={medalhas} />
+                  </div>
+                  {desafios.length > 0 && (
+                    <div className="mt-4 space-y-1.5">
+                      <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Por desafio</p>
+                      {desafios.map(({ desafio, ranking: rd, naoFizeram }) => (
+                        <details key={desafio.id} className="rounded-lg bg-slate-50 px-3 py-2">
+                          <summary className="cursor-pointer text-sm">
+                            <span className="font-medium">
+                              {desafio.tipo === "relampago" && "⚡ "}
+                              {desafio.titulo}
+                            </span>{" "}
+                            <span className="text-slate-500">
+                              · {rd.length} fizeram
+                              {situacaoDesafio(desafio) === "aberto" && " · aberto"}
+                            </span>
+                          </summary>
+                          <div className="mt-2">
+                            {rd.length ? (
+                              <TabelaRanking ranking={rd} nomes={nomes} medalhas={medalhas} />
+                            ) : (
+                              <p className="text-sm text-slate-500">Ninguém fez ainda.</p>
+                            )}
+                            {naoFizeram > 0 && rd.length > 0 && (
+                              <p className="mt-1 text-xs text-slate-500">{naoFizeram} aluno(s) não fizeram.</p>
+                            )}
+                            <Link
+                              href={`/professor/desafios/${desafio.id}`}
+                              className="mt-1 inline-block text-xs text-marca-700"
+                            >
+                              Ver desempenho por questão →
+                            </Link>
+                          </div>
+                        </details>
+                      ))}
+                    </div>
+                  )}
+                </details>
+              ))}
+            </div>
           </Cartao>
 
           <Cartao>

@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { JANELA_APOS_FECHAR_S } from "@/lib/questoes/correcao";
+import { gabaritoLiberado, type Desafio } from "@/lib/tipos-banco";
 
 /**
  * Revisão de erros: questões que o aluno errou (ou acertou só em parte) em
@@ -15,11 +16,13 @@ export const QUESTOES_POR_RODADA = 5;
 export async function errosParaRevisar(db: SupabaseClient, alunoId: string, turmaId: string): Promise<string[]> {
   const { data: tentativas } = await db
     .from("tentativas")
-    .select("id, desafios!inner(fecha_em, temporadas!inner(turma_id))")
+    .select("id, desafios!inner(*, temporadas!inner(turma_id))")
     .eq("aluno_id", alunoId)
     .eq("desafios.temporadas.turma_id", turmaId)
     .lt("desafios.fecha_em", new Date(Date.now() - JANELA_APOS_FECHAR_S * 1000).toISOString());
-  const ids = (tentativas ?? []).map((t) => t.id as string);
+  const ids = (tentativas ?? [])
+    .filter((t) => gabaritoLiberado(t.desafios as unknown as Desafio))
+    .map((t) => t.id as string);
   if (!ids.length) return [];
 
   const [{ data: respostas }, { data: revisadas }] = await Promise.all([

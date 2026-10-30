@@ -21,4 +21,12 @@ describe("gabarito liberado", () => {
     expect(tempoEsgotado(servida, fimDaQuestao, 180)).toBe(true);
     expect(gabaritoLiberado(desafio, fimDaQuestao)).toBe(false);
   });
+
+  it("com liberação manual, espera o professor mesmo depois do prazo", () => {
+    const manual = { ...desafio, gabarito_manual: true, gabarito_liberado_em: null };
+    expect(gabaritoLiberado(manual, new Date("2026-10-31T15:00:00Z"))).toBe(false);
+    const liberado = { ...manual, gabarito_liberado_em: "2026-10-30T15:01:00Z" };
+    expect(gabaritoLiberado(liberado, new Date("2026-10-30T15:02:00Z"))).toBe(false);
+    expect(gabaritoLiberado(liberado, new Date("2026-10-30T15:03:04Z"))).toBe(true);
+  });
 });
