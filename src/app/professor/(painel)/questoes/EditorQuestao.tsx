@@ -1,11 +1,19 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
+import { FaixaRelampago } from "@/components/FaixaRelampago";
 import { QuestaoInterativa } from "@/components/QuestaoInterativa";
 import { AreaTexto, Aviso, Botao, Campo, Cartao, Entrada, Selecao, classeInput } from "@/components/ui";
 import { HABILIDADES } from "@/lib/habilidades";
 import { montarVista, respostaInicial } from "@/lib/questoes/apresentacao";
 import { permutacaoAleatoria } from "@/lib/questoes/embaralhar";
+import {
+  LIMITE_ENUNCIADO,
+  problemasRelampago,
+  RELAMPAGO_MAX_S,
+  RELAMPAGO_MIN_S,
+  sugerirTempoRelampago,
+} from "@/lib/questoes/relampago";
 import {
   conteudoVazio,
   MARCA_LACUNA,
@@ -55,6 +63,7 @@ export function EditorQuestao({
     fonte: inicial?.fonte ?? "",
     imagem_path: inicial?.imagem_path ?? null,
     tempo_limite_s: inicial?.tempo_limite_s ?? TEMPO_PADRAO.multipla_escolha,
+    relampago: inicial?.relampago ?? false,
     explicacao: inicial?.explicacao ?? "",
     dica: inicial?.dica ?? "",
   });
@@ -62,8 +71,18 @@ export function EditorQuestao({
 
   const trocarTipo = (tipo: TipoQuestao) => {
     setConteudo(conteudoVazio(tipo));
-    set("tempo_limite_s", TEMPO_PADRAO[tipo]);
+    if (!campos.relampago) set("tempo_limite_s", TEMPO_PADRAO[tipo]);
   };
+
+  const temImagem = Boolean(campos.imagem_path) && conteudo.tipo !== "mapa";
+  const sugestao = sugerirTempoRelampago(campos.enunciado, conteudo, temImagem);
+  const problemas = campos.relampago ? problemasRelampago(campos.enunciado, conteudo, campos.tempo_limite_s) : [];
+  const alternarRelampago = (ligar: boolean) =>
+    setCampos((c) => ({
+      ...c,
+      relampago: ligar,
+      tempo_limite_s: ligar ? sugestao : TEMPO_PADRAO[conteudo.tipo],
+    }));
 
   const enviarImagem = async (arquivo: File) => {
     if (arquivo.size > 2 * 1024 * 1024) return setMensagem({ erro: "Imagem acima de 2 MB." });
@@ -116,8 +135,38 @@ export function EditorQuestao({
               ))}
             </Selecao>
           </Campo>
-          <Campo rotulo="Enunciado">
-            <AreaTexto rows={4} value={campos.enunciado} onChange={(e) => set("enunciado", e.target.value)} />
+          <div
+            className={`rounded-xl border p-3 ${campos.relampago ? "border-amber-400 bg-amber-50" : "border-slate-200"}`}
+          >
+            <label className="flex cursor-pointer items-start gap-2">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={campos.relampago}
+                onChange={(e) => alternarRelampago(e.target.checked)}
+              />
+              <span>
+                <span className="font-semibold">⚡ Questão relâmpago</span>
+                <span className="block text-sm text-slate-600">
+                  Pergunta direta, sem texto motivador, para responder em {RELAMPAGO_MIN_S} a {RELAMPAGO_MAX_S}{" "}
+                  segundos. O aluno vê um destaque especial.
+                </span>
+              </span>
+            </label>
+          </div>
+          <Campo
+            rotulo="Enunciado"
+            dica={
+              campos.relampago
+                ? `Direto, num parágrafo só, até ${LIMITE_ENUNCIADO} caracteres (${campos.enunciado.trim().length}).`
+                : undefined
+            }
+          >
+            <AreaTexto
+              rows={campos.relampago ? 2 : 4}
+              value={campos.enunciado}
+              onChange={(e) => set("enunciado", e.target.value)}
+            />
           </Campo>
           <Campo
             rotulo={conteudo.tipo === "mapa" ? "Imagem do mapa" : "Imagem (fonte, charge, mapa)"}
@@ -184,14 +233,32 @@ export function EditorQuestao({
               ))}
             </Selecao>
           </Campo>
-          <Campo rotulo="Tempo limite (segundos)">
-            <Entrada
-              type="number"
-              min={TEMPO_MIN_S}
-              max={TEMPO_MAX_S}
-              value={campos.tempo_limite_s}
-              onChange={(e) => set("tempo_limite_s", Number(e.target.value))}
-            />
+          <Campo
+            rotulo={campos.relampago ? "⚡ Tempo relâmpago (segundos)" : "Tempo limite (segundos)"}
+            dica={
+              campos.relampago
+                ? `Sugestão do app pelo tamanho do texto: ${sugestao} s. Ajuste de ${RELAMPAGO_MIN_S} a ${RELAMPAGO_MAX_S} s.`
+                : undefined
+            }
+          >
+            <div className="flex items-center gap-2">
+              <Entrada
+                type="number"
+                min={campos.relampago ? RELAMPAGO_MIN_S : TEMPO_MIN_S}
+                max={campos.relampago ? RELAMPAGO_MAX_S : TEMPO_MAX_S}
+                value={campos.tempo_limite_s}
+                onChange={(e) => set("tempo_limite_s", Number(e.target.value))}
+              />
+              {campos.relampago && campos.tempo_limite_s !== sugestao && (
+                <button
+                  type="button"
+                  className="shrink-0 text-sm font-medium text-marca-700"
+                  onClick={() => set("tempo_limite_s", sugestao)}
+                >
+                  Usar {sugestao} s
+                </button>
+              )}
+            </div>
           </Campo>
           <fieldset className="sm:col-span-2">
             <legend className="mb-1 text-sm font-medium text-slate-700">Habilidades</legend>
@@ -215,6 +282,13 @@ export function EditorQuestao({
           </fieldset>
         </Cartao>
 
+        {problemas.length > 0 && (
+          <ul className="list-disc space-y-0.5 rounded-lg border border-amber-300 bg-amber-50 py-2 pr-3 pl-7 text-sm text-amber-900">
+            {problemas.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+        )}
         {mensagem.erro && <Aviso>{mensagem.erro}</Aviso>}
         {mensagem.ok && <Aviso tipo="ok">{mensagem.ok}</Aviso>}
         <div className="flex flex-wrap gap-2">
@@ -241,6 +315,7 @@ export function EditorQuestao({
               enunciado={campos.enunciado}
               imagemUrl={conteudo.tipo === "mapa" ? null : urlImagem(campos.imagem_path)}
               tempo={campos.tempo_limite_s}
+              relampago={campos.relampago}
             />
           ) : (
             <p className="p-6 text-center text-sm text-slate-500">{validacao.error.issues[0].message}</p>
@@ -256,11 +331,13 @@ function Previa({
   enunciado,
   imagemUrl,
   tempo,
+  relampago,
 }: {
   conteudo: Conteudo;
   enunciado: string;
   imagemUrl: string | null;
   tempo: number;
+  relampago: boolean;
 }) {
   const chave = JSON.stringify(conteudo);
   const [semente, setSemente] = useState(0);
@@ -274,6 +351,7 @@ function Previa({
       enunciado={enunciado}
       imagemUrl={imagemUrl}
       tempo={tempo}
+      relampago={relampago}
       reembaralhar={() => setSemente((s) => s + 1)}
     />
   );
@@ -284,12 +362,14 @@ function PreviaInterna({
   enunciado,
   imagemUrl,
   tempo,
+  relampago,
   reembaralhar,
 }: {
   vista: ReturnType<typeof montarVista>;
   enunciado: string;
   imagemUrl: string | null;
   tempo: number;
+  relampago: boolean;
   reembaralhar: () => void;
 }) {
   const [resposta, setResposta] = useState<Resposta>(() => respostaInicial(vista));
@@ -299,6 +379,7 @@ function PreviaInterna({
         <span>Questão 1 de 10</span>
         <span>⏱️ {tempo}s</span>
       </div>
+      {relampago && <FaixaRelampago tempo={tempo} />}
       {imagemUrl && (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={imagemUrl} alt="" className="mx-auto max-h-64 rounded-xl border border-slate-200" />

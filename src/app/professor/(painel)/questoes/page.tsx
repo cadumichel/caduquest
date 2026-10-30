@@ -25,13 +25,14 @@ export default async function BancoQuestoes({ searchParams }: PageProps<"/profes
   let consulta = supabase
     .from("questoes")
     .select(
-      "id, tipo, enunciado, capitulo, habilidades, dificuldade, status, origem, imagem_path, desafio_questoes(count)",
+      "id, tipo, enunciado, capitulo, habilidades, dificuldade, status, origem, imagem_path, relampago, desafio_questoes(count)",
     )
     .order("criado_em", { ascending: false })
     .limit(500);
   if (filtros.capitulo) consulta = consulta.ilike("capitulo", `%${filtros.capitulo}%`);
   if (filtros.habilidade) consulta = consulta.contains("habilidades", [filtros.habilidade]);
   if ((TIPOS as readonly string[]).includes(filtros.tipo)) consulta = consulta.eq("tipo", filtros.tipo);
+  if (filtros.tipo === "relampago") consulta = consulta.eq("relampago", true);
   if (["1", "2", "3"].includes(filtros.dificuldade)) consulta = consulta.eq("dificuldade", Number(filtros.dificuldade));
   if (filtros.status === "rascunho" || filtros.status === "publicada") consulta = consulta.eq("status", filtros.status);
 
@@ -51,6 +52,7 @@ export default async function BancoQuestoes({ searchParams }: PageProps<"/profes
     status: q.status,
     origem: q.origem,
     temImagem: Boolean(q.imagem_path),
+    relampago: Boolean(q.relampago),
     usos: (q.desafio_questoes as { count: number }[])[0]?.count ?? 0,
   }));
   if (filtros.uso === "nova") itens = itens.filter((i) => i.usos === 0);
@@ -93,6 +95,7 @@ export default async function BancoQuestoes({ searchParams }: PageProps<"/profes
         </Selecao>
         <Selecao name="tipo" defaultValue={filtros.tipo}>
           <option value="">Tipo</option>
+          <option value="relampago">⚡ Só relâmpago</option>
           {TIPOS.map((t) => (
             <option key={t} value={t}>
               {NOME_TIPO[t]}

@@ -23,6 +23,8 @@ export type QuestaoServida = {
   imagemUrl: string | null;
   vista: Vista;
   tempoLimite: number;
+  /** Questão relâmpago: destaque especial na tela. */
+  relampago: boolean;
   restanteMs: number;
   /** Sair da tela zera a questão (opção do desafio). */
   saidaZera: boolean;
@@ -59,6 +61,8 @@ type QuestaoBanco = {
   enunciado: string;
   imagem_path: string | null;
   tempo_limite_s: number;
+  /** Ausente se o SQL do relâmpago ainda não rodou. */
+  relampago?: boolean;
   conteudo: Conteudo["conteudo"];
 };
 
@@ -77,7 +81,8 @@ export async function desafioDoAluno(db: SupabaseClient, aluno: AlunoSessao, des
 async function carregarQuestao(db: SupabaseClient, id: string): Promise<QuestaoBanco> {
   const { data, error } = await db
     .from("questoes")
-    .select("id, tipo, enunciado, imagem_path, tempo_limite_s, conteudo")
+    // "*" traz também relampago, quando o SQL dele já rodou.
+    .select("*")
     .eq("id", id)
     .single();
   if (error || !data) throw new Error("Questão não encontrada");
@@ -115,8 +120,15 @@ export async function ajudasRestantes(db: SupabaseClient, alunoId: string, tempo
 
 const comoConteudo = (q: QuestaoBanco) => ({ tipo: q.tipo, conteudo: q.conteudo }) as Conteudo;
 
-/** O desafio pode fixar um tempo único para todas as questões. */
-const tempoDaQuestao = (desafio: Desafio, q: QuestaoBanco) => desafio.tempo_por_questao_s ?? q.tempo_limite_s;
+/**
+ * O desafio pode fixar um tempo único para todas as questões; a relâmpago
+ * nunca ganha mais que o seu próprio tempo.
+ */
+const tempoDaQuestao = (desafio: Desafio, q: QuestaoBanco) => {
+  const fixo = desafio.tempo_por_questao_s;
+  if (fixo == null) return q.tempo_limite_s;
+  return q.relampago ? Math.min(fixo, q.tempo_limite_s) : fixo;
+};
 
 async function recalcularTentativa(db: SupabaseClient, tentativa: Tentativa, novoIndice: number) {
   const { data: respostas } = await db.from("respostas").select("pontos").eq("tentativa_id", tentativa.id);
@@ -303,6 +315,7 @@ export async function estadoAtual(
         imagemUrl: urlImagem(questao.imagem_path),
         vista: montarVista(conteudo, linha.permutacao),
         tempoLimite,
+        relampago: Boolean(questao.relampago),
         restanteMs: Math.max(0, tempoLimite * 1000 - decorrido),
         saidaZera: desafio.saida_zera_questao,
         eliminadas: eliminadasNaVista(linha.permutacao, eliminadas),

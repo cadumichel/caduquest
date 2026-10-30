@@ -14,6 +14,7 @@ type Opcao = {
   habilidades: string[];
   dificuldade: number;
   temImagem: boolean;
+  relampago: boolean;
   usos: number;
 };
 
@@ -121,6 +122,7 @@ export function MontarDesafio({
                   </span>
                   <span className="mt-1 flex flex-wrap gap-1">
                     <Etiqueta cor="azul">{NOME_TIPO[q.tipo]}</Etiqueta>
+                    {q.relampago && <Etiqueta cor="ambar">⚡ relâmpago</Etiqueta>}
                     {q.capitulo && <Etiqueta>{q.capitulo}</Etiqueta>}
                     <Etiqueta>{NOME_DIFICULDADE[q.dificuldade]}</Etiqueta>
                     {q.usos > 0 && <Etiqueta cor="ambar">usada {q.usos}×</Etiqueta>}
@@ -167,7 +169,7 @@ export function MontarDesafio({
           </Campo>
           <Campo
             rotulo="Tempo por questão (segundos)"
-            dica={`Deixe em branco para usar o tempo de cada questão. De ${TEMPO_MIN_S} a ${TEMPO_MAX_S} s.`}
+            dica={`Deixe em branco para usar o tempo de cada questão. De ${TEMPO_MIN_S} a ${TEMPO_MAX_S} s. As relâmpago nunca passam do tempo delas.`}
           >
             <Entrada
               type="number"

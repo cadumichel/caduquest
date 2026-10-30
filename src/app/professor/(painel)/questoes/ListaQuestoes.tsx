@@ -15,6 +15,7 @@ export type ItemLista = {
   status: "rascunho" | "publicada";
   origem: "manual" | "claude";
   temImagem: boolean;
+  relampago: boolean;
   usos: number;
 };
 
@@ -68,6 +69,7 @@ export function ListaQuestoes({ itens }: { itens: ItemLista[] }) {
               <div className="flex flex-wrap gap-1.5">
                 <Etiqueta cor={q.status === "publicada" ? "verde" : "ambar"}>{q.status}</Etiqueta>
                 <Etiqueta cor="azul">{NOME_TIPO[q.tipo]}</Etiqueta>
+                {q.relampago && <Etiqueta cor="ambar">⚡ relâmpago</Etiqueta>}
                 {q.capitulo && <Etiqueta>{q.capitulo}</Etiqueta>}
                 {q.habilidades.map((h) => (
                   <Etiqueta key={h}>{h}</Etiqueta>
