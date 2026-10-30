@@ -187,13 +187,20 @@ export async function salvarCarta(temaBruto: string): Promise<{ erro?: string; o
   const carta = await cartaDoAluno(db, aluno.id, aluno.turmaId);
   if (!carta) return { erro: "Só o campeão da última temporada pode usar a carta coringa." };
   if (!carta.aberta) return { erro: "O prazo para escolher o tema já terminou." };
-  const { error } = await db
-    .from("cartas_coringa")
-    .upsert(
-      { temporada_id: carta.temporada.id, aluno_id: aluno.id, tema, atualizado_em: new Date().toISOString() },
-      { onConflict: "temporada_id,aluno_id" },
-    );
+  const { error } = await db.from("cartas_coringa").upsert(
+    // Todo tema novo (ou mudado) volta para a aprovação do professor.
+    {
+      temporada_id: carta.temporada.id,
+      aluno_id: aluno.id,
+      tema,
+      status: "pendente",
+      atualizado_em: new Date().toISOString(),
+    },
+    { onConflict: "temporada_id,aluno_id" },
+  );
   if (error) return { erro: "Não foi possível salvar. Peça ao professor para atualizar o app." };
   revalidatePath("/aluno");
-  return { ok: "Tema registrado! O professor vai transformar esse tema em uma questão da próxima prova." };
+  return {
+    ok: "Tema enviado! Ele aparece para todos assim que o professor aprovar, e vira uma questão da próxima prova.",
+  };
 }
