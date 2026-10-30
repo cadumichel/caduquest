@@ -33,6 +33,11 @@ export default async function InicioProfessor() {
         .order("fecha_em"),
       supabase.from("questoes").select("*", { count: "exact", head: true }).eq("status", "rascunho"),
     ]);
+  // Sem a tabela da carta coringa (SQL não rodado), a consulta falha e nada aparece.
+  const { data: cartasPendentes } = await supabase
+    .from("cartas_coringa")
+    .select("id, alunos(apelido, turma_id, turmas(nome))")
+    .eq("status", "pendente");
 
   const turmasPorEscola = new Map<string, (Turma & { alunos: { count: number }[] })[]>();
   for (const t of (turmas ?? []) as (Turma & { alunos: { count: number }[] })[]) {
@@ -51,6 +56,19 @@ export default async function InicioProfessor() {
           Há {rascunhos} questões em rascunho esperando revisão →
         </Link>
       )}
+
+      {(cartasPendentes ?? []).map((c) => {
+        const a = c.alunos as unknown as { apelido: string; turma_id: string; turmas: { nome: string } };
+        return (
+          <Link
+            key={c.id}
+            href={`/professor/turmas/${a.turma_id}`}
+            className="block rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+          >
+            🃏 {a.apelido} ({a.turmas.nome}) escolheu o tema da carta coringa. Revise e aprove →
+          </Link>
+        );
+      })}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Cartao>

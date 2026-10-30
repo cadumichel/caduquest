@@ -88,6 +88,27 @@ export async function apagarCarta(cartaId: string, turmaId: string) {
   revalidatePath(`/professor/turmas/${turmaId}`);
 }
 
+/** Aprova a carta coringa, com o tema possivelmente editado pelo professor. */
+export async function aprovarCarta(cartaId: string, turmaId: string, form: FormData) {
+  const { supabase } = await exigirProfessor();
+  const tema = texto(form, "tema").replace(/\s+/g, " ");
+  if (tema.length < 3 || tema.length > 160) return;
+  await supabase
+    .from("cartas_coringa")
+    .update({ tema, status: "aprovada", atualizado_em: new Date().toISOString() })
+    .eq("id", cartaId);
+  revalidatePath(`/professor/turmas/${turmaId}`);
+  revalidatePath("/professor");
+}
+
+/** Recusa a carta: o aluno vê o aviso e pode escrever outro tema enquanto o prazo estiver aberto. */
+export async function recusarCarta(cartaId: string, turmaId: string) {
+  const { supabase } = await exigirProfessor();
+  await supabase.from("cartas_coringa").update({ status: "recusada" }).eq("id", cartaId);
+  revalidatePath(`/professor/turmas/${turmaId}`);
+  revalidatePath("/professor");
+}
+
 export async function aprovarAluno(alunoId: string) {
   const { supabase } = await exigirProfessor();
   const { data } = await supabase

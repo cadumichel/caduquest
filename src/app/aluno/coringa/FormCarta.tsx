@@ -19,7 +19,8 @@ export function FormCarta({ temaAtual }: { temaAtual: string | null }) {
           placeholder="Ex.: Página 42 da apostila ou o subtítulo “A crise do Império Romano”"
         />
         <span className="block text-xs text-slate-500">
-          Todos da sua turma e das turmas da mesma série vão ver o tema com o seu personagem.
+          Depois que o professor aprovar, todos da sua turma e das turmas da mesma série vão ver o tema com o seu
+          personagem. Mudar o tema manda de novo para a aprovação.
         </span>
       </label>
       {msg && <Aviso tipo={msg.tipo}>{msg.texto}</Aviso>}

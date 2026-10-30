@@ -15,6 +15,8 @@ import type { Aluno, Temporada } from "@/lib/tipos-banco";
 import { cartasParaAProxima } from "@/lib/carta-coringa";
 import {
   apagarCarta,
+  aprovarCarta,
+  recusarCarta,
   alternarAprovacao,
   aprovarAluno,
   aprovarTodos,
@@ -58,7 +60,7 @@ export default async function PaginaTurma({ params }: PageProps<"/professor/turm
   const temporadas = (temporadasBrutas ?? []) as Temporada[];
   const [ranking, cartas] = await Promise.all([
     atual ? rankingDaTemporada(supabase, atual) : [],
-    cartasParaAProxima(supabase, id),
+    cartasParaAProxima(supabase, id, { todas: true }),
   ]);
   const hoje = hojeEmBrasilia();
 
@@ -92,26 +94,49 @@ export default async function PaginaTurma({ params }: PageProps<"/professor/turm
         <Cartao className="border-amber-300 bg-amber-50">
           <Subtitulo>🃏 Cartas coringa para a próxima prova</Subtitulo>
           <p className="mb-3 text-sm text-slate-600">
-            Temas escolhidos pelos campeões da última temporada (desta turma e das turmas da mesma série). Cada um vira
-            uma questão da próxima prova; você decide o formato e a dificuldade. O Claude também vê estes temas pelo
-            conector.
+            Temas escolhidos pelos campeões da última temporada (desta turma e das turmas da mesma série). Revise o
+            texto e aprove: só então o tema aparece para os alunos, com o personagem do campeão. Cada tema aprovado vira
+            uma questão da próxima prova; o Claude também vê os aprovados pelo conector.
           </p>
-          <ul className="space-y-2">
+          <ul className="space-y-3">
             {cartas.map((c) => (
-              <li key={c.id} className="flex flex-wrap items-center gap-3 rounded-xl bg-white p-3">
-                <Avatar avatar={c.avatar} cor={c.cor} tamanho={36} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs text-slate-500">
+              <li key={c.id} className="space-y-2 rounded-xl bg-white p-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Avatar avatar={c.avatar} cor={c.cor} tamanho={36} />
+                  <p className="min-w-0 flex-1 text-xs text-slate-500">
                     {c.apelido} · {c.turmaNome} · campeão de {c.temporadaNome}
                   </p>
-                  <p className="font-semibold">“{c.tema}”</p>
+                  {c.status === "aprovada" ? (
+                    <Etiqueta cor="verde">Aprovada · visível para os alunos</Etiqueta>
+                  ) : c.status === "recusada" ? (
+                    <Etiqueta cor="vermelho">Recusada</Etiqueta>
+                  ) : (
+                    <Etiqueta cor="ambar">Aguardando sua aprovação</Etiqueta>
+                  )}
                 </div>
-                <BotaoConfirmar
-                  acao={apagarCarta.bind(null, c.id, id)}
-                  pergunta={`Apagar o tema escolhido por ${c.apelido}? O aluno poderá escolher outro enquanto o prazo estiver aberto.`}
-                >
-                  Apagar
-                </BotaoConfirmar>
+                <form action={aprovarCarta.bind(null, c.id, id)} className="flex flex-wrap gap-2">
+                  <Entrada name="tema" defaultValue={c.tema} maxLength={160} required className="min-w-0 flex-1" />
+                  <Botao variante={c.status === "aprovada" ? "secundario" : "sucesso"}>
+                    {c.status === "aprovada" ? "Salvar edição" : "Aprovar"}
+                  </Botao>
+                </form>
+                <div className="flex flex-wrap gap-2">
+                  {c.status !== "recusada" && (
+                    <BotaoConfirmar
+                      acao={recusarCarta.bind(null, c.id, id)}
+                      pergunta={`Recusar o tema de ${c.apelido}? Ele some da tela dos alunos e o campeão pode escrever outro enquanto o prazo estiver aberto.`}
+                    >
+                      Recusar
+                    </BotaoConfirmar>
+                  )}
+                  <BotaoConfirmar
+                    acao={apagarCarta.bind(null, c.id, id)}
+                    pergunta={`Apagar o tema escolhido por ${c.apelido}? O aluno poderá escolher outro enquanto o prazo estiver aberto.`}
+                    variante="fantasma"
+                  >
+                    Apagar
+                  </BotaoConfirmar>
+                </div>
               </li>
             ))}
           </ul>

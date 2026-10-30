@@ -127,7 +127,17 @@ export default async function Inicio() {
         </p>
       )}
 
-      {minhaCarta?.aberta && !minhaCarta.tema && (
+      {minhaCarta?.aberta && minhaCarta.status === "pendente" && (
+        <Link
+          href="/aluno/coringa"
+          className="block rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 ring-1 ring-amber-200"
+        >
+          🃏 Seu tema da carta coringa está com o professor para aprovação. Ele aparece para todos assim que for
+          aprovado.
+        </Link>
+      )}
+
+      {minhaCarta?.aberta && (!minhaCarta.tema || minhaCarta.status === "recusada") && (
         <Link
           href="/aluno/coringa"
           className="block rounded-3xl bg-gradient-to-br from-marca-950 via-marca-900 to-amber-900 p-5 text-white shadow-lg ring-2 ring-amber-300"
@@ -135,7 +145,9 @@ export default async function Inicio() {
           <p className="text-xs font-bold tracking-widest text-amber-300 uppercase">✦ Você ganhou a carta coringa ✦</p>
           <p className="mt-1 text-lg font-extrabold">Campeão da temporada {minhaCarta.temporada.nome}! 🏆</p>
           <p className="text-sm text-amber-50">
-            Escolha o tema de uma questão da próxima prova: uma página ou um subtítulo da apostila. ›
+            {minhaCarta.status === "recusada"
+              ? "O professor pediu outro tema. Escolha de novo uma página ou um subtítulo da apostila. ›"
+              : "Escolha o tema de uma questão da próxima prova: uma página ou um subtítulo da apostila. ›"}
           </p>
         </Link>
       )}
