@@ -3,7 +3,7 @@ import { BotaoEnviar, PendenteForm } from "@/components/BotaoEnviar";
 import { useAcaoSemReset } from "@/components/useAcaoSemReset";
 import { AreaTexto, Aviso, Campo, Cartao, Entrada, Selecao } from "@/components/ui";
 import { HABILIDADES } from "@/lib/habilidades";
-import { NOME_TIPO, TIPOS } from "@/lib/questoes/tipos";
+import { NOME_TIPO, TIPOS_GERADOR } from "@/lib/questoes/tipos";
 import { gerarQuestoes } from "./actions";
 
 export function FormGerar({ capitulos }: { capitulos: string[] }) {
@@ -39,7 +39,7 @@ export function FormGerar({ capitulos }: { capitulos: string[] }) {
           <fieldset>
             <legend className="mb-1 text-sm font-medium text-slate-700">Tipos</legend>
             <div className="grid grid-cols-2 gap-1 text-sm">
-              {TIPOS.map((t) => (
+              {TIPOS_GERADOR.map((t) => (
                 <label key={t} className="flex items-center gap-2">
                   <input type="checkbox" name="tipos" value={t} defaultChecked /> {NOME_TIPO[t]}
                 </label>

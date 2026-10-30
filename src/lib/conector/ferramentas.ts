@@ -15,6 +15,7 @@ import {
   type TipoQuestao,
 } from "@/lib/questoes/tipos";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
+import { guardarImagemDaUrl } from "./imagem";
 import { professorDoConector } from "./professor";
 
 const resultado = (dados: unknown) => ({
@@ -44,6 +45,12 @@ const schemaQuestao = z.object({
       "Aparece no gabarito depois que o desafio fecha. 2 a 4 frases: por que a resposta certa é certa e, na múltipla escolha, o erro de cada distrator (ex.: 'A) ... B) ...').",
     ),
   fonte: z.string().optional().describe("Origem do texto ou da imagem citada, se houver."),
+  imagem_url: z
+    .string()
+    .optional()
+    .describe(
+      "Link https direto de uma imagem pública (PNG, JPG, WEBP ou GIF, até 2 MB), como uma pintura, charge, foto ou mapa da Wikimedia Commons (use a miniatura de 800 px: upload.wikimedia.org/.../thumb/.../800px-...). O app baixa e guarda a imagem; ela aparece acima do enunciado.",
+    ),
   tempo_limite_s: z
     .number()
     .int()
@@ -65,6 +72,49 @@ const schemaQuestao = z.object({
     .array(z.object({ esquerda: z.string(), direita: z.string() }))
     .optional()
     .describe("pares: 3 a 6 pares; cada item da direita serve para um único item da esquerda."),
+  fonte_primaria: z
+    .object({
+      documento: z
+        .string()
+        .optional()
+        .describe(
+          "Trecho fiel da fonte (carta, lei, jornal, relato), até 2.500 caracteres. Vazio se a fonte for a imagem.",
+        ),
+      perguntas: z.array(
+        z.object({
+          pergunta: z.string(),
+          alternativas: z.array(z.string()),
+          correta: z.number().int().describe("Índice da alternativa correta, a partir de 0."),
+        }),
+      ),
+    })
+    .optional()
+    .describe(
+      "fonte_primaria: um documento (texto em documento e/ou imagem em imagem_url) e 2 ou 3 perguntas de 3 ou 4 alternativas, como 'De quando é?', 'Quem a produziu?' e 'Qual a intenção de quem a produziu?'. Crédito parcial por pergunta. Ponha a referência da fonte em fonte.",
+    ),
+  causa_consequencia: z
+    .object({
+      relacoes: z.array(z.object({ causa: z.string(), consequencia: z.string() })),
+      extras: z.array(z.string()).optional(),
+    })
+    .optional()
+    .describe(
+      "causa_consequencia: 3 a 5 relações causa → consequência do mesmo processo, e até 2 consequências extras plausíveis do período que não decorrem de nenhuma das causas. Crédito parcial por relação.",
+    ),
+  encontrar_erro: z
+    .object({
+      trechos: z.array(
+        z.object({
+          texto: z.string(),
+          errado: z.boolean(),
+          correcao: z.string().optional().describe("Obrigatória nos trechos errados: o texto certo."),
+        }),
+      ),
+    })
+    .optional()
+    .describe(
+      "encontrar_erro: um parágrafo dividido em 4 a 10 trechos (frases ou orações), na ordem, com 1 a 3 trechos errados e ao menos 3 certos. Erros sutis: data, autor, lugar ou conceito de período vizinho, anacronismo, causa trocada. O aluno sabe quantos erros há. Crédito parcial por erro achado.",
+    ),
 });
 
 function conteudoBruto(q: z.infer<typeof schemaQuestao>) {
@@ -77,6 +127,9 @@ function conteudoBruto(q: z.infer<typeof schemaQuestao>) {
       return { eventos: q.eventos ?? [] };
     case "pares":
       return { pares: q.pares ?? [] };
+    default:
+      // Tipos novos: o campo com o nome do tipo já vem no formato gravado.
+      return q[q.tipo] ?? {};
   }
 }
 
@@ -158,6 +211,8 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         "Grava questões no banco do CaduQuest. Por padrão entram como rascunho, para o professor revisar e publicar no app; só use publicar=true se o professor pedir.",
         `Tipos: ${TIPOS.map((t) => `${t} (${NOME_TIPO[t]})`).join(", ")}. Preencha só os campos do tipo da questão.`,
         "Questões inválidas são recusadas uma a uma, com o motivo, e as válidas são gravadas: corrija e reenvie só as recusadas.",
+        "Varie os formatos dentro do lote. fonte_primaria, causa_consequencia e encontrar_erro treinam as habilidades mais cobradas na prova: inclua ao menos uma de cada quando o capítulo permitir.",
+        "Distratores de alto nível em todos os tipos: plausíveis, do mesmo período e baseados em confusões reais de alunos.",
         "Antes de gravar, mostre as questões ao professor e grave só depois que ele aprovar.",
         "Sempre envie junto, em curiosidades, 2 a 4 curiosidades históricas curtas e verdadeiras sobre os capítulos do lote, sem o professor precisar pedir: elas viram a Curiosidade do dia na tela dos alunos.",
       ].join(" "),
@@ -191,8 +246,22 @@ export function registrarFerramentas(server: McpServer, origem: string) {
             : !conteudo.success
               ? conteudo.error.issues[0].message
               : null;
-        if (motivo || !conteudo.success) {
-          recusadas.push({ posicao: i + 1, enunciado: q.enunciado.slice(0, 80), motivo: motivo ?? "" });
+        const semTrechoCorrigido =
+          conteudo.success &&
+          q.tipo === "encontrar_erro" &&
+          (conteudo.data as { trechos: { errado: boolean; correcao?: string }[] }).trechos.some(
+            (t) => t.errado && !t.correcao?.trim(),
+          );
+        const imagem = !motivo && q.imagem_url ? await guardarImagemDaUrl(q.imagem_url, professorId) : null;
+        const motivoFinal =
+          motivo ??
+          (semTrechoCorrigido ? "Escreva a correção de cada trecho errado." : null) ??
+          (imagem && "erro" in imagem ? imagem.erro : null) ??
+          (q.tipo === "fonte_primaria" && !imagem && !(conteudo.data as { documento: string }).documento
+            ? "Fonte primária sem documento: envie o trecho em documento ou a imagem em imagem_url."
+            : null);
+        if (motivoFinal || !conteudo.success) {
+          recusadas.push({ posicao: i + 1, enunciado: q.enunciado.slice(0, 80), motivo: motivoFinal ?? "" });
           continue;
         }
         linhas.push({
@@ -204,6 +273,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           dificuldade: q.dificuldade,
           explicacao: q.explicacao.trim(),
           fonte: q.fonte?.trim() || null,
+          imagem_path: imagem && "caminho" in imagem ? imagem.caminho : null,
           tempo_limite_s: q.tempo_limite_s ?? TEMPO_PADRAO[q.tipo as TipoQuestao],
           conteudo: conteudo.data,
           status: publicar ? "publicada" : "rascunho",

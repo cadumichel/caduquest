@@ -1,4 +1,5 @@
-import type { Conteudo, Resposta } from "@/lib/questoes/tipos";
+import { iniciosPerguntas, subPermutacao, type Conteudo, type Resposta } from "@/lib/questoes/tipos";
+import { Documento } from "./QuestaoInterativa";
 
 const LETRAS = "ABCDEF";
 
@@ -103,6 +104,109 @@ export function Gabarito({
             );
           })}
         </ul>
+      );
+    }
+    case "fonte_primaria": {
+      const escolhas = resposta?.tipo === "fonte_primaria" ? resposta.escolhas : null;
+      const inicios = iniciosPerguntas(conteudo.conteudo);
+      return (
+        <div className="space-y-3 text-sm">
+          <Documento texto={conteudo.conteudo.documento} />
+          {conteudo.conteudo.perguntas.map((p, j) => {
+            const exibida = escolhas?.[j];
+            const escolhida =
+              exibida === null || exibida === undefined || !permutacao
+                ? -1
+                : (subPermutacao(permutacao, inicios[j], p.alternativas.length)[exibida] ?? -1);
+            return (
+              <div key={j}>
+                <p className="font-medium">
+                  {j + 1}. {p.pergunta}
+                </p>
+                <ul className="mt-1 space-y-1">
+                  {p.alternativas.map((a, i) => {
+                    const certa = i === p.correta;
+                    return (
+                      <li
+                        key={i}
+                        className={`rounded-lg px-3 py-1 ${certa ? "bg-emerald-50 font-medium text-emerald-900" : escolhida === i ? "bg-red-50 text-red-800" : "text-slate-600"}`}
+                      >
+                        {LETRAS[i]}) {a} {certa && "✓"} {escolhida === i && !certa && "← sua resposta"}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+    case "causa_consequencia": {
+      const ligacoes = resposta?.tipo === "causa_consequencia" ? resposta.ligacoes : null;
+      const { relacoes, extras } = conteudo.conteudo;
+      return (
+        <div className="space-y-2 text-sm">
+          <ul className="space-y-1">
+            {relacoes.map((rel, i) => {
+              const escolhida = ligacoes ? orig(ligacoes[i]) : -2;
+              return (
+                <li key={i} className="flex gap-2 rounded-lg px-3 py-1.5">
+                  <span className="flex-1">
+                    <strong>{rel.causa}</strong> → {rel.consequencia}
+                  </span>
+                  {ligacoes && (
+                    <span className={escolhida === i ? "text-emerald-700" : "text-red-700"}>
+                      {escolhida === i ? "✓" : "✗"}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          {extras.length > 0 && (
+            <p className="px-3 text-slate-500">Não era consequência de nenhuma causa: {extras.join("; ")}.</p>
+          )}
+        </div>
+      );
+    }
+    case "encontrar_erro": {
+      const marcados = resposta?.tipo === "encontrar_erro" ? resposta.marcados : [];
+      const trechos = conteudo.conteudo.trechos;
+      return (
+        <div className="space-y-2 text-sm">
+          <p className="leading-7">
+            {trechos.map((t, i) => (
+              <span key={i}>
+                <span
+                  className={
+                    t.errado
+                      ? `rounded px-1 line-through decoration-red-500 ${marcados.includes(i) ? "bg-emerald-100" : "bg-red-50"}`
+                      : marcados.includes(i)
+                        ? "rounded bg-red-100 px-1"
+                        : ""
+                  }
+                >
+                  {t.texto}
+                </span>{" "}
+              </span>
+            ))}
+          </p>
+          <ul className="space-y-1">
+            {trechos.map((t, i) =>
+              t.errado ? (
+                <li key={i} className="rounded-lg bg-emerald-50 px-3 py-1.5 text-emerald-900">
+                  {resposta && <span className="mr-1">{marcados.includes(i) ? "✓" : "✗"}</span>}
+                  <span className="line-through">{t.texto}</span>
+                  {t.correcao && <> → {t.correcao}</>}
+                </li>
+              ) : null,
+            )}
+          </ul>
+          {trechos.some((t, i) => !t.errado && marcados.includes(i)) && (
+            <p className="px-3 text-red-700">Os trechos com fundo vermelho estavam certos.</p>
+          )}
+        </div>
       );
     }
   }

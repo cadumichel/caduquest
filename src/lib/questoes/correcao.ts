@@ -1,4 +1,4 @@
-import type { Conteudo, Resposta } from "./tipos";
+import { iniciosPerguntas, subPermutacao, type Conteudo, type Resposta } from "./tipos";
 
 /**
  * Fração de acerto (0 a 1) de uma resposta.
@@ -48,6 +48,39 @@ export function corrigir(c: Conteudo, permutacao: number[], r: Resposta | null):
         if (original(exibido) === esquerda) certos++;
       }
       return certos / n;
+    }
+    case "fonte_primaria": {
+      const resp = r as Extract<Resposta, { tipo: "fonte_primaria" }>;
+      const { perguntas } = c.conteudo;
+      const inicios = iniciosPerguntas(c.conteudo);
+      const certos = perguntas.filter((p, j) => {
+        const escolha = resp.escolhas[j];
+        if (escolha === null || escolha === undefined) return false;
+        return subPermutacao(permutacao, inicios[j], p.alternativas.length)[escolha] === p.correta;
+      }).length;
+      return certos / perguntas.length;
+    }
+    case "causa_consequencia": {
+      // Índices originais 0..n-1 são as consequências de cada causa; os seguintes, as extras.
+      const resp = r as Extract<Resposta, { tipo: "causa_consequencia" }>;
+      const n = c.conteudo.relacoes.length;
+      const usados = new Set<number>();
+      let certos = 0;
+      for (let causa = 0; causa < n; causa++) {
+        const exibido = resp.ligacoes[causa] ?? null;
+        if (exibido === null || usados.has(exibido)) continue;
+        usados.add(exibido);
+        if (original(exibido) === causa) certos++;
+      }
+      return certos / n;
+    }
+    case "encontrar_erro": {
+      // O aluno sabe quantos erros há e marca no máximo esse número: vale a fração dos erros achados.
+      const resp = r as Extract<Resposta, { tipo: "encontrar_erro" }>;
+      const { trechos } = c.conteudo;
+      const erros = trechos.filter((t) => t.errado).length;
+      const marcados = [...new Set(resp.marcados)].slice(0, erros);
+      return marcados.filter((i) => trechos[i]?.errado).length / erros;
     }
   }
 }

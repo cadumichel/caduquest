@@ -56,7 +56,29 @@ export function QuestaoInterativa({
       );
     case "pares":
       return <Pares vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />;
+    case "fonte_primaria":
+      return (
+        <FontePrimaria vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />
+      );
+    case "causa_consequencia":
+      return (
+        <CausaConsequencia vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />
+      );
+    case "encontrar_erro":
+      return (
+        <EncontrarErro vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />
+      );
   }
+}
+
+/** Trecho de documento ou texto-base, com cara de fonte histórica. */
+export function Documento({ texto }: { texto: string }) {
+  if (!texto.trim()) return null;
+  return (
+    <blockquote className="rounded-xl border-l-4 border-amber-500 bg-amber-50 px-4 py-3 font-serif text-[15px] leading-relaxed whitespace-pre-line text-slate-800">
+      {texto}
+    </blockquote>
+  );
 }
 
 function MultiplaEscolha({
@@ -289,6 +311,182 @@ function Pares({ vista, resposta, onChange, desabilitada }: Props<Extract<Vista,
           })}
         </ul>
       </div>
+    </div>
+  );
+}
+
+function FontePrimaria({ vista, resposta, onChange, desabilitada }: Props<Extract<Vista, { tipo: "fonte_primaria" }>>) {
+  const escolher = (j: number, i: number) => {
+    const escolhas = [...resposta.escolhas];
+    escolhas[j] = i;
+    onChange({ tipo: "fonte_primaria", escolhas });
+  };
+  return (
+    <div className="space-y-4">
+      <Documento texto={vista.documento} />
+      {vista.perguntas.map((p, j) => (
+        <fieldset key={j} className="space-y-2">
+          <legend className="mb-1 font-medium">
+            <span className="mr-1 text-marca-700">{j + 1}.</span>
+            {p.pergunta}
+          </legend>
+          {p.alternativas.map((texto, i) => {
+            const marcada = resposta.escolhas[j] === i;
+            return (
+              <button
+                key={i}
+                type="button"
+                disabled={desabilitada}
+                onClick={() => escolher(j, i)}
+                aria-pressed={marcada}
+                className={`flex w-full items-start gap-2 rounded-xl border-2 px-3 py-2 text-left text-sm transition ${
+                  marcada ? "border-marca-600 bg-marca-50" : "border-slate-200 bg-white hover:border-marca-200"
+                }`}
+              >
+                <span
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                    marcada ? "bg-marca-600 text-white" : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {LETRAS[i]}
+                </span>
+                <span className="pt-0.5">{texto}</span>
+              </button>
+            );
+          })}
+        </fieldset>
+      ))}
+    </div>
+  );
+}
+
+function CausaConsequencia({
+  vista,
+  resposta,
+  onChange,
+  desabilitada,
+}: Props<Extract<Vista, { tipo: "causa_consequencia" }>>) {
+  const [aberta, setAberta] = useState<number | null>(0);
+  const escolher = (causa: number, consequencia: number) => {
+    const ligacoes = resposta.ligacoes.map((c) => (c === consequencia ? null : c));
+    ligacoes[causa] = consequencia;
+    onChange({ tipo: "causa_consequencia", ligacoes });
+    const proxima = ligacoes.findIndex((c, i) => c === null && i !== causa);
+    setAberta(proxima >= 0 ? proxima : null);
+  };
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-500">
+        Toque em cada causa e escolha a consequência dela. Sobra consequência: nem todas se encaixam.
+      </p>
+      <ol className="space-y-3">
+        {vista.causas.map((causa, i) => {
+          const escolhida = resposta.ligacoes[i];
+          const aberto = aberta === i;
+          return (
+            <li key={i} className={`rounded-xl border-2 bg-white ${aberto ? "border-marca-500" : "border-slate-200"}`}>
+              <button
+                type="button"
+                disabled={desabilitada}
+                onClick={() => setAberta(aberto ? null : i)}
+                className="w-full p-3 text-left"
+              >
+                <span className="text-xs font-bold tracking-wide text-amber-700 uppercase">Causa</span>
+                <span className="block">{causa}</span>
+                <span className="mt-2 flex items-start gap-2 text-sm">
+                  <span className="text-marca-600">↓</span>
+                  {escolhida !== null && escolhida !== undefined ? (
+                    <span className="flex-1 rounded-lg bg-marca-50 px-2 py-1 text-marca-900">
+                      {vista.consequencias[escolhida]}
+                    </span>
+                  ) : (
+                    <span className="flex-1 text-slate-400">Toque para escolher a consequência</span>
+                  )}
+                </span>
+              </button>
+              {aberto && (
+                <ul className="space-y-1.5 border-t border-slate-100 p-2">
+                  {vista.consequencias.map((texto, c) => {
+                    const dona = resposta.ligacoes.indexOf(c);
+                    return (
+                      <li key={c}>
+                        <button
+                          type="button"
+                          disabled={desabilitada}
+                          onClick={() => escolher(i, c)}
+                          className={`flex w-full items-start gap-2 rounded-lg border px-3 py-2 text-left text-sm ${
+                            dona === i
+                              ? "border-marca-600 bg-marca-50"
+                              : dona >= 0
+                                ? "border-slate-200 bg-slate-50 text-slate-400"
+                                : "border-slate-200 bg-white"
+                          }`}
+                        >
+                          <span className="flex-1">{texto}</span>
+                          {dona >= 0 && dona !== i && <span className="shrink-0 text-xs">causa {dona + 1}</span>}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
+function EncontrarErro({ vista, resposta, onChange, desabilitada }: Props<Extract<Vista, { tipo: "encontrar_erro" }>>) {
+  const cheio = resposta.marcados.length >= vista.erros;
+  const alternar = (i: number) => {
+    if (resposta.marcados.includes(i)) {
+      onChange({ tipo: "encontrar_erro", marcados: resposta.marcados.filter((m) => m !== i) });
+    } else if (!cheio) {
+      onChange({ tipo: "encontrar_erro", marcados: [...resposta.marcados, i] });
+    }
+  };
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-500">
+        {vista.erros === 1 ? "Há 1 trecho com erro histórico." : `Há ${vista.erros} trechos com erro histórico.`} Toque
+        para marcar; toque de novo para desmarcar.
+      </p>
+      <p className="rounded-xl border border-slate-200 bg-white p-3 leading-8">
+        {vista.trechos.map((texto, i) => {
+          const marcado = resposta.marcados.includes(i);
+          const travado = desabilitada || (cheio && !marcado);
+          // span em vez de button: trechos longos quebram linha como texto corrido.
+          return (
+            <span key={i}>
+              <span
+                role="button"
+                tabIndex={travado ? -1 : 0}
+                aria-pressed={marcado}
+                aria-disabled={travado}
+                onClick={() => !travado && alternar(i)}
+                onKeyDown={(e) => {
+                  if (!travado && (e.key === "Enter" || e.key === " ")) {
+                    e.preventDefault();
+                    alternar(i);
+                  }
+                }}
+                className={`box-decoration-clone rounded-md px-1 py-0.5 decoration-2 underline-offset-4 transition ${
+                  marcado
+                    ? "bg-red-100 text-red-900 underline decoration-red-500"
+                    : `underline decoration-slate-300 decoration-dotted ${travado ? "" : "cursor-pointer hover:bg-amber-50"}`
+                }`}
+              >
+                {texto}
+              </span>{" "}
+            </span>
+          );
+        })}
+      </p>
+      <p className={`text-sm font-medium ${cheio ? "text-marca-700" : "text-slate-500"}`}>
+        {resposta.marcados.length} de {vista.erros} marcado{vista.erros > 1 ? "s" : ""}
+      </p>
     </div>
   );
 }

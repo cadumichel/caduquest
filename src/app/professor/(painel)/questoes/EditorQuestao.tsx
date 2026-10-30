@@ -495,5 +495,203 @@ function EditorConteudo({
           />
         </fieldset>
       );
+    case "fonte_primaria": {
+      const c = conteudo.conteudo;
+      const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "fonte_primaria", conteudo: { ...c, ...novo } });
+      return (
+        <div className="space-y-4">
+          <Campo
+            rotulo="Documento (trecho da fonte)"
+            dica="Cole o trecho da carta, lei, jornal ou relato. Se a fonte for uma imagem, envie a imagem acima e deixe vazio."
+          >
+            <AreaTexto
+              rows={5}
+              value={c.documento}
+              disabled={bloqueado}
+              onChange={(e) => mudar({ documento: e.target.value })}
+            />
+          </Campo>
+          {c.perguntas.map((p, j) => (
+            <fieldset key={j} className="space-y-2 rounded-xl border border-slate-200 p-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-marca-700">{j + 1}.</span>
+                <input
+                  className={classeInput}
+                  value={p.pergunta}
+                  disabled={bloqueado}
+                  placeholder="De quando é? Quem produziu? Qual a intenção?"
+                  onChange={(e) =>
+                    mudar({ perguntas: c.perguntas.map((x, k) => (k === j ? { ...x, pergunta: e.target.value } : x)) })
+                  }
+                />
+                <button
+                  type="button"
+                  disabled={bloqueado || c.perguntas.length <= 2}
+                  onClick={() => mudar({ perguntas: c.perguntas.filter((_, k) => k !== j) })}
+                  className="px-2 text-slate-400 hover:text-red-600 disabled:opacity-30"
+                  aria-label="Remover pergunta"
+                >
+                  ✕
+                </button>
+              </div>
+              <Linhas
+                itens={p.alternativas}
+                min={3}
+                max={4}
+                novo={() => ""}
+                bloqueado={bloqueado}
+                onChange={(alternativas) =>
+                  mudar({
+                    perguntas: c.perguntas.map((x, k) =>
+                      k === j ? { ...x, alternativas, correta: Math.min(x.correta, alternativas.length - 1) } : x,
+                    ),
+                  })
+                }
+                render={(alt, i, atualizar) => (
+                  <>
+                    <input
+                      type="radio"
+                      name={`correta-${j}`}
+                      checked={p.correta === i}
+                      disabled={bloqueado}
+                      onChange={() =>
+                        mudar({ perguntas: c.perguntas.map((x, k) => (k === j ? { ...x, correta: i } : x)) })
+                      }
+                    />
+                    <span className="w-5 text-sm font-bold text-slate-500">{LETRAS[i]}</span>
+                    <input
+                      className={classeInput}
+                      value={alt}
+                      disabled={bloqueado}
+                      onChange={(e) => atualizar(e.target.value)}
+                    />
+                  </>
+                )}
+              />
+            </fieldset>
+          ))}
+          <button
+            type="button"
+            disabled={bloqueado || c.perguntas.length >= 3}
+            onClick={() =>
+              mudar({ perguntas: [...c.perguntas, { pergunta: "", alternativas: ["", "", "", ""], correta: 0 }] })
+            }
+            className="text-sm font-medium text-marca-700 disabled:opacity-40"
+          >
+            + Adicionar pergunta
+          </button>
+        </div>
+      );
+    }
+    case "causa_consequencia": {
+      const c = conteudo.conteudo;
+      return (
+        <div className="space-y-4">
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Causa e a consequência dela (3 a 5). As consequências são embaralhadas.
+            </legend>
+            <Linhas
+              itens={c.relacoes}
+              min={3}
+              max={5}
+              novo={() => ({ causa: "", consequencia: "" })}
+              bloqueado={bloqueado}
+              onChange={(relacoes) => onChange({ tipo: "causa_consequencia", conteudo: { ...c, relacoes } })}
+              render={(r, _i, atualizar) => (
+                <>
+                  <input
+                    className={classeInput}
+                    placeholder="Causa"
+                    value={r.causa}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...r, causa: e.target.value })}
+                  />
+                  <span className="text-slate-400">→</span>
+                  <input
+                    className={classeInput}
+                    placeholder="Consequência"
+                    value={r.consequencia}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...r, consequencia: e.target.value })}
+                  />
+                </>
+              )}
+            />
+          </fieldset>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Consequências extras (até 2): plausíveis, do mesmo período, mas de nenhuma das causas
+            </legend>
+            <Linhas
+              itens={c.extras}
+              min={0}
+              max={2}
+              novo={() => ""}
+              bloqueado={bloqueado}
+              onChange={(extras) => onChange({ tipo: "causa_consequencia", conteudo: { ...c, extras } })}
+              render={(x, _i, atualizar) => (
+                <input
+                  className={classeInput}
+                  value={x}
+                  disabled={bloqueado}
+                  onChange={(e) => atualizar(e.target.value)}
+                />
+              )}
+            />
+          </fieldset>
+        </div>
+      );
+    }
+    case "encontrar_erro":
+      return (
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium text-slate-700">
+            Texto em trechos (4 a 10), na ordem. Marque de 1 a 3 trechos com erro e escreva a correção.
+          </legend>
+          <Linhas
+            itens={conteudo.conteudo.trechos}
+            min={4}
+            max={10}
+            novo={() => ({ texto: "", errado: false, correcao: "" })}
+            bloqueado={bloqueado}
+            onChange={(trechos) => onChange({ tipo: "encontrar_erro", conteudo: { trechos } })}
+            render={(t, _i, atualizar) => (
+              <div className="flex flex-1 flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <label className="flex shrink-0 items-center gap-1 text-xs font-medium text-red-700">
+                    <input
+                      type="checkbox"
+                      checked={t.errado}
+                      disabled={bloqueado}
+                      onChange={(e) => atualizar({ ...t, errado: e.target.checked })}
+                    />
+                    erro
+                  </label>
+                  <input
+                    className={classeInput}
+                    value={t.texto}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...t, texto: e.target.value })}
+                  />
+                </div>
+                {t.errado && (
+                  <input
+                    className={`${classeInput} text-sm`}
+                    placeholder="Correção (aparece no gabarito)"
+                    value={t.correcao ?? ""}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...t, correcao: e.target.value })}
+                  />
+                )}
+              </div>
+            )}
+          />
+          <p className="text-xs text-slate-500">
+            O aluno vê o texto corrido e sabe quantos erros há. Prefira erros sutis: data, autor ou conceito de um
+            período vizinho, anacronismo, causa trocada por consequência.
+          </p>
+        </fieldset>
+      );
   }
 }

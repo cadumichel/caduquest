@@ -1,13 +1,27 @@
 import { z } from "zod";
 
-export const TIPOS = ["multipla_escolha", "vf_bloco", "linha_do_tempo", "pares"] as const;
+export const TIPOS = [
+  "multipla_escolha",
+  "vf_bloco",
+  "linha_do_tempo",
+  "pares",
+  "fonte_primaria",
+  "causa_consequencia",
+  "encontrar_erro",
+] as const;
 export type TipoQuestao = (typeof TIPOS)[number];
+
+/** Tipos que o gerador pela API sabe produzir (o conector aceita todos). */
+export const TIPOS_GERADOR = ["multipla_escolha", "vf_bloco", "linha_do_tempo", "pares"] as const;
 
 export const NOME_TIPO: Record<TipoQuestao, string> = {
   multipla_escolha: "Múltipla escolha",
   vf_bloco: "Verdadeiro ou falso em bloco",
   linha_do_tempo: "Linha do tempo",
   pares: "Pares",
+  fonte_primaria: "Fonte primária",
+  causa_consequencia: "Causa e consequência",
+  encontrar_erro: "Encontrar o erro",
 };
 
 /** Tempo limite padrão por tipo, em segundos (escopo: 20 a 60 s). */
@@ -20,6 +34,9 @@ export const TEMPO_PADRAO: Record<TipoQuestao, number> = {
   vf_bloco: 60,
   linha_do_tempo: 60,
   pares: 60,
+  fonte_primaria: 120,
+  causa_consequencia: 90,
+  encontrar_erro: 90,
 };
 
 export const NOME_DIFICULDADE: Record<number, string> = { 1: "Fácil", 2: "Média", 3: "Difícil" };
@@ -55,29 +72,85 @@ export const conteudoPares = z.object({
     .max(6, "Use de 3 a 6 pares."),
 });
 
+export const conteudoFontePrimaria = z.object({
+  // Trecho do documento; pode ficar vazio quando a fonte é a imagem da questão.
+  documento: z.string().trim().max(2500, "Documento longo demais (máx. 2.500 caracteres).").default(""),
+  perguntas: z
+    .array(
+      z
+        .object({
+          pergunta: texto,
+          alternativas: z
+            .array(texto)
+            .min(3, "Use 3 ou 4 alternativas por pergunta.")
+            .max(4, "Use 3 ou 4 alternativas por pergunta."),
+          correta: z.number().int().min(0),
+        })
+        .refine((p) => p.correta < p.alternativas.length, "Marque a alternativa correta de cada pergunta."),
+    )
+    .min(2, "Use 2 ou 3 perguntas sobre a fonte.")
+    .max(3, "Use 2 ou 3 perguntas sobre a fonte."),
+});
+
+export const conteudoCausaConsequencia = z.object({
+  relacoes: z
+    .array(z.object({ causa: texto, consequencia: texto }))
+    .min(3, "Use de 3 a 5 relações.")
+    .max(5, "Use de 3 a 5 relações."),
+  // Consequências que não pertencem a nenhuma causa: obrigam o aluno a pensar até a última.
+  extras: z.array(texto).max(2, "Use no máximo 2 consequências extras.").default([]),
+});
+
+export const conteudoEncontrarErro = z
+  .object({
+    // O texto é a junção dos trechos, na ordem.
+    trechos: z
+      .array(z.object({ texto, errado: z.boolean(), correcao: z.string().trim().optional() }))
+      .min(4, "Divida o texto em 4 a 10 trechos.")
+      .max(10, "Divida o texto em 4 a 10 trechos."),
+  })
+  .refine((c) => {
+    const erros = c.trechos.filter((t) => t.errado).length;
+    return erros >= 1 && erros <= 3;
+  }, "Marque de 1 a 3 trechos com erro.")
+  .refine((c) => c.trechos.filter((t) => !t.errado).length >= 3, "Deixe ao menos 3 trechos corretos.");
+
 export const SCHEMA_CONTEUDO = {
   multipla_escolha: conteudoMultiplaEscolha,
   vf_bloco: conteudoVfBloco,
   linha_do_tempo: conteudoLinhaDoTempo,
   pares: conteudoPares,
+  fonte_primaria: conteudoFontePrimaria,
+  causa_consequencia: conteudoCausaConsequencia,
+  encontrar_erro: conteudoEncontrarErro,
 } as const;
 
 export type ConteudoMultiplaEscolha = z.infer<typeof conteudoMultiplaEscolha>;
 export type ConteudoVfBloco = z.infer<typeof conteudoVfBloco>;
 export type ConteudoLinhaDoTempo = z.infer<typeof conteudoLinhaDoTempo>;
 export type ConteudoPares = z.infer<typeof conteudoPares>;
+export type ConteudoFontePrimaria = z.infer<typeof conteudoFontePrimaria>;
+export type ConteudoCausaConsequencia = z.infer<typeof conteudoCausaConsequencia>;
+export type ConteudoEncontrarErro = z.infer<typeof conteudoEncontrarErro>;
 
 export type Conteudo =
   | { tipo: "multipla_escolha"; conteudo: ConteudoMultiplaEscolha }
   | { tipo: "vf_bloco"; conteudo: ConteudoVfBloco }
   | { tipo: "linha_do_tempo"; conteudo: ConteudoLinhaDoTempo }
-  | { tipo: "pares"; conteudo: ConteudoPares };
+  | { tipo: "pares"; conteudo: ConteudoPares }
+  | { tipo: "fonte_primaria"; conteudo: ConteudoFontePrimaria }
+  | { tipo: "causa_consequencia"; conteudo: ConteudoCausaConsequencia }
+  | { tipo: "encontrar_erro"; conteudo: ConteudoEncontrarErro };
 
 export function validarConteudo(tipo: TipoQuestao, conteudo: unknown) {
   return SCHEMA_CONTEUDO[tipo].safeParse(conteudo);
 }
 
-/** Número de itens que a permutação embaralha em cada tipo. */
+/**
+ * Número de itens que a permutação embaralha em cada tipo. Quando o tipo tem
+ * várias listas (as perguntas da fonte primária), a permutação cobre todas
+ * juntas e cada lista usa o seu trecho (ver subPermutacao).
+ */
 export function tamanhoPermutacao(c: Conteudo): number {
   switch (c.tipo) {
     case "multipla_escolha":
@@ -88,7 +161,31 @@ export function tamanhoPermutacao(c: Conteudo): number {
       return c.conteudo.eventos.length;
     case "pares":
       return c.conteudo.pares.length;
+    case "fonte_primaria":
+      return c.conteudo.perguntas.reduce((n, p) => n + p.alternativas.length, 0);
+    case "causa_consequencia":
+      return c.conteudo.relacoes.length + c.conteudo.extras.length;
+    case "encontrar_erro":
+      return 0;
   }
+}
+
+/**
+ * Ordem dos índices inicio..inicio+tamanho-1 dentro da permutação, rebaixados
+ * para 0..tamanho-1. Como a permutação inteira é aleatória, cada trecho também é.
+ */
+export function subPermutacao(permutacao: number[], inicio: number, tamanho: number): number[] {
+  return permutacao.filter((i) => i >= inicio && i < inicio + tamanho).map((i) => i - inicio);
+}
+
+/** Início de cada pergunta da fonte primária dentro da permutação. */
+export function iniciosPerguntas(c: ConteudoFontePrimaria): number[] {
+  let soma = 0;
+  return c.perguntas.map((p) => {
+    const inicio = soma;
+    soma += p.alternativas.length;
+    return inicio;
+  });
 }
 
 export function conteudoVazio(tipo: TipoQuestao): Conteudo {
@@ -106,6 +203,23 @@ export function conteudoVazio(tipo: TipoQuestao): Conteudo {
       return { tipo, conteudo: { eventos: [0, 1, 2, 3].map(() => ({ texto: "", data: "" })) } };
     case "pares":
       return { tipo, conteudo: { pares: [0, 1, 2, 3].map(() => ({ esquerda: "", direita: "" })) } };
+    case "fonte_primaria":
+      return {
+        tipo,
+        conteudo: {
+          documento: "",
+          perguntas: ["De quando é esta fonte?", "Quem a produziu?", "Qual era a intenção de quem a produziu?"].map(
+            (pergunta) => ({ pergunta, alternativas: ["", "", "", ""], correta: 0 }),
+          ),
+        },
+      };
+    case "causa_consequencia":
+      return { tipo, conteudo: { relacoes: [0, 1, 2].map(() => ({ causa: "", consequencia: "" })), extras: [""] } };
+    case "encontrar_erro":
+      return {
+        tipo,
+        conteudo: { trechos: [0, 1, 2, 3, 4].map((i) => ({ texto: "", errado: i === 2, correcao: "" })) },
+      };
   }
 }
 
@@ -114,18 +228,27 @@ export type Vista =
   | { tipo: "multipla_escolha"; alternativas: string[] }
   | { tipo: "vf_bloco"; afirmativas: string[] }
   | { tipo: "linha_do_tempo"; eventos: string[] }
-  | { tipo: "pares"; esquerda: string[]; direita: string[] };
+  | { tipo: "pares"; esquerda: string[]; direita: string[] }
+  | { tipo: "fonte_primaria"; documento: string; perguntas: { pergunta: string; alternativas: string[] }[] }
+  | { tipo: "causa_consequencia"; causas: string[]; consequencias: string[] }
+  | { tipo: "encontrar_erro"; trechos: string[]; erros: number };
 
 /** Resposta do aluno, sempre em índices da ordem exibida. */
 export type Resposta =
   | { tipo: "multipla_escolha"; escolha: number | null }
   | { tipo: "vf_bloco"; valores: (boolean | null)[] }
   | { tipo: "linha_do_tempo"; ordem: number[] }
-  | { tipo: "pares"; ligacoes: (number | null)[] };
+  | { tipo: "pares"; ligacoes: (number | null)[] }
+  | { tipo: "fonte_primaria"; escolhas: (number | null)[] }
+  | { tipo: "causa_consequencia"; ligacoes: (number | null)[] }
+  | { tipo: "encontrar_erro"; marcados: number[] };
 
 export const schemaResposta = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("multipla_escolha"), escolha: z.number().int().nullable() }),
   z.object({ tipo: z.literal("vf_bloco"), valores: z.array(z.boolean().nullable()).max(10) }),
   z.object({ tipo: z.literal("linha_do_tempo"), ordem: z.array(z.number().int()).max(10) }),
   z.object({ tipo: z.literal("pares"), ligacoes: z.array(z.number().int().nullable()).max(10) }),
+  z.object({ tipo: z.literal("fonte_primaria"), escolhas: z.array(z.number().int().nullable()).max(10) }),
+  z.object({ tipo: z.literal("causa_consequencia"), ligacoes: z.array(z.number().int().nullable()).max(10) }),
+  z.object({ tipo: z.literal("encontrar_erro"), marcados: z.array(z.number().int()).max(10) }),
 ]);

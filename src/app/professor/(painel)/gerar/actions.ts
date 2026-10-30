@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { gerarLote } from "@/lib/claude/gerar";
 import { exigirProfessor } from "@/lib/professor";
-import { TIPOS } from "@/lib/questoes/tipos";
+import { TIPOS_GERADOR } from "@/lib/questoes/tipos";
 
 export type EstadoGeracao = { erro?: string };
 
@@ -12,7 +12,7 @@ const schema = z.object({
   capitulo: z.string().trim().min(1, "Informe o capítulo ou tema.").max(200),
   serie: z.string().trim().max(50),
   habilidades: z.array(z.string()),
-  tipos: z.array(z.enum(TIPOS)).min(1, "Escolha ao menos um tipo."),
+  tipos: z.array(z.enum(TIPOS_GERADOR)).min(1, "Escolha ao menos um tipo."),
   quantidade: z.coerce.number().int().min(1).max(15, "No máximo 15 questões por lote."),
   dificuldade: z.enum(["facil", "media", "dificil", "misturada"]),
   referencia: z.string().trim().max(30000, "Texto de referência muito longo (máx. 30 mil caracteres)."),
