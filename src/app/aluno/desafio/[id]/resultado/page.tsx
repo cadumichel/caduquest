@@ -37,6 +37,9 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
       <div className="space-y-4">
         <h1 className="text-2xl font-bold">{desafio.titulo}</h1>
         <Aviso tipo="info">Você não fez este desafio.</Aviso>
+        {liberado && (
+          <BotaoLink href={`/aluno/desafio/${id}/treino`}>🏋️ Fazer como treino (não vale ranking)</BotaoLink>
+        )}
         <BotaoLink href="/aluno" variante="secundario">
           Voltar ao início
         </BotaoLink>
@@ -135,6 +138,14 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
             );
           })}
         </section>
+      )}
+      {liberado && (
+        <div className="space-y-2">
+          <BotaoLink href={`/aluno/desafio/${id}/treino`}>🏋️ Refazer como treino</BotaoLink>
+          <p className="text-center text-xs text-slate-500">
+            O treino mostra a sua nota, mas o ranking e o XP contam só a primeira tentativa.
+          </p>
+        </div>
       )}
       <BotaoLink href="/aluno" variante="secundario">
         Voltar ao início

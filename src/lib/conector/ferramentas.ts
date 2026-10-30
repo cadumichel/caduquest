@@ -44,6 +44,12 @@ const schemaQuestao = z.object({
     .describe(
       "Aparece no gabarito depois que o desafio fecha. 2 a 4 frases: por que a resposta certa é certa e, na múltipla escolha, o erro de cada distrator (ex.: 'A) ... B) ...').",
     ),
+  dica: z
+    .string()
+    .max(300)
+    .describe(
+      "Dica que o aluno pode abrir durante o desafio (ele tem só 3 por temporada). 1 frase curta que puxa o raciocínio certo (um contexto, uma pista de época ou de causa) sem entregar a resposta nem eliminar alternativas diretamente.",
+    ),
   fonte: z.string().optional().describe("Origem do texto ou da imagem citada, se houver."),
   imagem_url: z
     .string()
@@ -316,6 +322,39 @@ export function registrarFerramentas(server: McpServer, origem: string) {
   );
 
   server.registerTool(
+    "definir_dicas",
+    {
+      title: "Escrever dicas em questões que já existem",
+      description:
+        "Grava (ou troca) a dica de questões que já estão no banco, pelo id (veja listar_questoes). Use para dar dica às questões antigas, criadas antes das dicas existirem. A dica é 1 frase curta que puxa o raciocínio certo sem entregar a resposta. Mostre as dicas ao professor e grave só depois que ele aprovar.",
+      inputSchema: z.object({
+        dicas: z
+          .array(z.object({ id: z.string(), dica: z.string().min(5).max(300) }))
+          .min(1)
+          .max(100),
+      }),
+    },
+    async ({ dicas }) => {
+      const professorId = await professorDoConector();
+      const db = criarClienteAdmin();
+      const gravadas: string[] = [];
+      const recusadas: { id: string; motivo: string }[] = [];
+      for (const { id, dica } of dicas) {
+        const { data, error } = await db
+          .from("questoes")
+          .update({ dica: dica.trim() })
+          .eq("id", id)
+          .eq("professor_id", professorId)
+          .select("id");
+        if (error) recusadas.push({ id, motivo: "Banco sem o campo de dica: rode o SQL das ajudas no Supabase." });
+        else if (!data?.length) recusadas.push({ id, motivo: "Questão não encontrada." });
+        else gravadas.push(id);
+      }
+      return resultado({ gravadas: gravadas.length, recusadas });
+    },
+  );
+
+  server.registerTool(
     "adicionar_questoes",
     {
       title: "Adicionar questões ao banco",
@@ -326,6 +365,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         "Varie os formatos dentro do lote. fonte_primaria, causa_consequencia e encontrar_erro treinam as habilidades mais cobradas na prova: inclua ao menos uma de cada quando o capítulo permitir.",
         "Distratores de alto nível em todos os tipos: plausíveis, do mesmo período e baseados em confusões reais de alunos.",
         "Antes de gravar, mostre as questões ao professor e grave só depois que ele aprovar.",
+        "Toda questão leva uma dica (campo dica), escrita junto com ela.",
         "Sempre envie junto, em curiosidades, 2 a 4 curiosidades históricas curtas e verdadeiras sobre os capítulos do lote, sem o professor precisar pedir: elas viram a Curiosidade do dia na tela dos alunos.",
       ].join(" "),
       inputSchema: z.object({
@@ -394,6 +434,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           habilidades: q.habilidades.filter((h) => permitidas.has(h)),
           dificuldade: q.dificuldade,
           explicacao: q.explicacao.trim(),
+          dica: q.dica.trim() || null,
           fonte: q.fonte?.trim() || null,
           imagem_path: q.tipo === "mapa" ? null : caminhoImagem,
           tempo_limite_s: q.tempo_limite_s ?? TEMPO_PADRAO[q.tipo as TipoQuestao],

@@ -56,6 +56,7 @@ export function EditorQuestao({
     imagem_path: inicial?.imagem_path ?? null,
     tempo_limite_s: inicial?.tempo_limite_s ?? TEMPO_PADRAO.multipla_escolha,
     explicacao: inicial?.explicacao ?? "",
+    dica: inicial?.dica ?? "",
   });
   const set = <K extends keyof typeof campos>(k: K, v: (typeof campos)[K]) => setCampos((c) => ({ ...c, [k]: v }));
 
@@ -145,6 +146,12 @@ export function EditorQuestao({
           <EditorConteudo conteudo={conteudo} onChange={setConteudo} bloqueado={usada} />
           <Campo rotulo="Explicação curta" dica="Aparece para quem errou, depois que o desafio fecha.">
             <AreaTexto rows={2} value={campos.explicacao} onChange={(e) => set("explicacao", e.target.value)} />
+          </Campo>
+          <Campo
+            rotulo="Dica"
+            dica="O aluno pode abrir durante o desafio (3 dicas por temporada). Ajuda a pensar, sem entregar a resposta."
+          >
+            <AreaTexto rows={2} maxLength={300} value={campos.dica} onChange={(e) => set("dica", e.target.value)} />
           </Campo>
         </Cartao>
 

@@ -28,6 +28,8 @@ type Props<V extends Vista> = {
   resposta: Extract<Resposta, { tipo: V["tipo"] }>;
   onChange: (r: Extract<Resposta, { tipo: V["tipo"] }>) => void;
   desabilitada?: boolean;
+  /** Posições eliminadas pela ajuda da temporada (tipos de uma resposta só). */
+  eliminadas?: number[];
 };
 
 /** Área de resposta de uma questão, igual no desafio e na prévia do professor. */
@@ -36,17 +38,25 @@ export function QuestaoInterativa({
   resposta,
   onChange,
   desabilitada,
+  eliminadas,
 }: {
   vista: Vista;
   resposta: Resposta;
   onChange: (r: Resposta) => void;
   desabilitada?: boolean;
+  eliminadas?: number[];
 }) {
   if (vista.tipo !== resposta.tipo) return null;
   switch (vista.tipo) {
     case "multipla_escolha":
       return (
-        <MultiplaEscolha vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />
+        <MultiplaEscolha
+          vista={vista}
+          resposta={resposta as never}
+          onChange={onChange}
+          desabilitada={desabilitada}
+          eliminadas={eliminadas}
+        />
       );
     case "vf_bloco":
       return <VfBloco vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />;
@@ -86,20 +96,40 @@ export function QuestaoInterativa({
       return (
         <div className="space-y-3">
           <Documento texto={vista.texto} />
-          <MultiplaEscolha vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />
+          <MultiplaEscolha
+            vista={vista}
+            resposta={resposta as never}
+            onChange={onChange}
+            desabilitada={desabilitada}
+            eliminadas={eliminadas}
+          />
         </div>
       );
     case "quem_disse":
       return (
         <div className="space-y-3">
           <Citacao texto={vista.citacao} />
-          <MultiplaEscolha vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />
+          <MultiplaEscolha
+            vista={vista}
+            resposta={resposta as never}
+            onChange={onChange}
+            desabilitada={desabilitada}
+            eliminadas={eliminadas}
+          />
         </div>
       );
     case "classificar":
       return <Classificar vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />;
     case "intruso":
-      return <Intruso vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />;
+      return (
+        <Intruso
+          vista={vista}
+          resposta={resposta as never}
+          onChange={onChange}
+          desabilitada={desabilitada}
+          eliminadas={eliminadas}
+        />
+      );
     case "ponto_de_vista":
       return (
         <PontoDeVista vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />
@@ -138,11 +168,13 @@ function MultiplaEscolha({
   resposta,
   onChange,
   desabilitada,
+  eliminadas = [],
 }: Props<Extract<Vista, { tipo: "multipla_escolha" | "interpretacao" | "quem_disse" }>>) {
   return (
     <ul className="space-y-2">
       {vista.alternativas.map((texto, i) => {
         const marcada = resposta.escolha === i;
+        if (eliminadas.includes(i)) return <AlternativaEliminada key={i} letra={LETRAS[i]} texto={texto} />;
         return (
           <li key={i}>
             <button
@@ -166,6 +198,20 @@ function MultiplaEscolha({
         );
       })}
     </ul>
+  );
+}
+
+function AlternativaEliminada({ letra, texto }: { letra: string; texto: string }) {
+  return (
+    <li
+      aria-label={`Alternativa ${letra} eliminada`}
+      className="flex w-full items-start gap-3 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-3 text-left text-slate-400"
+    >
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold">
+        ✕
+      </span>
+      <span className="pt-0.5 line-through">{texto}</span>
+    </li>
   );
 }
 
@@ -707,22 +753,33 @@ function Classificar({ vista, resposta, onChange, desabilitada }: Props<Extract<
   );
 }
 
-function Intruso({ vista, resposta, onChange, desabilitada }: Props<Extract<Vista, { tipo: "intruso" }>>) {
+function Intruso({
+  vista,
+  resposta,
+  onChange,
+  desabilitada,
+  eliminadas = [],
+}: Props<Extract<Vista, { tipo: "intruso" }>>) {
   return (
     <div className="space-y-3">
       <p className="text-sm text-slate-500">Qual item não pertence ao grupo?</p>
       <div className="grid grid-cols-2 gap-2">
         {vista.itens.map((texto, i) => {
           const marcado = resposta.escolha === i;
+          const eliminado = eliminadas.includes(i);
           return (
             <button
               key={i}
               type="button"
-              disabled={desabilitada}
+              disabled={desabilitada || eliminado}
               onClick={() => onChange({ tipo: "intruso", escolha: i })}
               aria-pressed={marcado}
               className={`flex min-h-20 items-center justify-center rounded-xl border-2 p-3 text-center text-sm font-medium transition ${
-                marcado ? "border-red-500 bg-red-50 text-red-900" : "border-slate-200 bg-white hover:border-marca-200"
+                eliminado
+                  ? "border-dashed border-slate-200 bg-slate-50 text-slate-400 line-through"
+                  : marcado
+                    ? "border-red-500 bg-red-50 text-red-900"
+                    : "border-slate-200 bg-white hover:border-marca-200"
               } ${vista.itens.length % 2 === 1 && i === vista.itens.length - 1 ? "col-span-2" : ""}`}
             >
               {texto}
