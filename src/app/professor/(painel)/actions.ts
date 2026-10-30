@@ -6,7 +6,8 @@ import { gerarCodigoDia, janelaLiberadaAgora } from "@/lib/cadurush";
 import { gerarCodigoTurma } from "@/lib/codigo";
 import { dataHoraLocalParaIso } from "@/lib/datas";
 import { exigirProfessor } from "@/lib/professor";
-import { TEMPO_MAX_S, TEMPO_MIN_S, TIPOS, validarConteudo } from "@/lib/questoes/tipos";
+import { problemasRelampago } from "@/lib/questoes/relampago";
+import { TEMPO_MAX_S, TEMPO_MIN_S, TIPOS, validarConteudo, type Conteudo } from "@/lib/questoes/tipos";
 
 export type EstadoForm = { erro?: string; ok?: string };
 
@@ -235,6 +236,7 @@ const schemaQuestao = z.object({
     .int()
     .min(TEMPO_MIN_S, `Tempo mínimo: ${TEMPO_MIN_S} s.`)
     .max(TEMPO_MAX_S, `Tempo máximo: ${TEMPO_MAX_S} s.`),
+  relampago: z.boolean().default(false),
   conteudo: z.unknown(),
   explicacao: z.string().trim().max(2000),
   dica: z.string().trim().max(300).default(""),
@@ -252,6 +254,11 @@ export async function salvarQuestao(dados: DadosQuestao): Promise<EstadoForm & {
   if (conteudo.data && "imagem" in conteudo.data && !conteudo.data.imagem.startsWith(`${professorId}/`)) {
     return { erro: "Imagem do mapa inválida." };
   }
+  if (r.data.relampago) {
+    const comoConteudo = { tipo: r.data.tipo, conteudo: conteudo.data } as Conteudo;
+    const [problema] = problemasRelampago(r.data.enunciado, comoConteudo, r.data.tempo_limite_s);
+    if (problema) return { erro: problema };
+  }
 
   const linha = {
     tipo: r.data.tipo,
@@ -262,6 +269,7 @@ export async function salvarQuestao(dados: DadosQuestao): Promise<EstadoForm & {
     enunciado: r.data.enunciado,
     imagem_path: r.data.imagem_path,
     tempo_limite_s: r.data.tempo_limite_s,
+    relampago: r.data.relampago,
     conteudo: conteudo.data,
     explicacao: r.data.explicacao || null,
     dica: r.data.dica || null,
@@ -308,6 +316,7 @@ export async function duplicarQuestao(id: string) {
       enunciado: q.enunciado,
       imagem_path: q.imagem_path,
       tempo_limite_s: q.tempo_limite_s,
+      ...(q.relampago && { relampago: true }),
       conteudo: q.conteudo,
       explicacao: q.explicacao,
       dica: q.dica ?? null,

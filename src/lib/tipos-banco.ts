@@ -41,6 +41,8 @@ export type Questao = {
   enunciado: string;
   imagem_path: string | null;
   tempo_limite_s: number;
+  /** Questão relâmpago: direta, de 5 a 20 s (ausente sem o SQL dela). */
+  relampago?: boolean;
   conteudo: unknown;
   explicacao: string | null;
   dica?: string | null;

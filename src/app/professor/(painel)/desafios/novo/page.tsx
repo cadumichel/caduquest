@@ -20,7 +20,9 @@ export default async function NovoDesafio({ searchParams }: PageProps<"/professo
     supabase.from("temporadas").select("id, nome, capitulos, turmas(nome)").eq("id", temporadaId).maybeSingle(),
     supabase
       .from("questoes")
-      .select("id, tipo, enunciado, capitulo, habilidades, dificuldade, imagem_path, desafio_questoes(count)")
+      .select(
+        "id, tipo, enunciado, capitulo, habilidades, dificuldade, imagem_path, relampago, desafio_questoes(count)",
+      )
       .eq("status", "publicada")
       .order("capitulo")
       .order("criado_em", { ascending: false }),
@@ -53,6 +55,7 @@ export default async function NovoDesafio({ searchParams }: PageProps<"/professo
           habilidades: q.habilidades,
           dificuldade: q.dificuldade,
           temImagem: Boolean(q.imagem_path),
+          relampago: Boolean(q.relampago),
           usos: (q.desafio_questoes as { count: number }[])[0]?.count ?? 0,
         }))}
       />

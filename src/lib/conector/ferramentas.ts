@@ -6,12 +6,23 @@ import { dataHoraLocalParaIso, formatarData, formatarDataHora } from "@/lib/data
 import { cartasDaTurma } from "@/lib/carta-coringa";
 import { HABILIDADES } from "@/lib/habilidades";
 import {
+  LIMITE_ENUNCIADO,
+  LIMITE_ITEM,
+  LIMITE_TOTAL,
+  problemasRelampago,
+  RELAMPAGO_MAX_S,
+  RELAMPAGO_MIN_S,
+  sugerirTempoRelampago,
+  TIPOS_RELAMPAGO,
+} from "@/lib/questoes/relampago";
+import {
   NOME_TIPO,
   TEMPO_MAX_S,
   TEMPO_MIN_S,
   TEMPO_PADRAO,
   TIPOS,
   validarConteudo,
+  type Conteudo,
   type TipoQuestao,
 } from "@/lib/questoes/tipos";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
@@ -63,7 +74,15 @@ const schemaQuestao = z.object({
     .min(TEMPO_MIN_S)
     .max(TEMPO_MAX_S)
     .optional()
-    .describe("Padrão: 40 s na múltipla escolha e 60 s nos outros tipos."),
+    .describe(
+      `Padrão: 40 s na múltipla escolha e 60 s nos outros tipos. Na relâmpago, ${RELAMPAGO_MIN_S} a ${RELAMPAGO_MAX_S} s; omita para usar o tempo sugerido pelo app.`,
+    ),
+  relampago: z
+    .boolean()
+    .optional()
+    .describe(
+      `Questão relâmpago: pergunta direta, sem texto motivador (nada de 'Leia o texto…' nem citação longa), para responder em ${RELAMPAGO_MIN_S} a ${RELAMPAGO_MAX_S} s. Só nos tipos ${TIPOS_RELAMPAGO.join(", ")} (vf_bloco com até 4 afirmativas). Enunciado de até ${LIMITE_ENUNCIADO} caracteres num parágrafo, cada item até ${LIMITE_ITEM} e tudo somado até ${LIMITE_TOTAL}. O aluno vê um destaque de relâmpago.`,
+    ),
   alternativas: z.array(z.string()).optional().describe("multipla_escolha: 4 ou 5 alternativas."),
   correta: z.number().int().optional().describe("multipla_escolha: índice da alternativa correta, a partir de 0."),
   afirmativas: z
@@ -251,6 +270,14 @@ function conteudoBruto(q: z.infer<typeof schemaQuestao>) {
   }
 }
 
+/** Tempo da relâmpago (o pedido ou o sugerido pelo app) e o que a impede de ser relâmpago. */
+function avaliarRelampago(q: z.infer<typeof schemaQuestao>, conteudo: unknown) {
+  const c = { tipo: q.tipo, conteudo } as Conteudo;
+  const sugerido = sugerirTempoRelampago(q.enunciado, c, Boolean(q.imagem_url));
+  const tempo = q.tempo_limite_s ?? sugerido;
+  return { tempo, sugerido, problemas: problemasRelampago(q.enunciado, c, tempo) };
+}
+
 export function registrarFerramentas(server: McpServer, origem: string) {
   server.registerTool(
     "listar_turmas",
@@ -299,15 +326,16 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         status: z.enum(["rascunho", "publicada", "arquivada"]).optional(),
         tipo: z.enum(TIPOS).optional(),
         busca: z.string().optional().describe("Trecho do enunciado."),
+        relampago: z.boolean().optional().describe("true lista só as questões relâmpago."),
         limite: z.number().int().min(1).max(200).optional().describe("Padrão 50."),
       }),
       annotations: { readOnlyHint: true },
     },
-    async ({ capitulo, status, tipo, busca, limite }) => {
+    async ({ capitulo, status, tipo, busca, relampago, limite }) => {
       const professorId = await professorDoConector();
       let consulta = criarClienteAdmin()
         .from("questoes")
-        .select("id, tipo, capitulo, status, dificuldade, habilidades, enunciado")
+        .select("id, tipo, capitulo, status, dificuldade, habilidades, relampago, tempo_limite_s, enunciado")
         .eq("professor_id", professorId)
         .order("criado_em", { ascending: false })
         .limit(limite ?? 50);
@@ -315,6 +343,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
       if (status) consulta = consulta.eq("status", status);
       if (tipo) consulta = consulta.eq("tipo", tipo);
       if (busca) consulta = consulta.ilike("enunciado", `%${busca}%`);
+      if (relampago !== undefined) consulta = consulta.eq("relampago", relampago);
       const { data, error } = await consulta;
       if (error) return falha("Não foi possível consultar o banco de questões.");
       return resultado({ total: data.length, questoes: data });
@@ -355,6 +384,34 @@ export function registrarFerramentas(server: McpServer, origem: string) {
   );
 
   server.registerTool(
+    "checar_relampago",
+    {
+      title: "Checar questões relâmpago e sugerir o tempo",
+      description: `Confere, sem gravar nada, se cada questão serve como relâmpago (direta, sem texto motivador, curta) e devolve o tempo que o app sugere pelo tamanho do texto (${RELAMPAGO_MIN_S} a ${RELAMPAGO_MAX_S} s). Use antes de mostrar questões relâmpago ao professor: reescreva as que tiverem problemas e mostre o tempo sugerido de cada uma para ele ajustar. Mesmos campos de adicionar_questoes.`,
+      inputSchema: z.object({ questoes: z.array(schemaQuestao).min(1).max(30) }),
+      annotations: { readOnlyHint: true },
+    },
+    async ({ questoes }) =>
+      resultado(
+        questoes.map((q, i) => {
+          const conteudo = validarConteudo(q.tipo, conteudoBruto(q));
+          if (!conteudo.success) {
+            return { posicao: i + 1, ok: false, problemas: [conteudo.error.issues[0].message] };
+          }
+          const r = avaliarRelampago(q, conteudo.data);
+          return {
+            posicao: i + 1,
+            enunciado: q.enunciado.slice(0, 80),
+            ok: r.problemas.length === 0,
+            tempo_sugerido_s: r.sugerido,
+            ...(q.tempo_limite_s !== undefined && { tempo_pedido_s: q.tempo_limite_s }),
+            problemas: r.problemas,
+          };
+        }),
+      ),
+  );
+
+  server.registerTool(
     "adicionar_questoes",
     {
       title: "Adicionar questões ao banco",
@@ -366,6 +423,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         "Distratores de alto nível em todos os tipos: plausíveis, do mesmo período e baseados em confusões reais de alunos.",
         "Antes de gravar, mostre as questões ao professor e grave só depois que ele aprovar.",
         "Toda questão leva uma dica (campo dica), escrita junto com ela.",
+        `Questões relâmpago (relampago=true): quando o professor pedir relâmpago, escreva perguntas diretas, sem texto motivador, e chame checar_relampago antes de mostrá-las: mostre o tempo sugerido pelo app (${RELAMPAGO_MIN_S} a ${RELAMPAGO_MAX_S} s) ao lado de cada uma para o professor ajustar, e grave com o tempo que ele aprovar (ou omita tempo_limite_s para usar o sugerido).`,
         "Sempre envie junto, em curiosidades, 2 a 4 curiosidades históricas curtas e verdadeiras sobre os capítulos do lote, sem o professor precisar pedir: elas viram a Curiosidade do dia na tela dos alunos.",
       ].join(" "),
       inputSchema: z.object({
@@ -405,9 +463,13 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           (conteudo.data as { trechos: { errado: boolean; correcao?: string }[] }).trechos.some(
             (t) => t.errado && !t.correcao?.trim(),
           );
-        const imagem = !motivo && q.imagem_url ? await guardarImagemDaUrl(q.imagem_url, professorId) : null;
+        const relampago = q.relampago && conteudo.success ? avaliarRelampago(q, conteudo.data) : null;
+        const motivoRelampago = relampago?.problemas[0] ?? null;
+        const imagem =
+          !motivo && !motivoRelampago && q.imagem_url ? await guardarImagemDaUrl(q.imagem_url, professorId) : null;
         const motivoFinal =
           motivo ??
+          motivoRelampago ??
           (semTrechoCorrigido ? "Escreva a correção de cada trecho errado." : null) ??
           (imagem && "erro" in imagem ? imagem.erro : null) ??
           (q.tipo === "fonte_primaria" && !imagem && !(conteudo.data as { documento: string }).documento
@@ -437,7 +499,8 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           dica: q.dica.trim() || null,
           fonte: q.fonte?.trim() || null,
           imagem_path: q.tipo === "mapa" ? null : caminhoImagem,
-          tempo_limite_s: q.tempo_limite_s ?? TEMPO_PADRAO[q.tipo as TipoQuestao],
+          tempo_limite_s: relampago?.tempo ?? q.tempo_limite_s ?? TEMPO_PADRAO[q.tipo as TipoQuestao],
+          ...(relampago && { relampago: true }),
           conteudo: dados,
           status: publicar && !posicionar ? "publicada" : "rascunho",
           origem: "claude",
@@ -464,6 +527,9 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         curiosidades_gravadas: curiosidadesGravadas,
         status: publicar ? "publicada" : "rascunho",
         questoes: gravadas,
+        relampago: linhas
+          .filter((l) => l.relampago)
+          .map((l) => ({ enunciado: l.enunciado.slice(0, 80), tempo_s: l.tempo_limite_s })),
         recusadas,
         ...(pinosPorPosicionar.length && {
           aviso: `Questões de mapa nas posições ${pinosPorPosicionar.join(", ")} ficaram em rascunho: o professor precisa abrir cada uma no app e tocar no mapa para pôr os pinos no lugar.`,

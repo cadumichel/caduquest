@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { FaixaRelampago } from "@/components/FaixaRelampago";
 import { QuestaoInterativa } from "@/components/QuestaoInterativa";
 import { Aviso, Botao, BotaoLink } from "@/components/ui";
 import type { Ajudas, EstadoJogo, ResultadoAjuda } from "@/lib/jogo";
@@ -326,7 +327,9 @@ function TelaQuestao({
   return (
     <div
       translate={questao.saidaZera ? "no" : undefined}
-      className={`sem-selecao space-y-4 ${questao.saidaZera ? "notranslate" : ""}`}
+      className={`sem-selecao space-y-4 ${questao.saidaZera ? "notranslate" : ""} ${
+        questao.relampago ? "rounded-2xl p-3 ring-4 ring-amber-300" : ""
+      }`}
       onCopy={(e) => e.preventDefault()}
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -334,8 +337,19 @@ function TelaQuestao({
         <span>
           Questão {posicao} de {total}
         </span>
-        <span className={`tabular-nums ${segundos <= 10 ? "font-bold text-red-600" : ""}`}>⏱️ {segundos}s</span>
+        <span
+          className={`tabular-nums ${questao.relampago ? "text-base font-black" : ""} ${
+            segundos <= (questao.relampago ? 5 : 10)
+              ? "font-bold text-red-600"
+              : questao.relampago
+                ? "text-amber-600"
+                : ""
+          }`}
+        >
+          {questao.relampago ? "⚡" : "⏱️"} {segundos}s
+        </span>
       </div>
+      {questao.relampago && <FaixaRelampago tempo={questao.tempoLimite} />}
       {aviso && <Aviso>{aviso}</Aviso>}
       {questao.saidaZera ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-center text-xs font-semibold text-red-700">
@@ -349,7 +363,7 @@ function TelaQuestao({
       )}
       <div className="h-2 overflow-hidden rounded-full bg-slate-200">
         <div
-          className={`h-full transition-[width] duration-200 ${fracao < 0.25 ? "bg-red-500" : "bg-marca-600"}`}
+          className={`h-full transition-[width] duration-200 ${fracao < 0.25 ? "bg-red-500" : questao.relampago ? "bg-amber-400" : "bg-marca-600"}`}
           style={{ width: `${Math.max(0, Math.min(1, fracao)) * 100}%` }}
         />
       </div>
