@@ -8,6 +8,7 @@ import { desafioDoAluno } from "@/lib/jogo";
 import type { Conteudo, Resposta } from "@/lib/questoes/tipos";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import {
+  gabaritoAguardaProfessor,
   gabaritoLiberado,
   gabaritoLiberadoEm,
   situacaoDesafio,
@@ -86,9 +87,13 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
 
       {!encerrado ? (
         <Aviso tipo="info">
-          O gabarito e as explicações aparecem quando o desafio fechar, em {formatarDataHora(desafio.fecha_em)}. Assim
-          ninguém passa as respostas enquanto ele está aberto.
+          {desafio.gabarito_manual
+            ? `O gabarito e as explicações aparecem depois que o desafio fechar (${formatarDataHora(desafio.fecha_em)}), quando o professor liberar.`
+            : `O gabarito e as explicações aparecem quando o desafio fechar, em ${formatarDataHora(desafio.fecha_em)}.`}{" "}
+          Assim ninguém passa as respostas enquanto ele está aberto.
         </Aviso>
+      ) : gabaritoAguardaProfessor(desafio) ? (
+        <Aviso tipo="info">O desafio fechou. O gabarito aparece quando o professor liberar.</Aviso>
       ) : !liberado ? (
         <Aviso tipo="info">
           O desafio acabou de fechar. O gabarito aparece em {formatarDataHora(gabaritoLiberadoEm(desafio))}, depois que

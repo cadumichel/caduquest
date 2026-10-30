@@ -65,9 +65,8 @@ type QuestaoBanco = {
 export async function desafioDoAluno(db: SupabaseClient, aluno: AlunoSessao, desafioId: string) {
   const { data } = await db
     .from("desafios")
-    .select(
-      "id, temporada_id, tipo, codigo_dia, titulo, abre_em, fecha_em, pontos_por_acerto, tempo_por_questao_s, saida_zera_questao, temporadas!inner(turma_id)",
-    )
+    // "*" traz também as colunas do gabarito manual, quando o SQL delas já rodou.
+    .select("*, temporadas!inner(turma_id)")
     .eq("id", desafioId)
     .eq("temporadas.turma_id", aluno.turmaId)
     .maybeSingle();

@@ -12,14 +12,23 @@ import { exigirProfessor } from "@/lib/professor";
 import type { Conteudo } from "@/lib/questoes/tipos";
 import { NOME_TIPO } from "@/lib/questoes/tipos";
 import { resultadosDoDesafio } from "@/lib/resultados-desafio";
-import { situacaoDesafio, type Desafio, type Questao } from "@/lib/tipos-banco";
+import { marcaResultado, rotuloResultado, type Marca } from "@/lib/relatorio";
+import { gabaritoLiberado, gabaritoLiberadoEm, situacaoDesafio, type Desafio, type Questao } from "@/lib/tipos-banco";
 import { atualizarJanelaDesafio, excluirDesafio } from "../../actions";
+import { ControlesDesafio } from "./ControlesDesafio";
 import { PainelRelampago } from "./PainelRelampago";
 import { formatarPontos } from "@/lib/pontos";
 
 export const metadata: Metadata = { title: "Desafio" };
 
 const COR_SITUACAO = { concluiu: "verde", "em andamento": "ambar", "não fez": "cinza" } as const;
+
+const MARCA: Record<Marca, { simbolo: string; classe: string }> = {
+  certa: { simbolo: "✓", classe: "bg-emerald-100 text-emerald-800" },
+  errada: { simbolo: "✗", classe: "bg-red-100 text-red-700" },
+  parcial: { simbolo: "½", classe: "bg-amber-100 text-amber-800" },
+  vazia: { simbolo: "", classe: "" },
+};
 
 export default async function PaginaDesafioProfessor({ params }: PageProps<"/professor/desafios/[id]">) {
   const { id } = await params;
@@ -128,40 +137,113 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
           </p>
         </Cartao>
 
-        <Cartao>
-          <Subtitulo>Janela do desafio</Subtitulo>
-          <p className="mb-3 text-sm text-slate-600">
-            ⏱️{" "}
-            {desafio.tempo_por_questao_s
-              ? `${desafio.tempo_por_questao_s} s em todas as questões`
-              : "Tempo de cada questão"}
-            {" · "}
-            {desafio.saida_zera_questao ? "🚫 pesquisa bloqueada" : "🔎 pesquisa liberada"}
-          </p>
-          <FormAcao acao={atualizarJanelaDesafio}>
-            <input type="hidden" name="id" value={id} />
-            <Campo rotulo="Título">
-              <Entrada name="titulo" defaultValue={desafio.titulo} />
-            </Campo>
-            <Campo rotulo="Abre em">
-              <Entrada type="datetime-local" name="abre_em" defaultValue={isoParaDataHoraLocal(desafio.abre_em)} />
-            </Campo>
-            <Campo rotulo="Fecha em">
-              <Entrada type="datetime-local" name="fecha_em" defaultValue={isoParaDataHoraLocal(desafio.fecha_em)} />
-            </Campo>
-            <EscolhaPesquisa name="pesquisa" bloqueada={desafio.saida_zera_questao} />
-            <BotaoEnviar>Salvar</BotaoEnviar>
-          </FormAcao>
-          <div className="mt-6 border-t border-slate-100 pt-4">
-            <BotaoConfirmar
-              acao={excluirDesafio.bind(null, id)}
-              pergunta="Apagar este desafio? As tentativas e os pontos dos alunos nele também serão apagados."
-            >
-              Apagar desafio
-            </BotaoConfirmar>
-          </div>
-        </Cartao>
+        <div className="space-y-6">
+          <Cartao>
+            <ControlesDesafio
+              id={id}
+              relampago={desafio.tipo === "relampago"}
+              situacao={situacao}
+              fechaEm={desafio.fecha_em}
+              manual={!!desafio.gabarito_manual}
+              liberadoEm={desafio.gabarito_liberado_em ?? null}
+              visivelEm={gabaritoLiberadoEm(desafio).toISOString()}
+              visivel={gabaritoLiberado(desafio)}
+            />
+          </Cartao>
+          <Cartao>
+            <Subtitulo>Janela do desafio</Subtitulo>
+            <p className="mb-3 text-sm text-slate-600">
+              ⏱️{" "}
+              {desafio.tempo_por_questao_s
+                ? `${desafio.tempo_por_questao_s} s em todas as questões`
+                : "Tempo de cada questão"}
+              {" · "}
+              {desafio.saida_zera_questao ? "🚫 pesquisa bloqueada" : "🔎 pesquisa liberada"}
+            </p>
+            <FormAcao acao={atualizarJanelaDesafio}>
+              <input type="hidden" name="id" value={id} />
+              <Campo rotulo="Título">
+                <Entrada name="titulo" defaultValue={desafio.titulo} />
+              </Campo>
+              <Campo rotulo="Abre em">
+                <Entrada type="datetime-local" name="abre_em" defaultValue={isoParaDataHoraLocal(desafio.abre_em)} />
+              </Campo>
+              <Campo rotulo="Fecha em">
+                <Entrada type="datetime-local" name="fecha_em" defaultValue={isoParaDataHoraLocal(desafio.fecha_em)} />
+              </Campo>
+              <EscolhaPesquisa name="pesquisa" bloqueada={desafio.saida_zera_questao} />
+              <BotaoEnviar>Salvar</BotaoEnviar>
+            </FormAcao>
+            <div className="mt-6 border-t border-slate-100 pt-4">
+              <BotaoConfirmar
+                acao={excluirDesafio.bind(null, id)}
+                pergunta="Apagar este desafio? As tentativas e os pontos dos alunos nele também serão apagados."
+              >
+                Apagar desafio
+              </BotaoConfirmar>
+            </div>
+          </Cartao>
+        </div>
       </div>
+
+      <Cartao className="overflow-x-auto">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <Subtitulo>Desempenho por questão</Subtitulo>
+          <span className="text-xs text-slate-500">
+            ✓ acertou · ✗ errou · ½ acertou em parte · em branco: não chegou na questão
+          </span>
+        </div>
+        {linhas.every((l) => l.situacao === "não fez") ? (
+          <p className="text-sm text-slate-500">Ninguém fez o desafio ainda.</p>
+        ) : (
+          <table className="text-sm">
+            <thead className="text-slate-500">
+              <tr>
+                <th className="sticky left-0 bg-white py-2 pr-3 text-left">Aluno</th>
+                {questoes.map((q, i) => (
+                  <th key={q.id} className="px-0.5 py-2 text-center font-medium" title={q.enunciado}>
+                    {i + 1}
+                  </th>
+                ))}
+                <th className="py-2 pl-3 text-right">Acertos</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {linhas
+                .filter((l) => l.situacao !== "não fez")
+                .map((l) => (
+                  <tr key={l.alunoId}>
+                    <td className="sticky left-0 bg-white py-1 pr-3 whitespace-nowrap">
+                      {l.apelido}
+                      {l.nomeReal && <span className="text-slate-500"> · {l.nomeReal}</span>}
+                    </td>
+                    {questoes.map((q, i) => {
+                      const r = l.questoes.get(q.id);
+                      const m = MARCA[marcaResultado(r)];
+                      return (
+                        <td key={q.id} className="px-0.5 py-1 text-center">
+                          <span
+                            className={`inline-flex size-7 items-center justify-center rounded-md font-semibold ${m.classe}`}
+                            title={`Questão ${i + 1}: ${rotuloResultado(r)}`}
+                          >
+                            {m.simbolo}
+                          </span>
+                        </td>
+                      );
+                    })}
+                    <td className="py-1 pl-3 text-right tabular-nums">
+                      {l.acertos}/{questoes.length}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        )}
+        <p className="mt-3 text-xs text-slate-500">
+          A numeração segue a lista de questões abaixo (cada aluno vê em ordem embaralhada). A planilha CSV traz o mesmo
+          relatório; o da temporada inteira fica na página da temporada.
+        </p>
+      </Cartao>
 
       <section className="space-y-3">
         <Subtitulo>Questões ({questoes.length})</Subtitulo>
