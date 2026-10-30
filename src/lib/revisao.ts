@@ -1,9 +1,10 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { JANELA_APOS_FECHAR_S } from "@/lib/questoes/correcao";
 
 /**
  * Revisão de erros: questões que o aluno errou (ou acertou só em parte) em
- * desafios já encerrados, cujo gabarito já é público. A questão sai da revisão
+ * desafios já encerrados, cujo gabarito já é público (ver gabaritoLiberado). A questão sai da revisão
  * quando o aluno acerta. Sem a tabela "revisoes" (SQL ainda não rodado), a
  * revisão funciona, só não guarda o progresso.
  */
@@ -17,7 +18,7 @@ export async function errosParaRevisar(db: SupabaseClient, alunoId: string, turm
     .select("id, desafios!inner(fecha_em, temporadas!inner(turma_id))")
     .eq("aluno_id", alunoId)
     .eq("desafios.temporadas.turma_id", turmaId)
-    .lt("desafios.fecha_em", new Date().toISOString());
+    .lt("desafios.fecha_em", new Date(Date.now() - JANELA_APOS_FECHAR_S * 1000).toISOString());
   const ids = (tentativas ?? []).map((t) => t.id as string);
   if (!ids.length) return [];
 

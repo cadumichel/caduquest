@@ -7,7 +7,15 @@ import { formatarDataHora } from "@/lib/datas";
 import { desafioDoAluno } from "@/lib/jogo";
 import type { Conteudo, Resposta } from "@/lib/questoes/tipos";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
-import { situacaoDesafio, urlImagem, type Questao, type RespostaBanco, type Tentativa } from "@/lib/tipos-banco";
+import {
+  gabaritoLiberado,
+  gabaritoLiberadoEm,
+  situacaoDesafio,
+  urlImagem,
+  type Questao,
+  type RespostaBanco,
+  type Tentativa,
+} from "@/lib/tipos-banco";
 import { formatarPontos } from "@/lib/pontos";
 
 export const metadata: Metadata = { title: "Resultado" };
@@ -22,6 +30,7 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
   const { data } = await db.from("tentativas").select("*").eq("desafio_id", id).eq("aluno_id", aluno.id).maybeSingle();
   const tentativa = data as Tentativa | null;
   const encerrado = situacaoDesafio(desafio) === "encerrado";
+  const liberado = gabaritoLiberado(desafio);
 
   if (!tentativa) {
     return (
@@ -46,7 +55,7 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
   const total = tentativa.ordem.length;
 
   let questoes = new Map<string, Questao>();
-  if (encerrado) {
+  if (liberado) {
     const { data: qs } = await db.from("questoes").select("*").in("id", tentativa.ordem);
     questoes = new Map(((qs ?? []) as Questao[]).map((q) => [q.id, q]));
   }
@@ -76,6 +85,11 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
         <Aviso tipo="info">
           O gabarito e as explicações aparecem quando o desafio fechar, em {formatarDataHora(desafio.fecha_em)}. Assim
           ninguém passa as respostas enquanto ele está aberto.
+        </Aviso>
+      ) : !liberado ? (
+        <Aviso tipo="info">
+          O desafio acabou de fechar. O gabarito aparece em {formatarDataHora(gabaritoLiberadoEm(desafio))}, depois que
+          todos terminarem a última questão.
         </Aviso>
       ) : (
         <section className="space-y-3">

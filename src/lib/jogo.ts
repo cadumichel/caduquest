@@ -2,8 +2,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AlunoSessao } from "@/lib/aluno-sessao";
 import { montarVista } from "@/lib/questoes/apresentacao";
-import { calcularPontos, corrigir, FOLGA_SEGUNDOS, tempoEsgotado } from "@/lib/questoes/correcao";
-import { codigoConfere } from "@/lib/cadurush";
+import { calcularPontos, corrigir, JANELA_APOS_FECHAR_S, tempoEsgotado } from "@/lib/questoes/correcao";
+import { codigoConfere, LIMITE_TENTATIVAS_CODIGO } from "@/lib/cadurush";
 import { embaralhar, permutacaoAleatoria } from "@/lib/questoes/embaralhar";
 import { tamanhoPermutacao, type Conteudo, type Resposta, type Vista } from "@/lib/questoes/tipos";
 import type { Desafio, RespostaBanco, Tentativa } from "@/lib/tipos-banco";
@@ -159,18 +159,27 @@ export async function estadoAtual(
   if (!desafio) return { fase: "erro", mensagem: "Desafio não encontrado." };
 
   // CaduRush: só começa com o código do dia mostrado pelo professor.
-  if (
-    desafio.tipo === "relampago" &&
-    situacaoDesafio(desafio) === "aberto" &&
-    !codigoConfere(codigo, desafio.codigo_dia)
-  ) {
+  if (desafio.tipo === "relampago" && desafio.codigo_dia && situacaoDesafio(desafio) === "aberto") {
     const { count } = await db
       .from("tentativas")
       .select("id", { count: "exact", head: true })
       .eq("desafio_id", desafio.id)
       .eq("aluno_id", aluno.id);
     if (!count) {
-      return { fase: "codigo", mensagem: codigo ? "Código errado. Confira o código no quadro." : undefined };
+      if (!codigo) return { fase: "codigo" };
+      // Conta a tentativa antes de conferir, para ninguém testar todas as combinações
+      // (nem com vários pedidos ao mesmo tempo). Sem o SQL do limite, só confere.
+      const { data: usadas, error } = await db.rpc("contar_tentativa_codigo", {
+        p_desafio: desafio.id,
+        p_aluno: aluno.id,
+        p_codigo: desafio.codigo_dia,
+      });
+      if (!error && Number(usadas) > LIMITE_TENTATIVAS_CODIGO) {
+        return { fase: "codigo", mensagem: "Muitas tentativas erradas. Peça ajuda ao professor." };
+      }
+      if (!codigoConfere(codigo, desafio.codigo_dia)) {
+        return { fase: "codigo", mensagem: "Código errado. Confira o código no quadro." };
+      }
     }
   }
 
@@ -250,7 +259,7 @@ export async function responderQuestao(
   const desafio = await desafioDoAluno(db, aluno, desafioId);
   if (!desafio) return { fase: "erro", mensagem: "Desafio não encontrado." };
   // Depois do fechamento, aceita só quem já estava respondendo (até o tempo da questão).
-  if (new Date() > new Date(new Date(desafio.fecha_em).getTime() + (180 + FOLGA_SEGUNDOS) * 1000)) {
+  if (new Date() > new Date(new Date(desafio.fecha_em).getTime() + JANELA_APOS_FECHAR_S * 1000)) {
     return { fase: "fim" };
   }
 
