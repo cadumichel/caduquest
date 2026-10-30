@@ -7,7 +7,16 @@ import { formatarDataHora } from "@/lib/datas";
 import { desafioDoAluno } from "@/lib/jogo";
 import type { Conteudo, Resposta } from "@/lib/questoes/tipos";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
-import { situacaoDesafio, urlImagem, type Questao, type RespostaBanco, type Tentativa } from "@/lib/tipos-banco";
+import {
+  gabaritoAguardaProfessor,
+  gabaritoLiberado,
+  gabaritoLiberadoEm,
+  situacaoDesafio,
+  urlImagem,
+  type Questao,
+  type RespostaBanco,
+  type Tentativa,
+} from "@/lib/tipos-banco";
 import { formatarPontos } from "@/lib/pontos";
 
 export const metadata: Metadata = { title: "Resultado" };
@@ -22,12 +31,16 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
   const { data } = await db.from("tentativas").select("*").eq("desafio_id", id).eq("aluno_id", aluno.id).maybeSingle();
   const tentativa = data as Tentativa | null;
   const encerrado = situacaoDesafio(desafio) === "encerrado";
+  const liberado = gabaritoLiberado(desafio);
 
   if (!tentativa) {
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-bold">{desafio.titulo}</h1>
         <Aviso tipo="info">Você não fez este desafio.</Aviso>
+        {liberado && (
+          <BotaoLink href={`/aluno/desafio/${id}/treino`}>🏋️ Fazer como treino (não vale ranking)</BotaoLink>
+        )}
         <BotaoLink href="/aluno" variante="secundario">
           Voltar ao início
         </BotaoLink>
@@ -46,7 +59,7 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
   const total = tentativa.ordem.length;
 
   let questoes = new Map<string, Questao>();
-  if (encerrado) {
+  if (liberado) {
     const { data: qs } = await db.from("questoes").select("*").in("id", tentativa.ordem);
     questoes = new Map(((qs ?? []) as Questao[]).map((q) => [q.id, q]));
   }
@@ -74,8 +87,17 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
 
       {!encerrado ? (
         <Aviso tipo="info">
-          O gabarito e as explicações aparecem quando o desafio fechar, em {formatarDataHora(desafio.fecha_em)}. Assim
-          ninguém passa as respostas enquanto ele está aberto.
+          {desafio.gabarito_manual
+            ? `O gabarito e as explicações aparecem depois que o desafio fechar (${formatarDataHora(desafio.fecha_em)}), quando o professor liberar.`
+            : `O gabarito e as explicações aparecem quando o desafio fechar, em ${formatarDataHora(desafio.fecha_em)}.`}{" "}
+          Assim ninguém passa as respostas enquanto ele está aberto.
+        </Aviso>
+      ) : gabaritoAguardaProfessor(desafio) ? (
+        <Aviso tipo="info">O desafio fechou. O gabarito aparece quando o professor liberar.</Aviso>
+      ) : !liberado ? (
+        <Aviso tipo="info">
+          O desafio acabou de fechar. O gabarito aparece em {formatarDataHora(gabaritoLiberadoEm(desafio))}, depois que
+          todos terminarem a última questão.
         </Aviso>
       ) : (
         <section className="space-y-3">
@@ -121,6 +143,14 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
             );
           })}
         </section>
+      )}
+      {liberado && (
+        <div className="space-y-2">
+          <BotaoLink href={`/aluno/desafio/${id}/treino`}>🏋️ Refazer como treino</BotaoLink>
+          <p className="text-center text-xs text-slate-500">
+            O treino mostra a sua nota, mas o ranking e o XP contam só a primeira tentativa.
+          </p>
+        </div>
       )}
       <BotaoLink href="/aluno" variante="secundario">
         Voltar ao início

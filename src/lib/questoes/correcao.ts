@@ -169,6 +169,13 @@ export function calcularPontos(fracao: number, pontosPorAcerto: number): number 
 /** Folga de rede, em segundos, além do tempo limite da questão. */
 export const FOLGA_SEGUNDOS = 3;
 
+/**
+ * Depois do fechamento, quem estava no meio de uma questão ainda pode responder
+ * por este tempo. O gabarito só aparece depois dele, para ninguém responder
+ * olhando o gabarito (o seu ou o de um colega).
+ */
+export const JANELA_APOS_FECHAR_S = 180 + FOLGA_SEGUNDOS;
+
 export function tempoEsgotado(servidaEm: Date, agora: Date, limiteSegundos: number): boolean {
   return agora.getTime() - servidaEm.getTime() > (limiteSegundos + FOLGA_SEGUNDOS) * 1000;
 }

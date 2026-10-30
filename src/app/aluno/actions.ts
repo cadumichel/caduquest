@@ -11,10 +11,18 @@ import { progressoDoAluno } from "@/lib/progresso-dados";
 import { rankingParaAluno } from "@/lib/ranking";
 import { rankingDaTemporada, temporadaAtual } from "@/lib/temporada-dados";
 import { fundoLiberado, FUNDOS } from "@/lib/visual-perfil";
-import { estadoAtual, responderQuestao, type EstadoJogo } from "@/lib/jogo";
+import {
+  abrirDica,
+  eliminarAlternativa,
+  estadoAtual,
+  responderQuestao,
+  type EstadoJogo,
+  type ResultadoAjuda,
+} from "@/lib/jogo";
+import { corrigirTreino, iniciarTreino, type ItemTreino } from "@/lib/treino";
 import { montarVista } from "@/lib/questoes/apresentacao";
 import { corrigir } from "@/lib/questoes/correcao";
-import { permutacaoAleatoria } from "@/lib/questoes/embaralhar";
+import { permutacaoAleatoria, permutacaoValida } from "@/lib/questoes/embaralhar";
 import { schemaResposta, tamanhoPermutacao, type Conteudo, type Vista } from "@/lib/questoes/tipos";
 import { errosParaRevisar, QUESTOES_POR_RODADA, registrarRevisao } from "@/lib/revisao";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
@@ -49,6 +57,29 @@ export async function enviarResposta(
     Number.isFinite(saidasTela) ? saidasTela : 0,
     ehMotivoZerada(motivo) ? motivo : null,
   );
+}
+
+/** Ajuda da temporada: elimina uma alternativa errada da questão atual. */
+export async function eliminar(desafioId: string, questaoId: string): Promise<ResultadoAjuda> {
+  const aluno = await exigirAluno();
+  return eliminarAlternativa(criarClienteAdmin(), aluno, String(desafioId), String(questaoId));
+}
+
+/** Ajuda da temporada: mostra a dica da questão atual. */
+export async function pedirDica(desafioId: string, questaoId: string): Promise<ResultadoAjuda> {
+  const aluno = await exigirAluno();
+  return abrirDica(criarClienteAdmin(), aluno, String(desafioId), String(questaoId));
+}
+
+/** Refazer como treino: questões novamente embaralhadas, sem gravar nada. */
+export async function comecarTreino(desafioId: string) {
+  const aluno = await exigirAluno();
+  return iniciarTreino(criarClienteAdmin(), aluno, String(desafioId));
+}
+
+export async function corrigirRespostasTreino(desafioId: string, itens: ItemTreino[]) {
+  const aluno = await exigirAluno();
+  return corrigirTreino(criarClienteAdmin(), aluno, String(desafioId), Array.isArray(itens) ? itens : []);
 }
 
 export async function salvarPerfil(avatar: number, cor: number): Promise<{ erro?: string }> {
@@ -164,13 +195,7 @@ export async function responderRevisao(
   const { data: q } = await db.from("questoes").select("tipo, conteudo, explicacao").eq("id", questaoId).single();
   if (!q) return { erro: "Questão não encontrada." };
   const conteudo = { tipo: q.tipo, conteudo: q.conteudo } as Conteudo;
-  const n = tamanhoPermutacao(conteudo);
-  const permValida =
-    Array.isArray(permutacao) &&
-    permutacao.length === n &&
-    new Set(permutacao).size === n &&
-    permutacao.every((i) => Number.isInteger(i) && i >= 0 && i < n);
-  if (!permValida) return { erro: "Resposta inválida." };
+  if (!permutacaoValida(permutacao, tamanhoPermutacao(conteudo))) return { erro: "Resposta inválida." };
   const r = resposta === null ? null : schemaResposta.safeParse(resposta);
   const fracao = corrigir(conteudo, permutacao, r && r.success ? r.data : null);
   await registrarRevisao(db, aluno.id, questaoId, fracao === 1);

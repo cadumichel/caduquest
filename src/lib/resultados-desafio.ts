@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { ResultadoQuestao } from "@/lib/relatorio";
 import type { Tentativa } from "@/lib/tipos-banco";
 
 export type LinhaResultado = {
@@ -16,6 +17,8 @@ export type LinhaResultado = {
   /** Zeradas por tecla apertada ou por tela alterada (extensão), dentro de zeradasPorSaida. */
   zeradasTeclado: number;
   zeradasTela: number;
+  /** Resultado em cada questão (por id); ausente = não chegou nela. */
+  questoes: Map<string, ResultadoQuestao>;
 };
 
 /** Resultados de um desafio por aluno e acerto médio por questão (cliente com RLS do professor). */
@@ -56,7 +59,15 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
   };
   const porTentativa = new Map<string, Agregado>();
   const porQuestao = new Map<string, { soma: number; n: number }>();
+  const detalhe = new Map<string, Map<string, ResultadoQuestao>>();
   for (const r of respostas ?? []) {
+    const doAluno = detalhe.get(r.tentativa_id) ?? new Map<string, ResultadoQuestao>();
+    doAluno.set(r.questao_id, {
+      fracao: r.fracao === null ? null : Number(r.fracao),
+      esgotada: r.tempo_esgotado,
+      zerada: r.zerada_por_saida,
+    });
+    detalhe.set(r.tentativa_id, doAluno);
     const agg = porTentativa.get(r.tentativa_id) ?? {
       acertos: 0,
       respondidas: 0,
@@ -99,6 +110,7 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
       zeradasPorSaida: agg?.zeradas ?? 0,
       zeradasTeclado: agg?.teclado ?? 0,
       zeradasTela: agg?.tela ?? 0,
+      questoes: (t && detalhe.get(t.id)) || new Map(),
     };
   });
   linhas.sort((a, b) => b.pontos - a.pontos || a.apelido.localeCompare(b.apelido, "pt-BR"));

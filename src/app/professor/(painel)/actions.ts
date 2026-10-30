@@ -237,6 +237,7 @@ const schemaQuestao = z.object({
     .max(TEMPO_MAX_S, `Tempo máximo: ${TEMPO_MAX_S} s.`),
   conteudo: z.unknown(),
   explicacao: z.string().trim().max(2000),
+  dica: z.string().trim().max(300).default(""),
   status: z.enum(["rascunho", "publicada"]),
 });
 export type DadosQuestao = z.input<typeof schemaQuestao>;
@@ -263,6 +264,7 @@ export async function salvarQuestao(dados: DadosQuestao): Promise<EstadoForm & {
     tempo_limite_s: r.data.tempo_limite_s,
     conteudo: conteudo.data,
     explicacao: r.data.explicacao || null,
+    dica: r.data.dica || null,
     status: r.data.status,
   };
 
@@ -308,6 +310,7 @@ export async function duplicarQuestao(id: string) {
       tempo_limite_s: q.tempo_limite_s,
       conteudo: q.conteudo,
       explicacao: q.explicacao,
+      dica: q.dica ?? null,
       status: "rascunho",
       origem: "manual",
     })
@@ -369,6 +372,10 @@ export async function criarDesafio(dados: z.input<typeof schemaDesafio>): Promis
   const abre = dataHoraLocalParaIso(r.data.abre_em);
   const fecha = dataHoraLocalParaIso(r.data.fecha_em);
   if (fecha <= abre) return { erro: "O fechamento deve ser depois da abertura." };
+  const { data: temporada } = await supabase.from("temporadas").select("*").eq("id", r.data.temporada_id).maybeSingle();
+  if ((temporada as { encerrada_em?: string | null } | null)?.encerrada_em) {
+    return { erro: "Esta temporada foi encerrada. Reabra a temporada para criar desafios nela." };
+  }
 
   const { data: publicadas } = await supabase
     .from("questoes")
@@ -421,6 +428,84 @@ export async function atualizarJanelaDesafio(_: EstadoForm, form: FormData): Pro
   if (error) return { erro: "Não foi possível salvar." };
   revalidatePath(`/professor/desafios/${id}`);
   return { ok: "Desafio atualizado." };
+}
+
+/** Fecha o desafio agora (quem está respondendo termina a questão atual). */
+export async function encerrarDesafioAgora(id: string): Promise<EstadoForm> {
+  const { supabase } = await exigirProfessor();
+  const { data: d } = await supabase.from("desafios").select("abre_em, fecha_em").eq("id", id).maybeSingle();
+  if (!d) return { erro: "Desafio não encontrado." };
+  const agora = new Date();
+  if (agora <= new Date(d.abre_em)) return { erro: "O desafio ainda não abriu." };
+  if (agora > new Date(d.fecha_em)) return { erro: "O desafio já está encerrado." };
+  const { error } = await supabase.from("desafios").update({ fecha_em: agora.toISOString() }).eq("id", id);
+  if (error) return { erro: "Não foi possível encerrar." };
+  revalidatePath(`/professor/desafios/${id}`);
+  return { ok: "Desafio encerrado." };
+}
+
+const ERRO_SQL_CONTROLES = "Rode antes o SQL 20261030180000_controles_professor.sql no Supabase.";
+
+/** manual = o gabarito só aparece quando o professor liberar. */
+export async function definirGabaritoManual(id: string, manual: boolean): Promise<EstadoForm> {
+  const { supabase } = await exigirProfessor();
+  const { error } = await supabase
+    .from("desafios")
+    .update({ gabarito_manual: manual, gabarito_liberado_em: null })
+    .eq("id", id);
+  if (error) return { erro: ERRO_SQL_CONTROLES };
+  revalidatePath(`/professor/desafios/${id}`);
+  return {
+    ok: manual ? "O gabarito só aparece quando você liberar." : "O gabarito aparece sozinho quando o prazo acabar.",
+  };
+}
+
+export async function liberarGabarito(id: string): Promise<EstadoForm> {
+  const { supabase } = await exigirProfessor();
+  const { data: d } = await supabase.from("desafios").select("fecha_em").eq("id", id).maybeSingle();
+  if (!d) return { erro: "Desafio não encontrado." };
+  // Com o desafio aberto, o gabarito viraria cola para quem ainda não fez.
+  if (new Date() <= new Date(d.fecha_em)) return { erro: "Encerre o desafio antes de liberar o gabarito." };
+  const { error } = await supabase
+    .from("desafios")
+    .update({ gabarito_liberado_em: new Date().toISOString() })
+    .eq("id", id);
+  if (error) return { erro: ERRO_SQL_CONTROLES };
+  revalidatePath(`/professor/desafios/${id}`);
+  return { ok: "Gabarito liberado para os alunos." };
+}
+
+/**
+ * Encerra a temporada antes da prova: fecha agora os desafios abertos e apaga os
+ * que ainda não abriram (ninguém jogou; as questões continuam no banco). Fechar
+ * esses em vez de apagar quebraria a ofensiva e a meta da semana da turma.
+ */
+export async function encerrarTemporada(id: string): Promise<EstadoForm> {
+  const { supabase } = await exigirProfessor();
+  const agora = new Date().toISOString();
+  const { error } = await supabase.from("temporadas").update({ encerrada_em: agora }).eq("id", id);
+  if (error) return { erro: ERRO_SQL_CONTROLES };
+  const [abertos, agendados] = await Promise.all([
+    supabase
+      .from("desafios")
+      .update({ fecha_em: agora })
+      .eq("temporada_id", id)
+      .lte("abre_em", agora)
+      .gt("fecha_em", agora),
+    supabase.from("desafios").delete().eq("temporada_id", id).gt("abre_em", agora),
+  ]);
+  if (abertos.error || agendados.error)
+    return { erro: "A temporada foi marcada como encerrada, mas nem todos os desafios fecharam. Tente de novo." };
+  revalidatePath(`/professor/temporadas/${id}`);
+  return { ok: "Temporada encerrada." };
+}
+
+export async function reabrirTemporada(id: string): Promise<EstadoForm> {
+  const { supabase } = await exigirProfessor();
+  const { error } = await supabase.from("temporadas").update({ encerrada_em: null }).eq("id", id);
+  if (error) return { erro: ERRO_SQL_CONTROLES };
+  revalidatePath(`/professor/temporadas/${id}`);
+  return { ok: "Temporada reaberta. Ajuste as datas dos desafios que quiser reabrir." };
 }
 
 // CaduRush ------------------------------------------------------------------
