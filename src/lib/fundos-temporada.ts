@@ -25,7 +25,7 @@ export const FUNDOS_TEMPORADA = [
   },
   { nome: "Cidade barroca", palavras: ["mineracao", "ouro preto", "minas gerais", "barroco", "inconfidencia"] },
   { nome: "Engenho de açúcar", palavras: ["engenho", "acucar", "colonia", "colonial", "capitanias", "brasil colonia"] },
-  { nome: "Quilombo", palavras: ["quilombo", "palmares", "escravi", "africa", "abolicao", "resistencia"] },
+  { nome: "Aldeia africana", palavras: ["quilombo", "palmares", "escravi", "africa", "abolicao", "resistencia"] },
   { nome: "Brasília", palavras: ["republica", "vargas", "ditadura", "redemocratizacao", "brasilia", "juscelino"] },
   { nome: "Japão feudal", palavras: ["japao", "samurai", "xogum"] },
   { nome: "Fiorde viking", palavras: ["viking", "nordico", "escandinav", "germanic", "barbaro"] },
