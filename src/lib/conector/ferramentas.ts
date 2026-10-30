@@ -469,7 +469,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           .boolean()
           .optional()
           .describe(
-            "true: sair da tela (trocar de aba ou de app) durante uma questão faz ela valer zero. Padrão false.",
+            "Pesquisa bloqueada (true): sair da tela (trocar de aba ou de app) durante uma questão faz ela valer zero. Pesquisa liberada (false, padrão): o aluno pode sair para consultar; as saídas só são registradas. Pergunte ao professor se não estiver claro.",
           ),
         confirmar: z.boolean(),
       }),
@@ -514,7 +514,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         fecha: formatarDataHora(fecha),
         pontos_por_acerto: pontos,
         tempo_por_questao: args.tempo_por_questao_s ? `${args.tempo_por_questao_s} s em todas` : "o de cada questão",
-        sair_da_tela_zera: args.saida_zera_questao ?? false,
+        pesquisa: args.saida_zera_questao ? "bloqueada (sair da tela zera a questão)" : "liberada",
         questoes: args.questoes.map((id, i) => `${i + 1}. ${porId.get(id)!.enunciado}`),
       };
       if (!args.confirmar) return resultado({ previa, proximo_passo: "Mostre a prévia e confirme com o professor." });
@@ -691,7 +691,10 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           .max(TEMPO_MAX_S)
           .optional()
           .describe(`Segundos (${TEMPO_MIN_S} a ${TEMPO_MAX_S}); 0 volta a usar o tempo de cada questão.`),
-        saida_zera_questao: z.boolean().optional(),
+        saida_zera_questao: z
+          .boolean()
+          .optional()
+          .describe("true bloqueia a pesquisa (sair da tela zera a questão); false libera."),
         questoes: z
           .array(z.string().uuid())
           .min(5)

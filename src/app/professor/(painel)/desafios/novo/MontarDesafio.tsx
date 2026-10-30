@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState, useTransition } from "react";
+import { EscolhaPesquisa } from "@/components/EscolhaPesquisa";
 import { Aviso, Botao, Campo, Cartao, Entrada, Etiqueta, Selecao } from "@/components/ui";
 import { PONTOS_RELAMPAGO } from "@/lib/cadurush";
 import { NOME_DIFICULDADE, NOME_TIPO, TEMPO_MAX_S, TEMPO_MIN_S, type TipoQuestao } from "@/lib/questoes/tipos";
@@ -177,20 +178,7 @@ export function MontarDesafio({
               onChange={(e) => setTempoFixo(e.target.value)}
             />
           </Campo>
-          <label className="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="mt-1"
-              checked={saidaZera}
-              onChange={(e) => setSaidaZera(e.target.checked)}
-            />
-            <span>
-              <strong>Sair da tela zera a questão</strong>
-              <span className="block text-xs text-slate-500">
-                Trocar de aba, de app ou de janela durante uma questão faz ela valer zero. O aluno é avisado antes.
-              </span>
-            </span>
-          </label>
+          <EscolhaPesquisa bloqueada={saidaZera} onChange={setSaidaZera} />
           <div className="rounded-lg bg-slate-50 p-3 text-sm">
             <p>
               <strong>{escolhidas.length}</strong> de 5 a 15 questões

@@ -355,7 +355,12 @@ export async function atualizarJanelaDesafio(_: EstadoForm, form: FormData): Pro
   if (fecha <= abre) return { erro: "O fechamento deve ser depois da abertura." };
   const { error } = await supabase
     .from("desafios")
-    .update({ abre_em: abre, fecha_em: fecha, titulo: texto(form, "titulo") || undefined })
+    .update({
+      abre_em: abre,
+      fecha_em: fecha,
+      titulo: texto(form, "titulo") || undefined,
+      ...(form.has("pesquisa") && { saida_zera_questao: form.get("pesquisa") === "bloqueada" }),
+    })
     .eq("id", id);
   if (error) return { erro: "Não foi possível salvar." };
   revalidatePath(`/professor/desafios/${id}`);
