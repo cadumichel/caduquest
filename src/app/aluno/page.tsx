@@ -17,6 +17,7 @@ import { errosParaRevisar } from "@/lib/revisao";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { situacaoDaTemporada } from "@/lib/temporada-dados";
 import { MetaTurma } from "@/components/MetaTurma";
+import { escolherFundo, FUNDOS_TEMPORADA, imagemDoFundo } from "@/lib/fundos-temporada";
 import { situacaoDesafio, type Desafio, type Tentativa } from "@/lib/tipos-banco";
 
 export const metadata: Metadata = { title: "Início" };
@@ -54,10 +55,16 @@ export default async function Inicio() {
       curiosidadeDoDia(temporada),
       progressoDoAluno(aluno.id, aluno.turmaId),
     ]);
-  const [cartas, minhaCarta] = await Promise.all([
+  const [cartas, minhaCarta, { count: temporadasAntes }] = await Promise.all([
     cartasParaAProxima(db, aluno.turmaId),
     cartaDoAluno(db, aluno.id, aluno.turmaId),
+    db
+      .from("temporadas")
+      .select("id", { count: "exact", head: true })
+      .eq("turma_id", aluno.turmaId)
+      .lt("inicio", temporada.inicio),
   ]);
+  const fundo = escolherFundo(temporada, temporadasAntes ?? 0);
   const desafios = (desafiosBrutos ?? []) as (Desafio & { desafio_questoes: { count: number }[] })[];
   const tentativas = new Map(((tentativasBrutas ?? []) as Tentativa[]).map((t) => [t.desafio_id, t]));
   const { top, eu, total } = rankingParaAluno(situacao.ranking, aluno.id);
@@ -88,14 +95,14 @@ export default async function Inicio() {
     <div className="space-y-6">
       <section className="relative overflow-hidden rounded-3xl bg-marca-900 text-white shadow-lg shadow-marca-900/20">
         <Image
-          src="/ilustracoes/cartao-mapa.webp"
-          alt=""
+          src={imagemDoFundo(fundo)}
+          alt={`Cenário da temporada: ${FUNDOS_TEMPORADA[fundo].nome}`}
           fill
           sizes="(max-width: 672px) 100vw, 672px"
-          className="object-cover opacity-60"
+          className="object-cover opacity-80"
           priority
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-marca-950/40 via-marca-900/75 to-marca-900" />
+        <div className="absolute inset-0 bg-gradient-to-b from-marca-950/50 via-marca-900/40 to-marca-950/90" />
         <div className="relative p-6">
           <p className="text-sm font-medium text-ouro-claro drop-shadow">
             {aluno.turmaNome} · {aluno.escolaNome}
@@ -119,7 +126,68 @@ export default async function Inicio() {
         </div>
       </section>
 
-      <CartaoMissao missao={missao} />
+      {abertos.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="flex items-center gap-2 text-lg font-extrabold text-marca-900">
+            <Image src="/ilustracoes/icone-desafios.png" alt="" width={36} height={28} className="h-7 w-auto" />
+            Desafios abertos
+          </h2>
+          {abertos.map((d) => {
+            const t = tentativas.get(d.id);
+            const concluido = Boolean(t && (t.concluida_em || t.indice_atual >= t.ordem.length));
+            if (d.tipo === "relampago") {
+              return (
+                <div
+                  key={d.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-3xl bg-gradient-to-br from-amber-400 via-orange-500 to-rose-600 p-5 text-white shadow-lg"
+                >
+                  <div>
+                    <p className="text-xs font-bold tracking-widest uppercase">⚡ CaduRush · em sala</p>
+                    <p className="text-lg font-extrabold">{d.titulo}</p>
+                    <p className="text-sm text-white/90">
+                      Peso 3 · {d.pontos_por_acerto} pts por acerto · fecha {formatarDataHora(d.fecha_em)}
+                    </p>
+                  </div>
+                  {concluido ? (
+                    <BotaoLink href={`/aluno/desafio/${d.id}/resultado`} variante="secundario">
+                      ✓ {Number(t!.pontos)} pts
+                    </BotaoLink>
+                  ) : (
+                    <Link
+                      href={`/aluno/desafio/${d.id}`}
+                      className="rounded-xl bg-white px-5 py-2.5 font-bold text-orange-700 shadow hover:bg-orange-50"
+                    >
+                      {t ? "Continuar" : "Entrar com o código"}
+                    </Link>
+                  )}
+                </div>
+              );
+            }
+            return (
+              <Cartao key={d.id} className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold">{d.titulo}</p>
+                  <p className="text-sm text-slate-500">
+                    {d.desafio_questoes[0]?.count ?? 0} questões · fecha {formatarDataHora(d.fecha_em)}
+                  </p>
+                </div>
+                {concluido ? (
+                  <BotaoLink href={`/aluno/desafio/${d.id}/resultado`} variante="secundario">
+                    ✓ {Number(t!.pontos)} pts
+                  </BotaoLink>
+                ) : (
+                  <BotaoLink href={`/aluno/desafio/${d.id}`}>▶ {t ? "Continuar" : "Começar desafio"}</BotaoLink>
+                )}
+              </Cartao>
+            );
+          })}
+        </section>
+      )}
+
+      {/* Com desafio aberto, a lista acima já é a missão do dia. */}
+      {!(abertos.length > 0 && (missao.tipo === "desafio" || missao.tipo === "cadurush")) && (
+        <CartaoMissao missao={missao} />
+      )}
 
       {rush && (
         <p className="rounded-2xl bg-gradient-to-r from-amber-100 to-orange-100 px-4 py-3 text-sm font-semibold text-orange-900">
@@ -156,8 +224,8 @@ export default async function Inicio() {
         <CartasCoringa cartas={cartas} prova={faltam >= 0 ? temporada.data_prova : null} meuId={aluno.id} />
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <section className="rounded-3xl bg-gradient-to-br from-marca-700 to-marca-900 p-4 text-white shadow-md sm:col-span-2">
+      <div className="space-y-3">
+        <section className="rounded-3xl bg-gradient-to-br from-marca-700 to-marca-900 p-4 text-white shadow-md">
           <div className="flex items-center gap-3">
             <Image
               src="/ilustracoes/sequencia.png"
@@ -189,7 +257,7 @@ export default async function Inicio() {
         </section>
 
         <Link
-          href="/aluno/perfil"
+          href="/aluno/perfil#visual"
           className="flex items-center gap-3 rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100/70 p-4 shadow-sm transition hover:shadow-md"
         >
           <div className="min-w-0 flex-1">
@@ -261,63 +329,6 @@ export default async function Inicio() {
           </ol>
         </Cartao>
       )}
-
-      <section className="space-y-3">
-        <h2 className="flex items-center gap-2 text-lg font-extrabold text-marca-900">
-          <Image src="/ilustracoes/icone-desafios.png" alt="" width={36} height={28} className="h-7 w-auto" />
-          Desafios abertos
-        </h2>
-        {abertos.length === 0 && <Vazio>Nenhum desafio aberto agora.</Vazio>}
-        {abertos.map((d) => {
-          const t = tentativas.get(d.id);
-          const concluido = Boolean(t && (t.concluida_em || t.indice_atual >= t.ordem.length));
-          if (d.tipo === "relampago") {
-            return (
-              <div
-                key={d.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-3xl bg-gradient-to-br from-amber-400 via-orange-500 to-rose-600 p-5 text-white shadow-lg"
-              >
-                <div>
-                  <p className="text-xs font-bold tracking-widest uppercase">⚡ CaduRush · em sala</p>
-                  <p className="text-lg font-extrabold">{d.titulo}</p>
-                  <p className="text-sm text-white/90">
-                    Peso 3 · {d.pontos_por_acerto} pts por acerto · fecha {formatarDataHora(d.fecha_em)}
-                  </p>
-                </div>
-                {concluido ? (
-                  <BotaoLink href={`/aluno/desafio/${d.id}/resultado`} variante="secundario">
-                    ✓ {Number(t!.pontos)} pts
-                  </BotaoLink>
-                ) : (
-                  <Link
-                    href={`/aluno/desafio/${d.id}`}
-                    className="rounded-xl bg-white px-5 py-2.5 font-bold text-orange-700 shadow hover:bg-orange-50"
-                  >
-                    {t ? "Continuar" : "Entrar com o código"}
-                  </Link>
-                )}
-              </div>
-            );
-          }
-          return (
-            <Cartao key={d.id} className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="font-semibold">{d.titulo}</p>
-                <p className="text-sm text-slate-500">
-                  {d.desafio_questoes[0]?.count ?? 0} questões · fecha {formatarDataHora(d.fecha_em)}
-                </p>
-              </div>
-              {concluido ? (
-                <BotaoLink href={`/aluno/desafio/${d.id}/resultado`} variante="secundario">
-                  ✓ {Number(t!.pontos)} pts
-                </BotaoLink>
-              ) : (
-                <BotaoLink href={`/aluno/desafio/${d.id}`}>▶ {t ? "Continuar" : "Começar desafio"}</BotaoLink>
-              )}
-            </Cartao>
-          );
-        })}
-      </section>
 
       {outros.length > 0 && (
         <section className="space-y-3">
