@@ -1,4 +1,4 @@
-import { iniciosPerguntas, subPermutacao, type Conteudo, type Resposta } from "./tipos";
+import { faixaDoAno, iniciosPerguntas, subPermutacao, type Conteudo, type Resposta } from "./tipos";
 
 /**
  * Fração de acerto (0 a 1) de uma resposta.
@@ -100,6 +100,55 @@ export function corrigir(c: Conteudo, permutacao: number[], r: Resposta | null):
         if (palavra !== undefined && normalizar(palavra) === normalizar(certa)) certos++;
       });
       return certos / lacunas.length;
+    }
+    case "intruso": {
+      const resp = r as Extract<Resposta, { tipo: "intruso" }>;
+      return original(resp.escolha) === c.conteudo.intruso ? 1 : 0;
+    }
+    case "classificar": {
+      const resp = r as Extract<Resposta, { tipo: "classificar" }>;
+      const { itens } = c.conteudo;
+      const certos = permutacao.filter((orig, exibido) => resp.grupos[exibido] === itens[orig]?.grupo).length;
+      return certos / itens.length;
+    }
+    case "ponto_de_vista": {
+      // Como causa e consequência: índices originais 0..n-1 são as perspectivas de cada relato.
+      const resp = r as Extract<Resposta, { tipo: "ponto_de_vista" }>;
+      const n = c.conteudo.relatos.length;
+      const usados = new Set<number>();
+      let certos = 0;
+      for (let relato = 0; relato < n; relato++) {
+        const exibido = resp.ligacoes[relato] ?? null;
+        if (exibido === null || usados.has(exibido)) continue;
+        usados.add(exibido);
+        if (original(exibido) === relato) certos++;
+      }
+      return certos / n;
+    }
+    case "linha_do_tempo_datas": {
+      // Faixa certa vale 1; a faixa vizinha vale meio.
+      const resp = r as Extract<Resposta, { tipo: "linha_do_tempo_datas" }>;
+      const { eventos } = c.conteudo;
+      const pontos = permutacao.reduce((soma, orig, exibido) => {
+        const faixa = resp.faixas[exibido];
+        if (faixa === null || faixa === undefined) return soma;
+        const distancia = Math.abs(faixa - faixaDoAno(c.conteudo, eventos[orig].ano));
+        return soma + (distancia === 0 ? 1 : distancia === 1 ? 0.5 : 0);
+      }, 0);
+      return pontos / eventos.length;
+    }
+    case "mapa": {
+      const resp = r as Extract<Resposta, { tipo: "mapa" }>;
+      const n = c.conteudo.marcadores.length;
+      const usados = new Set<number>();
+      let certos = 0;
+      permutacao.forEach((orig, exibido) => {
+        const pino = resp.pinos[exibido] ?? null;
+        if (pino === null || usados.has(pino)) return;
+        usados.add(pino);
+        if (pino === orig) certos++;
+      });
+      return certos / n;
     }
   }
 }

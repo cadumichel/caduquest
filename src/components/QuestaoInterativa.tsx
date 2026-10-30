@@ -96,6 +96,18 @@ export function QuestaoInterativa({
           <MultiplaEscolha vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />
         </div>
       );
+    case "classificar":
+      return <Classificar vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />;
+    case "intruso":
+      return <Intruso vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />;
+    case "ponto_de_vista":
+      return (
+        <PontoDeVista vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />
+      );
+    case "linha_do_tempo_datas":
+      return <Regua vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />;
+    case "mapa":
+      return <Mapa vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />;
   }
 }
 
@@ -622,6 +634,259 @@ function CompletarLacunas({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+const CORES_GRUPO = [
+  "border-sky-600 bg-sky-600 text-white",
+  "border-amber-600 bg-amber-600 text-white",
+  "border-emerald-600 bg-emerald-600 text-white",
+];
+
+/** Botões pequenos de escolha, usados para grupos, perspectivas e pinos. */
+function Fichas({
+  opcoes,
+  escolhida,
+  onEscolher,
+  cores,
+  desabilitada,
+}: {
+  opcoes: string[];
+  escolhida: number | null | undefined;
+  onEscolher: (i: number) => void;
+  cores?: string[];
+  desabilitada?: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {opcoes.map((o, i) => (
+        <button
+          key={i}
+          type="button"
+          disabled={desabilitada}
+          onClick={() => onEscolher(i)}
+          aria-pressed={escolhida === i}
+          className={`min-h-9 rounded-full border-2 px-3 text-sm font-medium ${
+            escolhida === i
+              ? (cores?.[i % cores.length] ?? "border-marca-600 bg-marca-600 text-white")
+              : "border-slate-200 bg-white text-slate-700"
+          }`}
+        >
+          {o}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Classificar({ vista, resposta, onChange, desabilitada }: Props<Extract<Vista, { tipo: "classificar" }>>) {
+  const escolher = (item: number, grupo: number) => {
+    const grupos = [...resposta.grupos];
+    grupos[item] = grupo;
+    onChange({ tipo: "classificar", grupos });
+  };
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-500">Toque no grupo certo de cada item.</p>
+      <ul className="space-y-2">
+        {vista.itens.map((texto, i) => (
+          <li key={i} className="space-y-2 rounded-xl border-2 border-slate-200 bg-white p-3">
+            <p>{texto}</p>
+            <Fichas
+              opcoes={vista.grupos}
+              escolhida={resposta.grupos[i]}
+              onEscolher={(g) => escolher(i, g)}
+              cores={CORES_GRUPO}
+              desabilitada={desabilitada}
+            />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function Intruso({ vista, resposta, onChange, desabilitada }: Props<Extract<Vista, { tipo: "intruso" }>>) {
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-500">Qual item não pertence ao grupo?</p>
+      <div className="grid grid-cols-2 gap-2">
+        {vista.itens.map((texto, i) => {
+          const marcado = resposta.escolha === i;
+          return (
+            <button
+              key={i}
+              type="button"
+              disabled={desabilitada}
+              onClick={() => onChange({ tipo: "intruso", escolha: i })}
+              aria-pressed={marcado}
+              className={`flex min-h-20 items-center justify-center rounded-xl border-2 p-3 text-center text-sm font-medium transition ${
+                marcado ? "border-red-500 bg-red-50 text-red-900" : "border-slate-200 bg-white hover:border-marca-200"
+              } ${vista.itens.length % 2 === 1 && i === vista.itens.length - 1 ? "col-span-2" : ""}`}
+            >
+              {texto}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PontoDeVista({ vista, resposta, onChange, desabilitada }: Props<Extract<Vista, { tipo: "ponto_de_vista" }>>) {
+  const escolher = (relato: number, perspectiva: number) => {
+    const ligacoes = resposta.ligacoes.map((p) => (p === perspectiva ? null : p));
+    ligacoes[relato] = perspectiva;
+    onChange({ tipo: "ponto_de_vista", ligacoes });
+  };
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-slate-500">De quem é cada relato? Sobra opção: nem todas se encaixam.</p>
+      {vista.relatos.map((texto, i) => (
+        <div key={i} className="space-y-2">
+          <p className="text-xs font-bold tracking-wide text-amber-700 uppercase">Relato {i + 1}</p>
+          <Documento texto={texto} />
+          <Fichas
+            opcoes={vista.perspectivas}
+            escolhida={resposta.ligacoes[i]}
+            onEscolher={(p) => escolher(i, p)}
+            desabilitada={desabilitada}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Regua({ vista, resposta, onChange, desabilitada }: Props<Extract<Vista, { tipo: "linha_do_tempo_datas" }>>) {
+  const [ativo, setAtivo] = useState<number | null>(0);
+  const colocar = (faixa: number) => {
+    if (ativo === null) return;
+    const faixas = [...resposta.faixas];
+    faixas[ativo] = faixa;
+    onChange({ tipo: "linha_do_tempo_datas", faixas });
+    const proximo = faixas.findIndex((f, i) => f === null && i !== ativo);
+    setAtivo(proximo >= 0 ? proximo : null);
+  };
+  const tirar = (evento: number) => {
+    const faixas = [...resposta.faixas];
+    faixas[evento] = null;
+    onChange({ tipo: "linha_do_tempo_datas", faixas });
+    setAtivo(evento);
+  };
+  const soltos = vista.eventos.map((_, i) => i).filter((i) => resposta.faixas[i] === null);
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-500">
+        Toque num evento e depois na faixa de tempo dele. Toque num evento já colocado para tirá-lo.
+      </p>
+      <div className="flex min-h-12 flex-wrap gap-2 rounded-xl border-2 border-dashed border-slate-300 p-2">
+        {soltos.length === 0 && <span className="self-center px-1 text-sm text-slate-400">Todos colocados ✓</span>}
+        {soltos.map((i) => (
+          <button
+            key={i}
+            type="button"
+            disabled={desabilitada}
+            onClick={() => setAtivo(i)}
+            className={`rounded-lg border-2 px-3 py-1.5 text-left text-sm ${
+              ativo === i ? "border-marca-600 bg-marca-50 font-medium" : "border-slate-200 bg-white"
+            }`}
+          >
+            {vista.eventos[i]}
+          </button>
+        ))}
+      </div>
+      <ol className="relative space-y-1.5 border-l-4 border-marca-300 pl-3">
+        {vista.faixas.map((rotulo, f) => (
+          <li key={f} className="relative">
+            <span className="absolute top-4 -left-[1.3rem] h-3 w-3 rounded-full border-2 border-white bg-marca-500" />
+            <button
+              type="button"
+              disabled={desabilitada || ativo === null}
+              onClick={() => colocar(f)}
+              className={`w-full rounded-xl border-2 p-2 text-left disabled:opacity-100 ${
+                ativo !== null ? "border-marca-200 bg-marca-50/50" : "border-slate-200 bg-white"
+              }`}
+            >
+              <span className="text-xs font-bold text-marca-700 tabular-nums">{rotulo}</span>
+            </button>
+            <div className="flex flex-wrap gap-1.5 px-2 pt-1 empty:hidden">
+              {vista.eventos.map((texto, i) =>
+                resposta.faixas[i] === f ? (
+                  <button
+                    key={i}
+                    type="button"
+                    disabled={desabilitada}
+                    onClick={() => tirar(i)}
+                    className="rounded-lg bg-marca-600 px-2.5 py-1 text-left text-sm text-white"
+                  >
+                    {texto}
+                  </button>
+                ) : null,
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+/** Imagem com pinos numerados por cima. */
+export function ImagemComPinos({
+  imagem,
+  pinos,
+  destaque,
+}: {
+  imagem: string;
+  pinos: { x: number; y: number }[];
+  destaque?: number | null;
+}) {
+  return (
+    <div className="relative mx-auto w-fit">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={imagem} alt="" className="block max-h-[60vh] w-auto rounded-xl border border-slate-200" />
+      {pinos.map((p, i) => (
+        <span
+          key={i}
+          style={{ left: `${p.x}%`, top: `${p.y}%` }}
+          className={`absolute flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white text-sm font-bold text-white shadow-md ${
+            destaque === i ? "scale-125 bg-amber-500" : "bg-marca-700"
+          }`}
+        >
+          {i + 1}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function Mapa({ vista, resposta, onChange, desabilitada }: Props<Extract<Vista, { tipo: "mapa" }>>) {
+  const [foco, setFoco] = useState<number | null>(null);
+  const escolher = (nome: number, pino: number) => {
+    const pinos = resposta.pinos.map((p) => (p === pino ? null : p));
+    pinos[nome] = pino;
+    onChange({ tipo: "mapa", pinos });
+    setFoco(pino);
+  };
+  return (
+    <div className="space-y-3">
+      <ImagemComPinos imagem={vista.imagem} pinos={vista.pinos} destaque={foco} />
+      <p className="text-sm text-slate-500">Escolha o número do pino de cada lugar.</p>
+      <ul className="space-y-2">
+        {vista.nomes.map((nome, i) => (
+          <li key={i} className="flex flex-wrap items-center gap-2 rounded-xl border-2 border-slate-200 bg-white p-2">
+            <span className="min-w-28 flex-1 font-medium">{nome}</span>
+            <Fichas
+              opcoes={vista.pinos.map((_, p) => String(p + 1))}
+              escolhida={resposta.pinos[i]}
+              onEscolher={(p) => escolher(i, p)}
+              desabilitada={desabilitada}
+            />
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -226,3 +226,106 @@ describe("ordenar frases, interpretação e quem disse", () => {
     expect(corrigir(qd, [1, 0, 2, 3], { tipo: "quem_disse", escolha: 0 })).toBe(0);
   });
 });
+
+describe("classificar, intruso e ponto de vista", () => {
+  it("classificar dá crédito por item", () => {
+    const cl: Conteudo = {
+      tipo: "classificar",
+      conteudo: {
+        grupos: ["Absolutismo", "Iluminismo"],
+        itens: [
+          { texto: "Direito divino", grupo: 0 },
+          { texto: "Separação dos poderes", grupo: 1 },
+          { texto: "Mercantilismo", grupo: 0 },
+          { texto: "Liberdade de expressão", grupo: 1 },
+        ],
+      },
+    };
+    const perm = [3, 2, 1, 0];
+    expect(corrigir(cl, perm, { tipo: "classificar", grupos: [1, 0, 1, 0] })).toBe(1);
+    expect(corrigir(cl, perm, { tipo: "classificar", grupos: [1, 0, 0, null] })).toBe(0.5);
+  });
+
+  it("intruso vale tudo ou nada", () => {
+    const it_: Conteudo = {
+      tipo: "intruso",
+      conteudo: { itens: ["Voltaire", "Rousseau", "Montesquieu", "Bossuet"], intruso: 3, criterio: "Iluministas" },
+    };
+    expect(corrigir(it_, [3, 0, 1, 2], { tipo: "intruso", escolha: 0 })).toBe(1);
+    expect(corrigir(it_, [3, 0, 1, 2], { tipo: "intruso", escolha: 1 })).toBe(0);
+  });
+
+  it("ponto de vista ignora a perspectiva extra", () => {
+    const pv: Conteudo = {
+      tipo: "ponto_de_vista",
+      conteudo: {
+        relatos: [
+          { texto: "a", perspectiva: "Jesuíta" },
+          { texto: "b", perspectiva: "Colono" },
+        ],
+        extras: ["Holandês"],
+      },
+    };
+    const perm = [2, 1, 0];
+    expect(montarVista(pv, perm)).toMatchObject({ perspectivas: ["Holandês", "Colono", "Jesuíta"] });
+    expect(corrigir(pv, perm, { tipo: "ponto_de_vista", ligacoes: [2, 1] })).toBe(1);
+    expect(corrigir(pv, perm, { tipo: "ponto_de_vista", ligacoes: [0, 1] })).toBe(0.5);
+  });
+});
+
+describe("linha do tempo com datas", () => {
+  const ld: Conteudo = {
+    tipo: "linha_do_tempo_datas",
+    conteudo: {
+      inicio: 1500,
+      fim: 1900,
+      passo: 100,
+      eventos: [
+        { texto: "Chegada de Cabral", ano: 1500 },
+        { texto: "Governo-geral", ano: 1549 },
+        { texto: "Descoberta do ouro", ano: 1693 },
+        { texto: "Independência", ano: 1822 },
+      ],
+    },
+  };
+
+  it("monta as faixas e dá meio ponto na faixa vizinha", () => {
+    const perm = [0, 1, 2, 3];
+    expect(montarVista(ld, perm)).toMatchObject({
+      faixas: ["1500 – 1600", "1600 – 1700", "1700 – 1800", "1800 – 1900"],
+    });
+    expect(corrigir(ld, perm, { tipo: "linha_do_tempo_datas", faixas: [0, 0, 1, 3] })).toBe(1);
+    expect(corrigir(ld, perm, { tipo: "linha_do_tempo_datas", faixas: [0, 0, 2, 1] })).toBe(2.5 / 4);
+  });
+
+  it("recusa régua com faixas demais ou evento fora", () => {
+    const base = ld.conteudo as { inicio: number; fim: number; passo: number; eventos: unknown[] };
+    expect(validarConteudo("linha_do_tempo_datas", { ...base, passo: 10 }).success).toBe(false);
+    expect(validarConteudo("linha_do_tempo_datas", { ...base, fim: 1800 }).success).toBe(false);
+  });
+});
+
+describe("mapa", () => {
+  const mp: Conteudo = {
+    tipo: "mapa",
+    conteudo: {
+      imagem: "prof/mapa.png",
+      marcadores: [
+        { nome: "São Vicente", x: 60, y: 80 },
+        { nome: "Pernambuco", x: 85, y: 30 },
+        { nome: "Bahia", x: 75, y: 45 },
+      ],
+    },
+  };
+
+  it("embaralha os nomes e mantém os pinos", () => {
+    const perm = [2, 0, 1];
+    expect(montarVista(mp, perm)).toMatchObject({ nomes: ["Bahia", "São Vicente", "Pernambuco"] });
+    expect(corrigir(mp, perm, { tipo: "mapa", pinos: [2, 0, 1] })).toBe(1);
+    expect(corrigir(mp, perm, { tipo: "mapa", pinos: [2, 1, 0] })).toBeCloseTo(1 / 3);
+  });
+
+  it("não publica com pinos por posicionar", () => {
+    expect(validarConteudo("mapa", { ...mp.conteudo, posicionar: true }).success).toBe(false);
+  });
+});

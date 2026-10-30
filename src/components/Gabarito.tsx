@@ -1,5 +1,15 @@
-import { iniciosPerguntas, MARCA_LACUNA, subPermutacao, type Conteudo, type Resposta } from "@/lib/questoes/tipos";
-import { Citacao, Documento } from "./QuestaoInterativa";
+import {
+  faixaDoAno,
+  faixasDaRegua,
+  formatarAno,
+  iniciosPerguntas,
+  MARCA_LACUNA,
+  subPermutacao,
+  type Conteudo,
+  type Resposta,
+} from "@/lib/questoes/tipos";
+import { urlImagem } from "@/lib/tipos-banco";
+import { Citacao, Documento, ImagemComPinos } from "./QuestaoInterativa";
 
 const LETRAS = "ABCDEF";
 
@@ -267,6 +277,144 @@ export function Gabarito({
           {trechos.some((t, i) => !t.errado && marcados.includes(i)) && (
             <p className="px-3 text-red-700">Os trechos com fundo vermelho estavam certos.</p>
           )}
+        </div>
+      );
+    }
+    case "classificar": {
+      const { grupos, itens } = conteudo.conteudo;
+      // Resposta por item exibido; traduz para o item original.
+      const escolhido = new Map<number, number | null>();
+      if (resposta?.tipo === "classificar") resposta.grupos.forEach((g, exibido) => escolhido.set(orig(exibido), g));
+      return (
+        <div className="grid gap-2 text-sm sm:grid-cols-2">
+          {grupos.map((g, gi) => (
+            <div key={gi} className="rounded-lg border border-slate-200 p-2">
+              <p className="mb-1 font-bold text-marca-800">{g}</p>
+              <ul className="space-y-0.5">
+                {itens.map((item, i) =>
+                  item.grupo === gi ? (
+                    <li key={i} className="flex gap-2">
+                      <span className="flex-1">{item.texto}</span>
+                      {resposta && (
+                        <span className={escolhido.get(i) === gi ? "text-emerald-700" : "text-red-700"}>
+                          {escolhido.get(i) === gi ? "✓" : "✗"}
+                        </span>
+                      )}
+                    </li>
+                  ) : null,
+                )}
+              </ul>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    case "intruso": {
+      const escolhida = resposta?.tipo === "intruso" ? orig(resposta.escolha) : -1;
+      const { itens, intruso, criterio } = conteudo.conteudo;
+      return (
+        <div className="space-y-1 text-sm">
+          <ul className="space-y-1">
+            {itens.map((item, i) => (
+              <li
+                key={i}
+                className={`rounded-lg px-3 py-1.5 ${i === intruso ? "bg-emerald-50 font-medium text-emerald-900" : escolhida === i ? "bg-red-50 text-red-800" : "text-slate-600"}`}
+              >
+                {item} {i === intruso && "← intruso ✓"} {escolhida === i && i !== intruso && "← sua resposta"}
+              </li>
+            ))}
+          </ul>
+          <p className="px-3 text-slate-600">Os outros têm em comum: {criterio}</p>
+        </div>
+      );
+    }
+    case "ponto_de_vista": {
+      const ligacoes = resposta?.tipo === "ponto_de_vista" ? resposta.ligacoes : null;
+      const { relatos, extras } = conteudo.conteudo;
+      return (
+        <div className="space-y-2 text-sm">
+          {relatos.map((r, i) => {
+            const certo = ligacoes ? orig(ligacoes[i]) === i : null;
+            return (
+              <div key={i} className="space-y-1">
+                <Documento texto={r.texto} />
+                <p className="px-1">
+                  <strong>{r.perspectiva}</strong>{" "}
+                  {certo !== null && (
+                    <span className={certo ? "text-emerald-700" : "text-red-700"}>{certo ? "✓" : "✗"}</span>
+                  )}
+                </p>
+              </div>
+            );
+          })}
+          {extras.length > 0 && <p className="text-slate-500">Não era de nenhum relato: {extras.join(", ")}.</p>}
+        </div>
+      );
+    }
+    case "linha_do_tempo_datas": {
+      const c = conteudo.conteudo;
+      const escolhida = new Map<number, number | null>();
+      if (resposta?.tipo === "linha_do_tempo_datas")
+        resposta.faixas.forEach((f, exibido) => escolhida.set(orig(exibido), f));
+      const faixas = faixasDaRegua(c);
+      const ordenados = c.eventos.map((e, i) => ({ ...e, i })).sort((a, b) => a.ano - b.ano);
+      return (
+        <ol className="space-y-1 text-sm">
+          {ordenados.map((e) => {
+            const certa = faixaDoAno(c, e.ano);
+            const f = escolhida.get(e.i);
+            const marca = !resposta
+              ? null
+              : f === certa
+                ? "✓"
+                : f !== null && f !== undefined && Math.abs(f - certa) === 1
+                  ? "½"
+                  : "✗";
+            return (
+              <li key={e.i} className="flex gap-2 rounded-lg px-3 py-1.5">
+                <span className="w-20 shrink-0 font-bold text-marca-700 tabular-nums">{formatarAno(e.ano)}</span>
+                <span className="flex-1">
+                  {e.texto}{" "}
+                  <span className="text-slate-500">
+                    ({formatarAno(faixas[certa][0])} – {formatarAno(faixas[certa][1])})
+                  </span>
+                </span>
+                {marca && (
+                  <span
+                    className={marca === "✓" ? "text-emerald-700" : marca === "½" ? "text-amber-700" : "text-red-700"}
+                  >
+                    {marca}
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      );
+    }
+    case "mapa": {
+      const { marcadores, imagem } = conteudo.conteudo;
+      const escolhido = new Map<number, number | null>();
+      if (resposta?.tipo === "mapa") resposta.pinos.forEach((p, exibido) => escolhido.set(orig(exibido), p));
+      return (
+        <div className="space-y-2 text-sm">
+          <ImagemComPinos imagem={urlImagem(imagem) ?? ""} pinos={marcadores} />
+          <ul className="space-y-1">
+            {marcadores.map((m, i) => {
+              const p = escolhido.get(i);
+              return (
+                <li key={i} className="flex gap-2 rounded-lg px-3 py-1">
+                  <span className="w-6 font-bold text-marca-700">{i + 1}</span>
+                  <span className="flex-1">{m.nome}</span>
+                  {resposta && (
+                    <span className={p === i ? "text-emerald-700" : "text-red-700"}>
+                      {p === i ? "✓" : p === null || p === undefined ? "–" : `✗ (você: ${p + 1})`}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         </div>
       );
     }

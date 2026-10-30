@@ -12,6 +12,11 @@ export const TIPOS = [
   "ordenar_frases",
   "interpretacao",
   "quem_disse",
+  "classificar",
+  "intruso",
+  "ponto_de_vista",
+  "linha_do_tempo_datas",
+  "mapa",
 ] as const;
 export type TipoQuestao = (typeof TIPOS)[number];
 
@@ -30,10 +35,15 @@ export const NOME_TIPO: Record<TipoQuestao, string> = {
   ordenar_frases: "Ordenar frases",
   interpretacao: "Interpretação correta",
   quem_disse: "Quem disse?",
+  classificar: "Classificar em grupos",
+  intruso: "Intruso",
+  ponto_de_vista: "Ponto de vista",
+  linha_do_tempo_datas: "Linha do tempo com datas",
+  mapa: "Mapa clicável",
 };
 
 /** Tipos de uma resposta só: o aluno precisa escolher antes de confirmar. */
-export const ESCOLHA_UNICA: readonly TipoQuestao[] = ["multipla_escolha", "interpretacao", "quem_disse"];
+export const ESCOLHA_UNICA: readonly TipoQuestao[] = ["multipla_escolha", "interpretacao", "quem_disse", "intruso"];
 
 /** Tempo limite padrão por tipo, em segundos (escopo: 20 a 60 s). */
 /** Limites do tempo por questão, em segundos (o professor escolhe livremente dentro deles). */
@@ -52,6 +62,11 @@ export const TEMPO_PADRAO: Record<TipoQuestao, number> = {
   ordenar_frases: 75,
   interpretacao: 90,
   quem_disse: 40,
+  classificar: 75,
+  intruso: 40,
+  ponto_de_vista: 90,
+  linha_do_tempo_datas: 90,
+  mapa: 75,
 };
 
 export const NOME_DIFICULDADE: Record<number, string> = { 1: "Fácil", 2: "Média", 3: "Difícil" };
@@ -166,6 +181,92 @@ export const conteudoQuemDisse = z
   })
   .refine((c) => c.correta < c.autores.length, "Marque quem disse.");
 
+export const conteudoClassificar = z
+  .object({
+    grupos: z.array(texto).min(2, "Use 2 ou 3 grupos.").max(3, "Use 2 ou 3 grupos."),
+    itens: z
+      .array(z.object({ texto, grupo: z.number().int().min(0) }))
+      .min(4, "Use de 4 a 8 itens.")
+      .max(8, "Use de 4 a 8 itens."),
+  })
+  .refine((c) => c.itens.every((i) => i.grupo < c.grupos.length), "Escolha o grupo de cada item.")
+  .refine(
+    (c) => c.grupos.every((_, g) => c.itens.some((i) => i.grupo === g)),
+    "Cada grupo precisa de ao menos um item.",
+  );
+
+export const conteudoIntruso = z
+  .object({
+    itens: z.array(texto).min(4, "Use 4 ou 5 itens.").max(5, "Use 4 ou 5 itens."),
+    intruso: z.number().int().min(0),
+    // O que os outros itens têm em comum: aparece no gabarito.
+    criterio: texto,
+  })
+  .refine((c) => c.intruso < c.itens.length, "Marque o intruso.");
+
+export const conteudoPontoDeVista = z.object({
+  relatos: z
+    .array(z.object({ texto: texto.max(800, "Relato longo demais (máx. 800 caracteres)."), perspectiva: texto }))
+    .min(2, "Use 2 ou 3 relatos.")
+    .max(3, "Use 2 ou 3 relatos."),
+  extras: z.array(texto).max(2, "Use no máximo 2 perspectivas extras.").default([]),
+});
+
+const ano = z.number({ error: "Informe o ano de cada evento." }).int().min(-5000).max(2100);
+
+export const conteudoLinhaDoTempoDatas = z
+  .object({
+    inicio: ano,
+    fim: ano,
+    passo: z.number().int().min(1, "Informe o tamanho de cada faixa."),
+    eventos: z.array(z.object({ texto, ano })).min(3, "Use de 3 a 6 eventos.").max(6, "Use de 3 a 6 eventos."),
+  })
+  .refine((c) => c.fim > c.inicio, "O fim da régua precisa vir depois do início.")
+  .refine((c) => {
+    const n = Math.ceil((c.fim - c.inicio) / c.passo);
+    return n >= 3 && n <= 8;
+  }, "A régua precisa ter de 3 a 8 faixas: ajuste início, fim ou tamanho da faixa.")
+  .refine(
+    (c) => c.eventos.every((e) => e.ano >= c.inicio && e.ano < c.fim),
+    "Todos os eventos precisam caber na régua.",
+  );
+
+export const conteudoMapa = z
+  .object({
+    // Caminho no bucket das questões, como imagem_path.
+    imagem: z.string().trim().min(1, "Envie a imagem do mapa."),
+    marcadores: z
+      .array(
+        z.object({
+          nome: texto,
+          // Posição em % da largura e da altura da imagem.
+          x: z.number().min(0).max(100),
+          y: z.number().min(0).max(100),
+        }),
+      )
+      .min(2, "Use de 2 a 6 marcadores.")
+      .max(6, "Use de 2 a 6 marcadores."),
+    // Marcadores criados pelo conector, ainda fora do lugar.
+    posicionar: z.boolean().optional(),
+  })
+  .refine((c) => !c.posicionar, "Toque no mapa para pôr cada marcador no lugar certo.");
+
+/** Faixas da régua: [início, fim) de cada uma. */
+export function faixasDaRegua(c: { inicio: number; fim: number; passo: number }): [number, number][] {
+  const faixas: [number, number][] = [];
+  for (let a = c.inicio; a < c.fim; a += c.passo) faixas.push([a, Math.min(a + c.passo, c.fim)]);
+  return faixas;
+}
+
+export function faixaDoAno(c: { inicio: number; passo: number }, a: number): number {
+  return Math.floor((a - c.inicio) / c.passo);
+}
+
+/** 1500 → "1500"; -27 → "27 a.C." */
+export function formatarAno(a: number): string {
+  return a < 0 ? `${-a} a.C.` : String(a);
+}
+
 export const SCHEMA_CONTEUDO = {
   multipla_escolha: conteudoMultiplaEscolha,
   vf_bloco: conteudoVfBloco,
@@ -178,6 +279,11 @@ export const SCHEMA_CONTEUDO = {
   ordenar_frases: conteudoOrdenarFrases,
   interpretacao: conteudoInterpretacao,
   quem_disse: conteudoQuemDisse,
+  classificar: conteudoClassificar,
+  intruso: conteudoIntruso,
+  ponto_de_vista: conteudoPontoDeVista,
+  linha_do_tempo_datas: conteudoLinhaDoTempoDatas,
+  mapa: conteudoMapa,
 } as const;
 
 export type ConteudoMultiplaEscolha = z.infer<typeof conteudoMultiplaEscolha>;
@@ -191,6 +297,11 @@ export type ConteudoCompletarLacunas = z.infer<typeof conteudoCompletarLacunas>;
 export type ConteudoOrdenarFrases = z.infer<typeof conteudoOrdenarFrases>;
 export type ConteudoInterpretacao = z.infer<typeof conteudoInterpretacao>;
 export type ConteudoQuemDisse = z.infer<typeof conteudoQuemDisse>;
+export type ConteudoClassificar = z.infer<typeof conteudoClassificar>;
+export type ConteudoIntruso = z.infer<typeof conteudoIntruso>;
+export type ConteudoPontoDeVista = z.infer<typeof conteudoPontoDeVista>;
+export type ConteudoLinhaDoTempoDatas = z.infer<typeof conteudoLinhaDoTempoDatas>;
+export type ConteudoMapa = z.infer<typeof conteudoMapa>;
 
 export type Conteudo =
   | { tipo: "multipla_escolha"; conteudo: ConteudoMultiplaEscolha }
@@ -203,7 +314,12 @@ export type Conteudo =
   | { tipo: "completar_lacunas"; conteudo: ConteudoCompletarLacunas }
   | { tipo: "ordenar_frases"; conteudo: ConteudoOrdenarFrases }
   | { tipo: "interpretacao"; conteudo: ConteudoInterpretacao }
-  | { tipo: "quem_disse"; conteudo: ConteudoQuemDisse };
+  | { tipo: "quem_disse"; conteudo: ConteudoQuemDisse }
+  | { tipo: "classificar"; conteudo: ConteudoClassificar }
+  | { tipo: "intruso"; conteudo: ConteudoIntruso }
+  | { tipo: "ponto_de_vista"; conteudo: ConteudoPontoDeVista }
+  | { tipo: "linha_do_tempo_datas"; conteudo: ConteudoLinhaDoTempoDatas }
+  | { tipo: "mapa"; conteudo: ConteudoMapa };
 
 export function validarConteudo(tipo: TipoQuestao, conteudo: unknown) {
   return SCHEMA_CONTEUDO[tipo].safeParse(conteudo);
@@ -238,6 +354,16 @@ export function tamanhoPermutacao(c: Conteudo): number {
       return c.conteudo.alternativas.length;
     case "quem_disse":
       return c.conteudo.autores.length;
+    case "classificar":
+      return c.conteudo.itens.length;
+    case "intruso":
+      return c.conteudo.itens.length;
+    case "ponto_de_vista":
+      return c.conteudo.relatos.length + c.conteudo.extras.length;
+    case "linha_do_tempo_datas":
+      return c.conteudo.eventos.length;
+    case "mapa":
+      return c.conteudo.marcadores.length;
   }
 }
 
@@ -299,6 +425,22 @@ export function conteudoVazio(tipo: TipoQuestao): Conteudo {
       return { tipo, conteudo: { texto: "", alternativas: ["", "", "", ""], correta: 0 } };
     case "quem_disse":
       return { tipo, conteudo: { citacao: "", autores: ["", "", "", ""], correta: 0 } };
+    case "classificar":
+      return {
+        tipo,
+        conteudo: { grupos: ["", ""], itens: [0, 1, 0, 1].map((grupo) => ({ texto: "", grupo })) },
+      };
+    case "intruso":
+      return { tipo, conteudo: { itens: ["", "", "", ""], intruso: 0, criterio: "" } };
+    case "ponto_de_vista":
+      return { tipo, conteudo: { relatos: [0, 1].map(() => ({ texto: "", perspectiva: "" })), extras: [""] } };
+    case "linha_do_tempo_datas":
+      return {
+        tipo,
+        conteudo: { inicio: 1500, fim: 1900, passo: 100, eventos: [0, 1, 2, 3].map(() => ({ texto: "", ano: 1500 })) },
+      };
+    case "mapa":
+      return { tipo, conteudo: { imagem: "", marcadores: [] } };
   }
 }
 
@@ -314,7 +456,12 @@ export type Vista =
   | { tipo: "completar_lacunas"; partes: string[]; banco: string[] }
   | { tipo: "ordenar_frases"; frases: string[] }
   | { tipo: "interpretacao"; texto: string; alternativas: string[] }
-  | { tipo: "quem_disse"; citacao: string; alternativas: string[] };
+  | { tipo: "quem_disse"; citacao: string; alternativas: string[] }
+  | { tipo: "classificar"; grupos: string[]; itens: string[] }
+  | { tipo: "intruso"; itens: string[] }
+  | { tipo: "ponto_de_vista"; relatos: string[]; perspectivas: string[] }
+  | { tipo: "linha_do_tempo_datas"; faixas: string[]; eventos: string[] }
+  | { tipo: "mapa"; imagem: string; pinos: { x: number; y: number }[]; nomes: string[] };
 
 /** Resposta do aluno, sempre em índices da ordem exibida. */
 export type Resposta =
@@ -328,7 +475,12 @@ export type Resposta =
   | { tipo: "completar_lacunas"; preenchidas: (number | null)[] }
   | { tipo: "ordenar_frases"; ordem: number[] }
   | { tipo: "interpretacao"; escolha: number | null }
-  | { tipo: "quem_disse"; escolha: number | null };
+  | { tipo: "quem_disse"; escolha: number | null }
+  | { tipo: "classificar"; grupos: (number | null)[] }
+  | { tipo: "intruso"; escolha: number | null }
+  | { tipo: "ponto_de_vista"; ligacoes: (number | null)[] }
+  | { tipo: "linha_do_tempo_datas"; faixas: (number | null)[] }
+  | { tipo: "mapa"; pinos: (number | null)[] };
 
 export const schemaResposta = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("multipla_escolha"), escolha: z.number().int().nullable() }),
@@ -342,4 +494,9 @@ export const schemaResposta = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("ordenar_frases"), ordem: z.array(z.number().int()).max(10) }),
   z.object({ tipo: z.literal("interpretacao"), escolha: z.number().int().nullable() }),
   z.object({ tipo: z.literal("quem_disse"), escolha: z.number().int().nullable() }),
+  z.object({ tipo: z.literal("classificar"), grupos: z.array(z.number().int().nullable()).max(10) }),
+  z.object({ tipo: z.literal("intruso"), escolha: z.number().int().nullable() }),
+  z.object({ tipo: z.literal("ponto_de_vista"), ligacoes: z.array(z.number().int().nullable()).max(10) }),
+  z.object({ tipo: z.literal("linha_do_tempo_datas"), faixas: z.array(z.number().int().nullable()).max(10) }),
+  z.object({ tipo: z.literal("mapa"), pinos: z.array(z.number().int().nullable()).max(10) }),
 ]);

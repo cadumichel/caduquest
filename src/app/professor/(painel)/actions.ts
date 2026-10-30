@@ -192,6 +192,9 @@ export async function salvarQuestao(dados: DadosQuestao): Promise<EstadoForm & {
   const conteudo = validarConteudo(r.data.tipo, r.data.conteudo);
   if (!conteudo.success) return { erro: conteudo.error.issues[0].message };
   if (r.data.imagem_path && !r.data.imagem_path.startsWith(`${professorId}/`)) return { erro: "Imagem inválida." };
+  if (conteudo.data && "imagem" in conteudo.data && !conteudo.data.imagem.startsWith(`${professorId}/`)) {
+    return { erro: "Imagem do mapa inválida." };
+  }
 
   const linha = {
     tipo: r.data.tipo,

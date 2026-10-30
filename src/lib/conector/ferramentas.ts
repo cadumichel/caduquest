@@ -154,6 +154,69 @@ const schemaQuestao = z.object({
     .describe(
       "quem_disse: citação real e curta; as outras opções devem ser personagens ou grupos que poderiam plausivelmente dizê-la.",
     ),
+  classificar: z
+    .object({
+      grupos: z.array(z.string()).describe("2 ou 3 nomes de grupo, ex.: ['Absolutismo', 'Iluminismo']."),
+      itens: z.array(
+        z.object({ texto: z.string(), grupo: z.number().int().describe("Índice do grupo, a partir de 0.") }),
+      ),
+    })
+    .optional()
+    .describe(
+      "classificar: 4 a 8 itens curtos para o aluno pôr em cada grupo, com ao menos um item por grupo. Prefira itens que exigem entender o conceito (ideias, práticas, medidas), não só nomes. Crédito parcial por item.",
+    ),
+  intruso: z
+    .object({
+      itens: z.array(z.string()),
+      intruso: z.number().int().describe("Índice do item que não pertence ao grupo, a partir de 0."),
+      criterio: z.string().describe("O que os outros itens têm em comum; aparece no gabarito."),
+    })
+    .optional()
+    .describe(
+      "intruso: 4 ou 5 itens; o intruso deve parecer pertencer (mesmo período ou tema) e só sair pelo critério conceitual.",
+    ),
+  ponto_de_vista: z
+    .object({
+      relatos: z.array(
+        z.object({
+          texto: z.string().describe("Relato do mesmo fato, até 800 caracteres, sem dizer quem fala."),
+          perspectiva: z.string().describe("Quem fala ou de que lugar social, ex.: 'Jesuíta', 'Senhor de engenho'."),
+        }),
+      ),
+      extras: z
+        .array(z.string())
+        .optional()
+        .describe("Até 2 perspectivas plausíveis que não correspondem a nenhum relato."),
+    })
+    .optional()
+    .describe(
+      "ponto_de_vista: 2 ou 3 relatos do mesmo fato histórico, de perspectivas diferentes; o aluno identifica a de cada um. Crédito parcial por relato.",
+    ),
+  linha_do_tempo_datas: z
+    .object({
+      inicio: z.number().int().describe("Ano inicial da régua (negativo para a.C.)."),
+      fim: z.number().int().describe("Ano final da régua (exclusivo)."),
+      passo: z.number().int().describe("Tamanho de cada faixa em anos: a régua precisa ter 3 a 8 faixas."),
+      eventos: z.array(z.object({ texto: z.string().describe("Sem a data."), ano: z.number().int() })),
+    })
+    .optional()
+    .describe(
+      "linha_do_tempo_datas: régua dividida em faixas (ex.: 1500 a 1900, de 50 em 50) e 3 a 6 eventos; o aluno põe cada evento na faixa certa. Faixa vizinha vale meio ponto.",
+    ),
+  mapa: z
+    .object({
+      marcadores: z.array(
+        z.object({
+          nome: z.string().describe("Lugar que o aluno vai localizar."),
+          x: z.number().optional().describe("Posição em % da largura (0 a 100), se você souber com segurança."),
+          y: z.number().optional().describe("Posição em % da altura (0 a 100), se você souber com segurança."),
+        }),
+      ),
+    })
+    .optional()
+    .describe(
+      "mapa: exige imagem_url com o mapa (sem os nomes escritos nos lugares cobrados) e 2 a 6 marcadores. Se não souber as posições, omita x e y: a questão entra como rascunho e o professor toca no mapa, no app, para pôr os pinos no lugar. Avise o professor disso.",
+    ),
 });
 
 function conteudoBruto(q: z.infer<typeof schemaQuestao>) {
@@ -166,6 +229,16 @@ function conteudoBruto(q: z.infer<typeof schemaQuestao>) {
       return { eventos: q.eventos ?? [] };
     case "pares":
       return { pares: q.pares ?? [] };
+    case "mapa":
+      // A imagem e a marca "posicionar" entram depois da validação.
+      return {
+        imagem: "-",
+        marcadores: (q.mapa?.marcadores ?? []).map((m, i) =>
+          m.x === undefined || m.y === undefined
+            ? { nome: m.nome, x: 10 + i * 15, y: 92 } // em fila no rodapé, esperando o professor
+            : m,
+        ),
+      };
     default:
       // Tipos novos: o campo com o nome do tipo já vem no formato gravado.
       return q[q.tipo] ?? {};
@@ -275,6 +348,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
       const permitidas = new Set<string>(HABILIDADES);
       const linhas = [];
       const recusadas: { posicao: number; enunciado: string; motivo: string }[] = [];
+      const pinosPorPosicionar: number[] = [];
 
       for (const [i, q] of questoes.entries()) {
         const conteudo = validarConteudo(q.tipo, conteudoBruto(q));
@@ -298,11 +372,20 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           (imagem && "erro" in imagem ? imagem.erro : null) ??
           (q.tipo === "fonte_primaria" && !imagem && !(conteudo.data as { documento: string }).documento
             ? "Fonte primária sem documento: envie o trecho em documento ou a imagem em imagem_url."
-            : null);
+            : null) ??
+          (q.tipo === "mapa" && !imagem ? "Mapa sem imagem: envie o mapa em imagem_url." : null);
         if (motivoFinal || !conteudo.success) {
           recusadas.push({ posicao: i + 1, enunciado: q.enunciado.slice(0, 80), motivo: motivoFinal ?? "" });
           continue;
         }
+        const caminhoImagem = imagem && "caminho" in imagem ? imagem.caminho : null;
+        let dados = conteudo.data;
+        // No mapa, a imagem fica dentro do conteúdo, embaixo dos pinos.
+        const posicionar =
+          q.tipo === "mapa" && (q.mapa?.marcadores ?? []).some((m) => m.x === undefined || m.y === undefined);
+        if (q.tipo === "mapa")
+          dados = { ...dados, imagem: caminhoImagem ?? "", ...(posicionar && { posicionar: true }) };
+        if (posicionar) pinosPorPosicionar.push(i + 1);
         linhas.push({
           professor_id: professorId,
           tipo: q.tipo,
@@ -312,10 +395,10 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           dificuldade: q.dificuldade,
           explicacao: q.explicacao.trim(),
           fonte: q.fonte?.trim() || null,
-          imagem_path: imagem && "caminho" in imagem ? imagem.caminho : null,
+          imagem_path: q.tipo === "mapa" ? null : caminhoImagem,
           tempo_limite_s: q.tempo_limite_s ?? TEMPO_PADRAO[q.tipo as TipoQuestao],
-          conteudo: conteudo.data,
-          status: publicar ? "publicada" : "rascunho",
+          conteudo: dados,
+          status: publicar && !posicionar ? "publicada" : "rascunho",
           origem: "claude",
         });
       }
@@ -341,6 +424,9 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         status: publicar ? "publicada" : "rascunho",
         questoes: gravadas,
         recusadas,
+        ...(pinosPorPosicionar.length && {
+          aviso: `Questões de mapa nas posições ${pinosPorPosicionar.join(", ")} ficaram em rascunho: o professor precisa abrir cada uma no app e tocar no mapa para pôr os pinos no lugar.`,
+        }),
         revisar_em: capitulos.map(
           (c) =>
             `${origem}/professor/questoes?status=${publicar ? "publicada" : "rascunho"}&capitulo=${encodeURIComponent(c)}`,
