@@ -14,6 +14,8 @@ export type Aluno = {
   ultimo_acesso: string | null;
   total_acessos: number;
   criado_em: string;
+  /** Acessibilidade: tecla não zera a questão com pesquisa bloqueada. Nem toda consulta traz. */
+  teclado_liberado?: boolean;
 };
 export type Temporada = {
   id: string;
@@ -81,6 +83,7 @@ export type RespostaBanco = {
   tempo_esgotado: boolean;
   saidas_tela: number;
   zerada_por_saida: boolean;
+  motivo_zerada: "saida" | "teclado" | "tela_alterada" | null;
 };
 
 export function situacaoDesafio(d: Pick<Desafio, "abre_em" | "fecha_em">, agora = new Date()) {

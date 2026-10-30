@@ -1,0 +1,40 @@
+/** Por que uma questão de pesquisa bloqueada foi zerada. */
+export const MOTIVOS_ZERADA = ["saida", "teclado", "tela_alterada"] as const;
+export type MotivoZerada = (typeof MOTIVOS_ZERADA)[number];
+
+export const ehMotivoZerada = (v: unknown): v is MotivoZerada =>
+  typeof v === "string" && (MOTIVOS_ZERADA as readonly string[]).includes(v);
+
+export const AVISO_ZERADA: Record<MotivoZerada, string> = {
+  saida: "Você saiu da tela durante a questão anterior, então ela valeu zero.",
+  teclado: "Você apertou uma tecla durante a questão anterior, então ela valeu zero.",
+  tela_alterada:
+    "A tela da questão anterior foi alterada por algo de fora do app (uma extensão do navegador, por exemplo), então ela valeu zero.",
+};
+
+/** Teclas que o celular ou o sistema podem mandar sem o aluno digitar nada. */
+const TECLAS_IGNORADAS = new Set(["AudioVolumeUp", "AudioVolumeDown", "AudioVolumeMute"]);
+export const teclaConta = (key: string) => !TECLAS_IGNORADAS.has(key);
+
+/** Elementos que o próprio Next.js ou o navegador acrescentam e que não mudam a questão. */
+const TAGS_IGNORADAS = new Set([
+  "SCRIPT",
+  "STYLE",
+  "LINK",
+  "META",
+  "NOSCRIPT",
+  "TEMPLATE",
+  "NEXT-ROUTE-ANNOUNCER",
+  "NEXTJS-PORTAL",
+]);
+
+/**
+ * Um elemento novo na página que não foi criado pelo React veio de fora do app,
+ * em geral de uma extensão (botão de "responder com IA", marca-texto, barra
+ * lateral). O React marca todo nó que cria com uma chave `__reactFiber$…`.
+ */
+export function elementoEstranho(no: Node): boolean {
+  if (no.nodeType !== 1) return false;
+  if (TAGS_IGNORADAS.has((no as Element).tagName.toUpperCase())) return false;
+  return !Object.keys(no).some((k) => k.startsWith("__reactFiber$"));
+}

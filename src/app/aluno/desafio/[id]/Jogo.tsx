@@ -7,6 +7,7 @@ import type { EstadoJogo } from "@/lib/jogo";
 import { respostaCompleta, respostaInicial } from "@/lib/questoes/apresentacao";
 import { ESCOLHA_UNICA } from "@/lib/questoes/tipos";
 import type { Resposta } from "@/lib/questoes/tipos";
+import { elementoEstranho, teclaConta, type MotivoZerada } from "@/lib/tela-protegida";
 import { carregarJogo, enviarResposta } from "../../actions";
 
 type QuestaoEmJogo = Extract<EstadoJogo, { fase: "questao" }>;
@@ -27,6 +28,7 @@ export function Jogo({
   jaComecou,
   tempoFixo,
   saidaZera,
+  tecladoLiberado = false,
   relampago = false,
   pontosPorAcerto,
 }: {
@@ -36,6 +38,7 @@ export function Jogo({
   jaComecou: boolean;
   tempoFixo: number | null;
   saidaZera: boolean;
+  tecladoLiberado?: boolean;
   relampago?: boolean;
   pontosPorAcerto: number;
 }) {
@@ -79,9 +82,23 @@ export function Jogo({
             correndo se você sair da tela.
           </li>
           {saidaZera ? (
-            <li className="font-semibold text-red-700">
-              🚫 Pesquisa bloqueada: não saia desta tela nem troque de aba ou de app. Se sair, a questão vale zero.
-            </li>
+            <>
+              <li className="font-semibold text-red-700">
+                🚫 Pesquisa bloqueada: não saia desta tela nem troque de aba ou de app. Se sair, a questão vale zero.
+              </li>
+              {tecladoLiberado ? (
+                <li>⌨️ O professor liberou o teclado para você.</li>
+              ) : (
+                <li className="font-semibold text-red-700">
+                  ⌨️ Não use o teclado: apertar qualquer tecla durante uma questão, mesmo sem querer, faz ela valer
+                  zero. Responda só com o mouse ou tocando na tela.
+                </li>
+              )}
+              <li className="font-semibold text-red-700">
+                🧩 Extensões do navegador que mexem na tela (como as que respondem com IA) também fazem a questão valer
+                zero.
+              </li>
+            </>
           ) : (
             <li className="font-semibold text-emerald-700">
               🔎 Pesquisa liberada: pode sair da tela para consultar, mas o tempo continua correndo.
@@ -153,7 +170,10 @@ export function Jogo({
       estado={estado}
       pendente={pendente}
       erroRede={erroRede}
-      enviar={(resposta, saidas) => executar(() => enviarResposta(desafioId, estado.questao.id, resposta, saidas))}
+      tecladoLiberado={tecladoLiberado}
+      enviar={(resposta, saidas, motivo) =>
+        executar(() => enviarResposta(desafioId, estado.questao.id, resposta, saidas, motivo))
+      }
     />
   );
 }
@@ -162,12 +182,14 @@ function TelaQuestao({
   estado,
   pendente,
   erroRede,
+  tecladoLiberado,
   enviar,
 }: {
   estado: QuestaoEmJogo;
   pendente: boolean;
   erroRede: boolean;
-  enviar: (resposta: Resposta | null, saidas: number) => void;
+  tecladoLiberado: boolean;
+  enviar: (resposta: Resposta | null, saidas: number, motivo: MotivoZerada | null) => void;
 }) {
   const { questao, posicao, total, aviso } = estado;
   const [resposta, setResposta] = useState<Resposta>(() => respostaInicial(questao.vista));
@@ -176,10 +198,10 @@ function TelaQuestao({
   const enviado = useRef(false);
 
   const confirmar = useCallback(
-    (r: Resposta | null) => {
+    (r: Resposta | null, motivo: MotivoZerada | null = null) => {
       if (enviado.current) return;
       enviado.current = true;
-      enviar(r, saidas.current);
+      enviar(r, saidas.current, motivo);
     },
     [enviar],
   );
@@ -211,7 +233,7 @@ function TelaQuestao({
       if (fora.current || dialogoProprio.current || enviado.current) return;
       fora.current = true;
       saidas.current += 1;
-      if (questao.saidaZera) confirmar(null);
+      if (questao.saidaZera) confirmar(null, "saida");
     };
     const voltou = () => {
       if (document.visibilityState === "visible" && document.hasFocus()) fora.current = false;
@@ -232,12 +254,44 @@ function TelaQuestao({
     };
   }, [questao.saidaZera, confirmar]);
 
+  // Pesquisa bloqueada: qualquer tecla zera a questão (salvo teclado liberado
+  // pelo professor). Atalhos do sistema, como Alt+Tab, nem chegam aqui, mas já
+  // tiram o aluno da tela.
+  const bloquearTeclado = questao.saidaZera && !tecladoLiberado;
+  useEffect(() => {
+    if (!bloquearTeclado) return;
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (enviado.current || dialogoProprio.current || !teclaConta(e.key)) return;
+      e.preventDefault();
+      confirmar(null, "teclado");
+    };
+    window.addEventListener("keydown", aoTeclar, true);
+    return () => window.removeEventListener("keydown", aoTeclar, true);
+  }, [bloquearTeclado, confirmar]);
+
+  // Pesquisa bloqueada: um elemento que aparece na página sem ter sido criado
+  // pelo app (botão de IA, marca-texto, barra lateral de extensão) zera a questão.
+  useEffect(() => {
+    if (!questao.saidaZera) return;
+    const observador = new MutationObserver((mudancas) => {
+      if (enviado.current) return;
+      if (mudancas.some((m) => Array.from(m.addedNodes).some(elementoEstranho))) confirmar(null, "tela_alterada");
+    });
+    observador.observe(document.body, { childList: true, subtree: true });
+    return () => observador.disconnect();
+  }, [questao.saidaZera, confirmar]);
+
   const segundos = Math.ceil(restante / 1000);
   const fracao = restante / (questao.tempoLimite * 1000);
   const completa = respostaCompleta(resposta);
 
   return (
-    <div className="sem-selecao space-y-4" onCopy={(e) => e.preventDefault()} onContextMenu={(e) => e.preventDefault()}>
+    <div
+      translate={questao.saidaZera ? "no" : undefined}
+      className={`sem-selecao space-y-4 ${questao.saidaZera ? "notranslate" : ""}`}
+      onCopy={(e) => e.preventDefault()}
+      onContextMenu={(e) => e.preventDefault()}
+    >
       <div className="flex items-center justify-between text-sm font-medium text-slate-600">
         <span>
           Questão {posicao} de {total}
@@ -247,7 +301,8 @@ function TelaQuestao({
       {aviso && <Aviso>{aviso}</Aviso>}
       {questao.saidaZera ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-center text-xs font-semibold text-red-700">
-          🚫 Pesquisa bloqueada: se sair desta tela, esta questão vale zero.
+          🚫 Pesquisa bloqueada: sair desta tela{tecladoLiberado ? "" : ", apertar qualquer tecla"} ou usar extensões
+          que mexem na tela faz esta questão valer zero.
         </p>
       ) : (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-center text-xs font-semibold text-emerald-700">

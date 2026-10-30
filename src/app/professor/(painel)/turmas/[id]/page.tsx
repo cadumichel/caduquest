@@ -19,6 +19,7 @@ import {
   aprovarCarta,
   recusarCarta,
   alternarAprovacao,
+  alternarTeclado,
   aprovarAluno,
   aprovarTodos,
   atualizarAluno,
@@ -48,7 +49,7 @@ export default async function PaginaTurma({ params }: PageProps<"/professor/turm
     supabase
       .from("alunos")
       .select(
-        "id, turma_id, apelido, nome_real, pin_hash, avatar, cor, aprovado, ultimo_acesso, total_acessos, criado_em",
+        "id, turma_id, apelido, nome_real, pin_hash, avatar, cor, aprovado, ultimo_acesso, total_acessos, criado_em, teclado_liberado",
       )
       .eq("turma_id", id)
       .order("apelido"),
@@ -217,6 +218,14 @@ export default async function PaginaTurma({ params }: PageProps<"/professor/turm
                 </form>
                 <div className="flex items-center gap-2">
                   {a.pin_hash === null && <Etiqueta cor="ambar">PIN redefinido</Etiqueta>}
+                  <form action={alternarTeclado.bind(null, a.id, !a.teclado_liberado)}>
+                    <Botao
+                      variante="fantasma"
+                      title="Acessibilidade: com o teclado liberado, apertar uma tecla não zera a questão nos desafios com pesquisa bloqueada"
+                    >
+                      {a.teclado_liberado ? "⌨️ Teclado liberado · bloquear" : "⌨️ Liberar teclado"}
+                    </Botao>
+                  </form>
                   <BotaoConfirmar
                     acao={redefinirPin.bind(null, a.id)}
                     pergunta={`Redefinir o PIN de ${a.apelido}? No próximo acesso, o PIN digitado passa a valer.`}
