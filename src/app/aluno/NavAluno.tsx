@@ -18,9 +18,7 @@ export function NavAluno() {
         const ativo =
           item.href === "/aluno"
             ? caminho === "/aluno" || caminho.startsWith("/aluno/desafio") || caminho.startsWith("/aluno/revisao")
-            : item.href === "/aluno/perfil"
-              ? caminho.startsWith("/aluno/perfil") || caminho.startsWith("/aluno/colecao")
-              : caminho.startsWith(item.href);
+            : caminho.startsWith(item.href);
         return (
           <Link
             key={item.href}

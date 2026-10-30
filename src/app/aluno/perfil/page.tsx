@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
 import { medalhasDaTurmaDoAluno, temporadaAtualDoAluno } from "@/lib/aluno-dados";
 import { exigirAluno } from "@/lib/aluno-sessao";
@@ -186,21 +185,6 @@ export default async function Perfil() {
           🎉 Você liberou todos os {ORDEM_ESPECIAIS.length} personagens lendários!
         </p>
       )}
-
-      <Link
-        href="/aluno/colecao"
-        className="flex items-center gap-3 rounded-3xl border border-marca-100 bg-white p-4 shadow-sm transition hover:shadow-md"
-      >
-        <span className="text-3xl">📖</span>
-        <div className="min-w-0 flex-1">
-          <p className="font-extrabold text-marca-900">Álbum de personagens</p>
-          <p className="text-sm text-slate-600">
-            {basicosLiberados + especiaisLiberados} de {TOTAL_PERSONAGENS} na coleção. Toque para ver a curiosidade de
-            cada um.
-          </p>
-        </div>
-        <span className="font-bold text-marca-700">Abrir ›</span>
-      </Link>
 
       <PersonalizarPerfil
         fundoAtual={fundo === fundoDoAluno(visual.fundo) ? visual.fundo : 0}
