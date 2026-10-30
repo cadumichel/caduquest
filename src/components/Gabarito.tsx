@@ -21,11 +21,15 @@ export function Gabarito({
   conteudo,
   permutacao,
   resposta,
+  doProfessor = false,
 }: {
   conteudo: Conteudo;
   permutacao?: number[];
   resposta?: Resposta | null;
+  /** Professor vendo a resposta de um aluno: troca "sua resposta" por "resposta do aluno". */
+  doProfessor?: boolean;
 }) {
+  const rotulo = doProfessor ? "resposta do aluno" : "sua resposta";
   const orig = (exibido: number | null | undefined) =>
     exibido === null || exibido === undefined || !permutacao ? -1 : (permutacao[exibido] ?? -1);
 
@@ -44,7 +48,7 @@ export function Gabarito({
                 key={i}
                 className={`rounded-lg px-3 py-1.5 ${certa ? "bg-emerald-50 font-medium text-emerald-900" : escolhida === i ? "bg-red-50 text-red-800" : "text-slate-600"}`}
               >
-                {LETRAS[i]}) {a} {certa && "✓"} {escolhida === i && !certa && "← sua resposta"}
+                {LETRAS[i]}) {a} {certa && "✓"} {escolhida === i && !certa && `← ${rotulo}`}
               </li>
             );
           })}
@@ -202,7 +206,7 @@ export function Gabarito({
                         key={i}
                         className={`rounded-lg px-3 py-1 ${certa ? "bg-emerald-50 font-medium text-emerald-900" : escolhida === i ? "bg-red-50 text-red-800" : "text-slate-600"}`}
                       >
-                        {LETRAS[i]}) {a} {certa && "✓"} {escolhida === i && !certa && "← sua resposta"}
+                        {LETRAS[i]}) {a} {certa && "✓"} {escolhida === i && !certa && `← ${rotulo}`}
                       </li>
                     );
                   })}
@@ -320,7 +324,7 @@ export function Gabarito({
                 key={i}
                 className={`rounded-lg px-3 py-1.5 ${i === intruso ? "bg-emerald-50 font-medium text-emerald-900" : escolhida === i ? "bg-red-50 text-red-800" : "text-slate-600"}`}
               >
-                {item} {i === intruso && "← intruso ✓"} {escolhida === i && i !== intruso && "← sua resposta"}
+                {item} {i === intruso && "← intruso ✓"} {escolhida === i && i !== intruso && `← ${rotulo}`}
               </li>
             ))}
           </ul>
@@ -408,7 +412,11 @@ export function Gabarito({
                   <span className="flex-1">{m.nome}</span>
                   {resposta && (
                     <span className={p === i ? "text-emerald-700" : "text-red-700"}>
-                      {p === i ? "✓" : p === null || p === undefined ? "–" : `✗ (você: ${p + 1})`}
+                      {p === i
+                        ? "✓"
+                        : p === null || p === undefined
+                          ? "–"
+                          : `✗ (${doProfessor ? "aluno" : "você"}: ${p + 1})`}
                     </span>
                   )}
                 </li>

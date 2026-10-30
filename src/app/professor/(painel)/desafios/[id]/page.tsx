@@ -108,8 +108,18 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
               {linhas.map((l) => (
                 <tr key={l.alunoId}>
                   <td className="py-1.5">
-                    {l.apelido}
-                    {l.nomeReal && <span className="text-slate-500"> · {l.nomeReal}</span>}
+                    <Link href={`/professor/alunos/${l.alunoId}`} className="hover:text-marca-700">
+                      {l.apelido}
+                      {l.nomeReal && <span className="text-slate-500"> · {l.nomeReal}</span>}
+                    </Link>
+                    {l.situacao !== "não fez" && (
+                      <Link
+                        href={`/professor/desafios/${id}/alunos/${l.alunoId}`}
+                        className="ml-2 text-xs whitespace-nowrap text-marca-700"
+                      >
+                        ver respostas
+                      </Link>
+                    )}
                   </td>
                   <td className="py-1.5">
                     <Etiqueta cor={COR_SITUACAO[l.situacao]}>{l.situacao}</Etiqueta>
@@ -204,7 +214,8 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <Subtitulo>Desempenho por questão</Subtitulo>
           <span className="text-xs text-slate-500">
-            ✓ acertou · ✗ errou · ½ acertou em parte · em branco: não chegou na questão
+            ✓ acertou · ✗ errou · ½ acertou em parte · em branco: não chegou na questão. Clique no aluno para ver as
+            respostas dele.
           </span>
         </div>
         {linhas.every((l) => l.situacao === "não fez") ? (
@@ -228,8 +239,10 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
                 .map((l) => (
                   <tr key={l.alunoId}>
                     <td className="sticky left-0 bg-white py-1 pr-3 whitespace-nowrap">
-                      {l.apelido}
-                      {l.nomeReal && <span className="text-slate-500"> · {l.nomeReal}</span>}
+                      <Link href={`/professor/desafios/${id}/alunos/${l.alunoId}`} className="hover:text-marca-700">
+                        {l.apelido}
+                        {l.nomeReal && <span className="text-slate-500"> · {l.nomeReal}</span>}
+                      </Link>
                     </td>
                     {questoes.map((q, i) => {
                       const r = l.questoes.get(q.id);
