@@ -22,6 +22,7 @@ const schemaLote = z.object({
       eventos_em_ordem: z.array(z.object({ texto: z.string(), data: z.string() })).nullable(),
       pares: z.array(z.object({ esquerda: z.string(), direita: z.string() })).nullable(),
       explicacao: z.string(),
+      dica: z.string(),
     }),
   ),
 });
@@ -44,6 +45,7 @@ export type QuestaoGerada = {
   dificuldade: number;
   conteudo: unknown;
   explicacao: string;
+  dica: string;
   tempo_limite_s: number;
 };
 
@@ -57,6 +59,7 @@ Regras de conteúdo:
 - Prefira questões que exigem raciocínio (relação, contexto, interpretação) a decoreba solta.
 - Português do Brasil, linguagem clara para a série informada. Enunciados curtos: o aluno tem 40 a 60 segundos.
 - Explicação: 2 a 4 frases dizendo por que a resposta certa é certa e, na múltipla escolha, o erro de cada distrator.
+- Dica: 1 frase curta que o aluno pode abrir durante o desafio. Puxa o raciocínio certo sem entregar a resposta.
 
 Regras por tipo:
 - multipla_escolha: 4 alternativas em "alternativas" e o índice (0 a 3) em "indice_correta". Varie a posição da correta.
@@ -138,6 +141,7 @@ export async function gerarLote(pedido: PedidoGeracao): Promise<{ questoes: Ques
       dificuldade: dificuldadeNumero(q.dificuldade),
       conteudo: conteudo.data,
       explicacao: q.explicacao.trim(),
+      dica: q.dica.trim(),
       tempo_limite_s: TEMPO_PADRAO[tipo],
     });
   }

@@ -15,3 +15,13 @@ export function permutacaoAleatoria(n: number, aleatorio: () => number = Math.ra
     aleatorio,
   );
 }
+
+/** A permutação devolvida pelo aluno é mesmo uma permutação de 0..n-1? */
+export function permutacaoValida(permutacao: unknown, n: number): permutacao is number[] {
+  return (
+    Array.isArray(permutacao) &&
+    permutacao.length === n &&
+    new Set(permutacao).size === n &&
+    permutacao.every((i) => Number.isInteger(i) && i >= 0 && i < n)
+  );
+}

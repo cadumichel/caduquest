@@ -38,6 +38,7 @@ export type Questao = {
   tempo_limite_s: number;
   conteudo: unknown;
   explicacao: string | null;
+  dica?: string | null;
   status: "rascunho" | "publicada";
   origem: "manual" | "claude";
   criado_em: string;
@@ -81,6 +82,9 @@ export type RespostaBanco = {
   tempo_esgotado: boolean;
   saidas_tela: number;
   zerada_por_saida: boolean;
+  /** Ausentes antes do SQL das ajudas. */
+  eliminadas?: number[];
+  dica_usada?: boolean;
 };
 
 export function situacaoDesafio(d: Pick<Desafio, "abre_em" | "fecha_em">, agora = new Date()) {
