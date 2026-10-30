@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { EscolhaPesquisa } from "@/components/EscolhaPesquisa";
 import { BotaoConfirmar } from "@/components/BotaoConfirmar";
 import { BotaoEnviar } from "@/components/BotaoEnviar";
 import { FormAcao } from "@/components/FormAcao";
@@ -106,7 +107,7 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
                   </td>
                   <td className="py-1.5 text-right tabular-nums">{l.esgotadas || ""}</td>
                   <td
-                    className={`py-1.5 text-right tabular-nums ${l.saidasTela > 3 ? "font-semibold text-amber-700" : ""}`}
+                    className={`py-1.5 text-right tabular-nums ${desafio.saida_zera_questao && l.saidasTela > 3 ? "font-semibold text-amber-700" : ""}`}
                   >
                     {l.saidasTela || ""}
                     {l.zeradasPorSaida > 0 && (
@@ -122,7 +123,7 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
           <p className="mt-3 text-xs text-slate-500">
             {desafio.saida_zera_questao
               ? "Neste desafio, sair da tela zera a questão em que o aluno estava."
-              : "Mais de 3 saídas da tela aparecem em destaque. É só um alerta: neste desafio, sair da tela não tira pontos."}
+              : "Pesquisa liberada: as saídas da tela são só registradas e não tiram pontos."}
           </p>
         </Cartao>
 
@@ -134,7 +135,7 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
               ? `${desafio.tempo_por_questao_s} s em todas as questões`
               : "Tempo de cada questão"}
             {" · "}
-            {desafio.saida_zera_questao ? "🚫 sair da tela zera a questão" : "saídas da tela só são registradas"}
+            {desafio.saida_zera_questao ? "🚫 pesquisa bloqueada" : "🔎 pesquisa liberada"}
           </p>
           <FormAcao acao={atualizarJanelaDesafio}>
             <input type="hidden" name="id" value={id} />
@@ -147,6 +148,7 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
             <Campo rotulo="Fecha em">
               <Entrada type="datetime-local" name="fecha_em" defaultValue={isoParaDataHoraLocal(desafio.fecha_em)} />
             </Campo>
+            <EscolhaPesquisa name="pesquisa" bloqueada={desafio.saida_zera_questao} />
             <BotaoEnviar>Salvar</BotaoEnviar>
           </FormAcao>
           <div className="mt-6 border-t border-slate-100 pt-4">

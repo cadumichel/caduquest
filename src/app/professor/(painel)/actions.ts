@@ -213,6 +213,9 @@ export async function salvarQuestao(dados: DadosQuestao): Promise<EstadoForm & {
   const conteudo = validarConteudo(r.data.tipo, r.data.conteudo);
   if (!conteudo.success) return { erro: conteudo.error.issues[0].message };
   if (r.data.imagem_path && !r.data.imagem_path.startsWith(`${professorId}/`)) return { erro: "Imagem inválida." };
+  if (conteudo.data && "imagem" in conteudo.data && !conteudo.data.imagem.startsWith(`${professorId}/`)) {
+    return { erro: "Imagem do mapa inválida." };
+  }
 
   const linha = {
     tipo: r.data.tipo,
@@ -373,7 +376,12 @@ export async function atualizarJanelaDesafio(_: EstadoForm, form: FormData): Pro
   if (fecha <= abre) return { erro: "O fechamento deve ser depois da abertura." };
   const { error } = await supabase
     .from("desafios")
-    .update({ abre_em: abre, fecha_em: fecha, titulo: texto(form, "titulo") || undefined })
+    .update({
+      abre_em: abre,
+      fecha_em: fecha,
+      titulo: texto(form, "titulo") || undefined,
+      ...(form.has("pesquisa") && { saida_zera_questao: form.get("pesquisa") === "bloqueada" }),
+    })
     .eq("id", id);
   if (error) return { erro: "Não foi possível salvar." };
   revalidatePath(`/professor/desafios/${id}`);

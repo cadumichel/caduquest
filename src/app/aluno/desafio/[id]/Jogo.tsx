@@ -5,12 +5,13 @@ import { QuestaoInterativa } from "@/components/QuestaoInterativa";
 import { Aviso, Botao, BotaoLink } from "@/components/ui";
 import type { EstadoJogo } from "@/lib/jogo";
 import { respostaCompleta, respostaInicial } from "@/lib/questoes/apresentacao";
+import { ESCOLHA_UNICA } from "@/lib/questoes/tipos";
 import type { Resposta } from "@/lib/questoes/tipos";
 import { carregarJogo, enviarResposta } from "../../actions";
 
 type QuestaoEmJogo = Extract<EstadoJogo, { fase: "questao" }>;
 
-/** Tela cheia ajuda a manter o foco; o navegador pode recusar (iPhone, por exemplo). */
+/** Tela cheia ajuda a manter o foco quando a pesquisa é bloqueada; o navegador pode recusar (iPhone, por exemplo). */
 function entrarEmTelaCheia() {
   document.documentElement.requestFullscreen?.().catch(() => {});
 }
@@ -77,9 +78,13 @@ export function Jogo({
             ⏱️ {tempoFixo ? `${tempoFixo} segundos por questão.` : "Cada questão tem tempo limite."} O tempo continua
             correndo se você sair da tela.
           </li>
-          {saidaZera && (
+          {saidaZera ? (
             <li className="font-semibold text-red-700">
-              🚫 Não saia desta tela nem troque de aba ou de app: se sair, a questão vale zero.
+              🚫 Pesquisa bloqueada: não saia desta tela nem troque de aba ou de app. Se sair, a questão vale zero.
+            </li>
+          ) : (
+            <li className="font-semibold text-emerald-700">
+              🔎 Pesquisa liberada: pode sair da tela para consultar, mas o tempo continua correndo.
             </li>
           )}
           <li>↩️ Não dá para voltar à questão anterior.</li>
@@ -105,7 +110,7 @@ export function Jogo({
           className={`w-full py-4 text-base ${relampago ? "bg-orange-600 hover:bg-orange-700" : ""}`}
           disabled={pendente || (pedirCodigo && codigo.trim().length < 4)}
           onClick={() => {
-            entrarEmTelaCheia();
+            if (saidaZera) entrarEmTelaCheia();
             executar(() => carregarJogo(desafioId, pedirCodigo ? codigo : undefined));
           }}
         >
@@ -240,9 +245,13 @@ function TelaQuestao({
         <span className={`tabular-nums ${segundos <= 10 ? "font-bold text-red-600" : ""}`}>⏱️ {segundos}s</span>
       </div>
       {aviso && <Aviso>{aviso}</Aviso>}
-      {questao.saidaZera && (
+      {questao.saidaZera ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-center text-xs font-semibold text-red-700">
-          Não saia desta tela: se sair, esta questão vale zero.
+          🚫 Pesquisa bloqueada: se sair desta tela, esta questão vale zero.
+        </p>
+      ) : (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-center text-xs font-semibold text-emerald-700">
+          🔎 Pesquisa liberada: pode consultar, o tempo continua correndo.
         </p>
       )}
       <div className="h-2 overflow-hidden rounded-full bg-slate-200">
@@ -269,7 +278,7 @@ function TelaQuestao({
       <Botao
         variante="sucesso"
         className="sticky bottom-4 w-full py-4 text-base shadow-lg"
-        disabled={pendente || (!completa && resposta.tipo === "multipla_escolha")}
+        disabled={pendente || (!completa && ESCOLHA_UNICA.includes(resposta.tipo))}
         onClick={() => {
           if (!completa) {
             // O diálogo do navegador tira o foco da página: não conta como saída.

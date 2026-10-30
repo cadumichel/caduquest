@@ -8,6 +8,7 @@ import { montarVista, respostaInicial } from "@/lib/questoes/apresentacao";
 import { permutacaoAleatoria } from "@/lib/questoes/embaralhar";
 import {
   conteudoVazio,
+  MARCA_LACUNA,
   NOME_DIFICULDADE,
   NOME_TIPO,
   tamanhoPermutacao,
@@ -73,7 +74,9 @@ export function EditorQuestao({
     });
     setEnviandoImagem(false);
     if (error) return setMensagem({ erro: "Não foi possível enviar a imagem." });
-    set("imagem_path", caminho);
+    // No mapa, a imagem fica dentro do conteúdo, embaixo dos pinos.
+    if (conteudo.tipo === "mapa") setConteudo({ tipo: "mapa", conteudo: { ...conteudo.conteudo, imagem: caminho } });
+    else set("imagem_path", caminho);
   };
 
   const salvar = (status: "rascunho" | "publicada") =>
@@ -84,6 +87,7 @@ export function EditorQuestao({
         conteudo: conteudo.conteudo,
         status,
         ...campos,
+        imagem_path: conteudo.tipo === "mapa" ? null : campos.imagem_path,
       });
       setMensagem(r);
       if (r.id && !inicial) router.replace(`/professor/questoes/${r.id}`);
@@ -115,8 +119,12 @@ export function EditorQuestao({
             <AreaTexto rows={4} value={campos.enunciado} onChange={(e) => set("enunciado", e.target.value)} />
           </Campo>
           <Campo
-            rotulo="Imagem (fonte, charge, mapa)"
-            dica="PNG, JPG ou WEBP até 2 MB. Meta: 40% das questões de cada desafio com imagem."
+            rotulo={conteudo.tipo === "mapa" ? "Imagem do mapa" : "Imagem (fonte, charge, mapa)"}
+            dica={
+              conteudo.tipo === "mapa"
+                ? "PNG, JPG ou WEBP até 2 MB, sem os nomes escritos nos lugares cobrados."
+                : "PNG, JPG ou WEBP até 2 MB. Meta: 40% das questões de cada desafio com imagem."
+            }
           >
             <div className="flex items-center gap-3">
               <input
@@ -127,7 +135,7 @@ export function EditorQuestao({
                 className="text-sm"
               />
               {enviandoImagem && <span className="text-sm text-slate-500">Enviando…</span>}
-              {campos.imagem_path && (
+              {campos.imagem_path && conteudo.tipo !== "mapa" && (
                 <button type="button" className="text-sm text-red-700" onClick={() => set("imagem_path", null)}>
                   Remover
                 </button>
@@ -224,7 +232,7 @@ export function EditorQuestao({
             <Previa
               conteudo={{ tipo: conteudo.tipo, conteudo: validacao.data } as Conteudo}
               enunciado={campos.enunciado}
-              imagemUrl={urlImagem(campos.imagem_path)}
+              imagemUrl={conteudo.tipo === "mapa" ? null : urlImagem(campos.imagem_path)}
               tempo={campos.tempo_limite_s}
             />
           ) : (
@@ -495,5 +503,702 @@ function EditorConteudo({
           />
         </fieldset>
       );
+    case "fonte_primaria": {
+      const c = conteudo.conteudo;
+      const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "fonte_primaria", conteudo: { ...c, ...novo } });
+      return (
+        <div className="space-y-4">
+          <Campo
+            rotulo="Documento (trecho da fonte)"
+            dica="Cole o trecho da carta, lei, jornal ou relato. Se a fonte for uma imagem, envie a imagem acima e deixe vazio."
+          >
+            <AreaTexto
+              rows={5}
+              value={c.documento}
+              disabled={bloqueado}
+              onChange={(e) => mudar({ documento: e.target.value })}
+            />
+          </Campo>
+          {c.perguntas.map((p, j) => (
+            <fieldset key={j} className="space-y-2 rounded-xl border border-slate-200 p-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-marca-700">{j + 1}.</span>
+                <input
+                  className={classeInput}
+                  value={p.pergunta}
+                  disabled={bloqueado}
+                  placeholder="De quando é? Quem produziu? Qual a intenção?"
+                  onChange={(e) =>
+                    mudar({ perguntas: c.perguntas.map((x, k) => (k === j ? { ...x, pergunta: e.target.value } : x)) })
+                  }
+                />
+                <button
+                  type="button"
+                  disabled={bloqueado || c.perguntas.length <= 2}
+                  onClick={() => mudar({ perguntas: c.perguntas.filter((_, k) => k !== j) })}
+                  className="px-2 text-slate-400 hover:text-red-600 disabled:opacity-30"
+                  aria-label="Remover pergunta"
+                >
+                  ✕
+                </button>
+              </div>
+              <Linhas
+                itens={p.alternativas}
+                min={3}
+                max={4}
+                novo={() => ""}
+                bloqueado={bloqueado}
+                onChange={(alternativas) =>
+                  mudar({
+                    perguntas: c.perguntas.map((x, k) =>
+                      k === j ? { ...x, alternativas, correta: Math.min(x.correta, alternativas.length - 1) } : x,
+                    ),
+                  })
+                }
+                render={(alt, i, atualizar) => (
+                  <>
+                    <input
+                      type="radio"
+                      name={`correta-${j}`}
+                      checked={p.correta === i}
+                      disabled={bloqueado}
+                      onChange={() =>
+                        mudar({ perguntas: c.perguntas.map((x, k) => (k === j ? { ...x, correta: i } : x)) })
+                      }
+                    />
+                    <span className="w-5 text-sm font-bold text-slate-500">{LETRAS[i]}</span>
+                    <input
+                      className={classeInput}
+                      value={alt}
+                      disabled={bloqueado}
+                      onChange={(e) => atualizar(e.target.value)}
+                    />
+                  </>
+                )}
+              />
+            </fieldset>
+          ))}
+          <button
+            type="button"
+            disabled={bloqueado || c.perguntas.length >= 3}
+            onClick={() =>
+              mudar({ perguntas: [...c.perguntas, { pergunta: "", alternativas: ["", "", "", ""], correta: 0 }] })
+            }
+            className="text-sm font-medium text-marca-700 disabled:opacity-40"
+          >
+            + Adicionar pergunta
+          </button>
+        </div>
+      );
+    }
+    case "causa_consequencia": {
+      const c = conteudo.conteudo;
+      return (
+        <div className="space-y-4">
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Causa e a consequência dela (3 a 5). As consequências são embaralhadas.
+            </legend>
+            <Linhas
+              itens={c.relacoes}
+              min={3}
+              max={5}
+              novo={() => ({ causa: "", consequencia: "" })}
+              bloqueado={bloqueado}
+              onChange={(relacoes) => onChange({ tipo: "causa_consequencia", conteudo: { ...c, relacoes } })}
+              render={(r, _i, atualizar) => (
+                <>
+                  <input
+                    className={classeInput}
+                    placeholder="Causa"
+                    value={r.causa}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...r, causa: e.target.value })}
+                  />
+                  <span className="text-slate-400">→</span>
+                  <input
+                    className={classeInput}
+                    placeholder="Consequência"
+                    value={r.consequencia}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...r, consequencia: e.target.value })}
+                  />
+                </>
+              )}
+            />
+          </fieldset>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Consequências extras (até 2): plausíveis, do mesmo período, mas de nenhuma das causas
+            </legend>
+            <Linhas
+              itens={c.extras}
+              min={0}
+              max={2}
+              novo={() => ""}
+              bloqueado={bloqueado}
+              onChange={(extras) => onChange({ tipo: "causa_consequencia", conteudo: { ...c, extras } })}
+              render={(x, _i, atualizar) => (
+                <input
+                  className={classeInput}
+                  value={x}
+                  disabled={bloqueado}
+                  onChange={(e) => atualizar(e.target.value)}
+                />
+              )}
+            />
+          </fieldset>
+        </div>
+      );
+    }
+    case "encontrar_erro":
+      return (
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium text-slate-700">
+            Texto em trechos (4 a 10), na ordem. Marque de 1 a 3 trechos com erro e escreva a correção.
+          </legend>
+          <Linhas
+            itens={conteudo.conteudo.trechos}
+            min={4}
+            max={10}
+            novo={() => ({ texto: "", errado: false, correcao: "" })}
+            bloqueado={bloqueado}
+            onChange={(trechos) => onChange({ tipo: "encontrar_erro", conteudo: { trechos } })}
+            render={(t, _i, atualizar) => (
+              <div className="flex flex-1 flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <label className="flex shrink-0 items-center gap-1 text-xs font-medium text-red-700">
+                    <input
+                      type="checkbox"
+                      checked={t.errado}
+                      disabled={bloqueado}
+                      onChange={(e) => atualizar({ ...t, errado: e.target.checked })}
+                    />
+                    erro
+                  </label>
+                  <input
+                    className={classeInput}
+                    value={t.texto}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...t, texto: e.target.value })}
+                  />
+                </div>
+                {t.errado && (
+                  <input
+                    className={`${classeInput} text-sm`}
+                    placeholder="Correção (aparece no gabarito)"
+                    value={t.correcao ?? ""}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...t, correcao: e.target.value })}
+                  />
+                )}
+              </div>
+            )}
+          />
+          <p className="text-xs text-slate-500">
+            O aluno vê o texto corrido e sabe quantos erros há. Prefira erros sutis: data, autor ou conceito de um
+            período vizinho, anacronismo, causa trocada por consequência.
+          </p>
+        </fieldset>
+      );
+    case "completar_lacunas": {
+      const c = conteudo.conteudo;
+      const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "completar_lacunas", conteudo: { ...c, ...novo } });
+      const marcas = (c.texto.match(MARCA_LACUNA) ?? []).length;
+      return (
+        <div className="space-y-4">
+          <Campo
+            rotulo="Texto"
+            dica="Escreva ___ (três sublinhados) no lugar de cada palavra que o aluno vai completar."
+          >
+            <AreaTexto
+              rows={4}
+              value={c.texto}
+              disabled={bloqueado}
+              onChange={(e) => mudar({ texto: e.target.value })}
+            />
+          </Campo>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Respostas, na ordem das lacunas ({marcas} lacuna{marcas === 1 ? "" : "s"} no texto)
+            </legend>
+            <Linhas
+              itens={c.lacunas}
+              min={1}
+              max={5}
+              novo={() => ""}
+              bloqueado={bloqueado}
+              onChange={(lacunas) => mudar({ lacunas })}
+              render={(x, i, atualizar) => (
+                <>
+                  <span className="w-6 text-sm font-bold text-marca-700">{i + 1}</span>
+                  <input
+                    className={classeInput}
+                    value={x}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar(e.target.value)}
+                  />
+                </>
+              )}
+            />
+          </fieldset>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Palavras extras no banco (até 3): do mesmo campo, mas que não servem
+            </legend>
+            <Linhas
+              itens={c.extras}
+              min={0}
+              max={3}
+              novo={() => ""}
+              bloqueado={bloqueado}
+              onChange={(extras) => mudar({ extras })}
+              render={(x, _i, atualizar) => (
+                <input
+                  className={classeInput}
+                  value={x}
+                  disabled={bloqueado}
+                  onChange={(e) => atualizar(e.target.value)}
+                />
+              )}
+            />
+          </fieldset>
+        </div>
+      );
+    }
+    case "ordenar_frases":
+      return (
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium text-slate-700">
+            Frases na ordem correta (3 a 6): etapas de um processo, cadeia de causas ou argumento
+          </legend>
+          <Linhas
+            itens={conteudo.conteudo.frases}
+            min={3}
+            max={6}
+            novo={() => ""}
+            bloqueado={bloqueado}
+            onChange={(frases) => onChange({ tipo: "ordenar_frases", conteudo: { frases } })}
+            render={(f, i, atualizar) => (
+              <>
+                <span className="w-6 text-sm font-bold text-marca-700">{i + 1}º</span>
+                <input
+                  className={classeInput}
+                  value={f}
+                  disabled={bloqueado}
+                  onChange={(e) => atualizar(e.target.value)}
+                />
+              </>
+            )}
+          />
+        </fieldset>
+      );
+    case "interpretacao":
+    case "quem_disse": {
+      const ehCitacao = conteudo.tipo === "quem_disse";
+      const c = conteudo.conteudo;
+      const base = conteudo.tipo === "quem_disse" ? conteudo.conteudo.citacao : conteudo.conteudo.texto;
+      const opcoes = conteudo.tipo === "quem_disse" ? conteudo.conteudo.autores : conteudo.conteudo.alternativas;
+      const mudar = (novo: { base?: string; opcoes?: string[]; correta?: number }) => {
+        const b = novo.base ?? base;
+        const o = novo.opcoes ?? opcoes;
+        const correta = Math.min(novo.correta ?? c.correta, o.length - 1);
+        onChange(
+          conteudo.tipo === "quem_disse"
+            ? { tipo: "quem_disse", conteudo: { citacao: b, autores: o, correta } }
+            : { tipo: "interpretacao", conteudo: { texto: b, alternativas: o, correta } },
+        );
+      };
+      return (
+        <div className="space-y-4">
+          <Campo
+            rotulo={ehCitacao ? "Citação" : "Texto-base"}
+            dica={
+              ehCitacao
+                ? "Frase real e curta, sem o nome de quem disse. Ponha a referência em Fonte."
+                : "Trecho de fonte, de historiador ou descrição de uma charge (a imagem pode ir acima)."
+            }
+          >
+            <AreaTexto
+              rows={ehCitacao ? 3 : 5}
+              value={base}
+              disabled={bloqueado}
+              onChange={(e) => mudar({ base: e.target.value })}
+            />
+          </Campo>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              {ehCitacao
+                ? "Quem pode ter dito (marque o autor): personagens ou grupos do mesmo período"
+                : "Interpretações (marque a única sustentada pelo texto)"}
+            </legend>
+            <Linhas
+              itens={opcoes}
+              min={4}
+              max={5}
+              novo={() => ""}
+              bloqueado={bloqueado}
+              onChange={(o) => mudar({ opcoes: o })}
+              render={(alt, i, atualizar) => (
+                <>
+                  <input
+                    type="radio"
+                    name="correta"
+                    checked={c.correta === i}
+                    disabled={bloqueado}
+                    onChange={() => mudar({ correta: i })}
+                  />
+                  <span className="w-5 text-sm font-bold text-slate-500">{LETRAS[i]}</span>
+                  <input
+                    className={classeInput}
+                    value={alt}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar(e.target.value)}
+                  />
+                </>
+              )}
+            />
+          </fieldset>
+        </div>
+      );
+    }
+    case "classificar": {
+      const c = conteudo.conteudo;
+      const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "classificar", conteudo: { ...c, ...novo } });
+      return (
+        <div className="space-y-4">
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">Grupos (2 ou 3)</legend>
+            <Linhas
+              itens={c.grupos}
+              min={2}
+              max={3}
+              novo={() => ""}
+              bloqueado={bloqueado}
+              onChange={(grupos) =>
+                mudar({ grupos, itens: c.itens.map((i) => ({ ...i, grupo: Math.min(i.grupo, grupos.length - 1) })) })
+              }
+              render={(g, _i, atualizar) => (
+                <input
+                  className={classeInput}
+                  value={g}
+                  disabled={bloqueado}
+                  onChange={(e) => atualizar(e.target.value)}
+                />
+              )}
+            />
+          </fieldset>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">Itens (4 a 8) e o grupo de cada um</legend>
+            <Linhas
+              itens={c.itens}
+              min={4}
+              max={8}
+              novo={() => ({ texto: "", grupo: 0 })}
+              bloqueado={bloqueado}
+              onChange={(itens) => mudar({ itens })}
+              render={(item, _i, atualizar) => (
+                <>
+                  <input
+                    className={classeInput}
+                    value={item.texto}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...item, texto: e.target.value })}
+                  />
+                  <select
+                    className="max-w-36 rounded-lg border border-slate-300 px-2 py-2 text-sm"
+                    value={item.grupo}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...item, grupo: Number(e.target.value) })}
+                  >
+                    {c.grupos.map((g, gi) => (
+                      <option key={gi} value={gi}>
+                        {g || `Grupo ${gi + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+            />
+          </fieldset>
+        </div>
+      );
+    }
+    case "intruso": {
+      const c = conteudo.conteudo;
+      const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "intruso", conteudo: { ...c, ...novo } });
+      return (
+        <div className="space-y-4">
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">Itens (marque o intruso)</legend>
+            <Linhas
+              itens={c.itens}
+              min={4}
+              max={5}
+              novo={() => ""}
+              bloqueado={bloqueado}
+              onChange={(itens) => mudar({ itens, intruso: Math.min(c.intruso, itens.length - 1) })}
+              render={(item, i, atualizar) => (
+                <>
+                  <input
+                    type="radio"
+                    name="intruso"
+                    checked={c.intruso === i}
+                    disabled={bloqueado}
+                    onChange={() => mudar({ intruso: i })}
+                  />
+                  <input
+                    className={classeInput}
+                    value={item}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar(e.target.value)}
+                  />
+                </>
+              )}
+            />
+          </fieldset>
+          <Campo rotulo="O que os outros têm em comum" dica="Aparece no gabarito.">
+            <Entrada value={c.criterio} disabled={bloqueado} onChange={(e) => mudar({ criterio: e.target.value })} />
+          </Campo>
+        </div>
+      );
+    }
+    case "ponto_de_vista": {
+      const c = conteudo.conteudo;
+      const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "ponto_de_vista", conteudo: { ...c, ...novo } });
+      return (
+        <div className="space-y-4">
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Relatos do mesmo fato (2 ou 3) e a perspectiva de cada um
+            </legend>
+            <Linhas
+              itens={c.relatos}
+              min={2}
+              max={3}
+              novo={() => ({ texto: "", perspectiva: "" })}
+              bloqueado={bloqueado}
+              onChange={(relatos) => mudar({ relatos })}
+              render={(r, _i, atualizar) => (
+                <div className="flex flex-1 flex-col gap-1">
+                  <textarea
+                    className={classeInput}
+                    rows={3}
+                    placeholder="Relato, sem dizer quem fala"
+                    value={r.texto}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...r, texto: e.target.value })}
+                  />
+                  <input
+                    className={classeInput}
+                    placeholder="Perspectiva (ex.: jesuíta, colono, indígena)"
+                    value={r.perspectiva}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...r, perspectiva: e.target.value })}
+                  />
+                </div>
+              )}
+            />
+          </fieldset>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Perspectivas extras (até 2) que não são de nenhum relato
+            </legend>
+            <Linhas
+              itens={c.extras}
+              min={0}
+              max={2}
+              novo={() => ""}
+              bloqueado={bloqueado}
+              onChange={(extras) => mudar({ extras })}
+              render={(x, _i, atualizar) => (
+                <input
+                  className={classeInput}
+                  value={x}
+                  disabled={bloqueado}
+                  onChange={(e) => atualizar(e.target.value)}
+                />
+              )}
+            />
+          </fieldset>
+        </div>
+      );
+    }
+    case "linha_do_tempo_datas": {
+      const c = conteudo.conteudo;
+      const mudar = (novo: Partial<typeof c>) =>
+        onChange({ tipo: "linha_do_tempo_datas", conteudo: { ...c, ...novo } });
+      const numero = (v: string) => (v === "" || v === "-" ? 0 : Number(v));
+      return (
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-2">
+            <Campo rotulo="Régua começa em">
+              <Entrada
+                type="number"
+                value={c.inicio}
+                disabled={bloqueado}
+                onChange={(e) => mudar({ inicio: numero(e.target.value) })}
+              />
+            </Campo>
+            <Campo rotulo="Termina em">
+              <Entrada
+                type="number"
+                value={c.fim}
+                disabled={bloqueado}
+                onChange={(e) => mudar({ fim: numero(e.target.value) })}
+              />
+            </Campo>
+            <Campo rotulo="Faixas de (anos)">
+              <Entrada
+                type="number"
+                min={1}
+                value={c.passo}
+                disabled={bloqueado}
+                onChange={(e) => mudar({ passo: numero(e.target.value) })}
+              />
+            </Campo>
+          </div>
+          <p className="text-xs text-slate-500">Use número negativo para a.C. A régua precisa ter de 3 a 8 faixas.</p>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">Eventos (3 a 6) e o ano de cada um</legend>
+            <Linhas
+              itens={c.eventos}
+              min={3}
+              max={6}
+              novo={() => ({ texto: "", ano: c.inicio })}
+              bloqueado={bloqueado}
+              onChange={(eventos) => mudar({ eventos })}
+              render={(ev, _i, atualizar) => (
+                <>
+                  <input
+                    className={classeInput}
+                    placeholder="Evento, sem a data"
+                    value={ev.texto}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...ev, texto: e.target.value })}
+                  />
+                  <input
+                    type="number"
+                    className={`${classeInput} w-24`}
+                    value={ev.ano}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...ev, ano: numero(e.target.value) })}
+                  />
+                </>
+              )}
+            />
+          </fieldset>
+        </div>
+      );
+    }
+    case "mapa":
+      return <EditorMapa conteudo={conteudo.conteudo} onChange={onChange} bloqueado={bloqueado} />;
   }
+}
+
+function EditorMapa({
+  conteudo: c,
+  onChange,
+  bloqueado,
+}: {
+  conteudo: Extract<Conteudo, { tipo: "mapa" }>["conteudo"];
+  onChange: (c: Conteudo) => void;
+  bloqueado: boolean;
+}) {
+  const [ativo, setAtivo] = useState(0);
+  const mudar = (marcadores: typeof c.marcadores, posicionado = false) =>
+    onChange({
+      tipo: "mapa",
+      conteudo: { imagem: c.imagem, marcadores, ...(c.posicionar && !posicionado && { posicionar: true }) },
+    });
+  const tocar = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (bloqueado) return;
+    const caixa = e.currentTarget.getBoundingClientRect();
+    const x = Math.round(((e.clientX - caixa.left) / caixa.width) * 1000) / 10;
+    const y = Math.round(((e.clientY - caixa.top) / caixa.height) * 1000) / 10;
+    if (ativo >= c.marcadores.length) {
+      if (c.marcadores.length >= 6) return;
+      mudar([...c.marcadores, { nome: "", x, y }], true);
+    } else {
+      mudar(
+        c.marcadores.map((m, i) => (i === ativo ? { ...m, x, y } : m)),
+        true,
+      );
+    }
+    setAtivo((a) => Math.min(a + 1, 6));
+  };
+  if (!c.imagem) return <Aviso tipo="info">Envie a imagem do mapa no campo acima para pôr os pinos.</Aviso>;
+  return (
+    <div className="space-y-3">
+      {c.posicionar && (
+        <Aviso tipo="info">
+          Os pinos vieram do Claude sem posição. Toque em cada nome e depois no lugar dele no mapa.
+        </Aviso>
+      )}
+      <p className="text-sm text-slate-600">
+        Toque num nome da lista e depois no mapa para pôr o pino. Com &quot;+ Novo pino&quot; selecionado, cada toque
+        cria um pino.
+      </p>
+      <div className="relative mx-auto w-fit cursor-crosshair" onClick={tocar}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={urlImagem(c.imagem) ?? ""}
+          alt=""
+          className="block max-h-96 w-auto rounded-xl border border-slate-200"
+        />
+        {c.marcadores.map((m, i) => (
+          <span
+            key={i}
+            style={{ left: `${m.x}%`, top: `${m.y}%` }}
+            className={`pointer-events-none absolute flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white text-sm font-bold text-white shadow ${
+              i === ativo ? "bg-amber-500" : "bg-marca-700"
+            }`}
+          >
+            {i + 1}
+          </span>
+        ))}
+      </div>
+      <ul className="space-y-1.5">
+        {c.marcadores.map((m, i) => (
+          <li key={i} className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setAtivo(i)}
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${i === ativo ? "bg-amber-500" : "bg-marca-700"}`}
+            >
+              {i + 1}
+            </button>
+            <input
+              className={classeInput}
+              placeholder="Nome do lugar"
+              value={m.nome}
+              disabled={bloqueado}
+              onFocus={() => setAtivo(i)}
+              onChange={(e) => mudar(c.marcadores.map((x, j) => (j === i ? { ...x, nome: e.target.value } : x)))}
+            />
+            <button
+              type="button"
+              disabled={bloqueado || c.marcadores.length <= 2}
+              onClick={() => {
+                mudar(c.marcadores.filter((_, j) => j !== i));
+                setAtivo(0);
+              }}
+              className="px-2 text-slate-400 hover:text-red-600 disabled:opacity-30"
+              aria-label="Remover pino"
+            >
+              ✕
+            </button>
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        disabled={bloqueado || c.marcadores.length >= 6}
+        onClick={() => setAtivo(c.marcadores.length)}
+        className={`text-sm font-medium disabled:opacity-40 ${ativo >= c.marcadores.length ? "text-amber-600" : "text-marca-700"}`}
+      >
+        + Novo pino {ativo >= c.marcadores.length && "(toque no mapa)"}
+      </button>
+    </div>
+  );
 }
