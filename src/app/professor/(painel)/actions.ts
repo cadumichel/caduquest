@@ -225,6 +225,7 @@ const schemaQuestao = z.object({
     .max(TEMPO_MAX_S, `Tempo máximo: ${TEMPO_MAX_S} s.`),
   conteudo: z.unknown(),
   explicacao: z.string().trim().max(2000),
+  dica: z.string().trim().max(300).default(""),
   status: z.enum(["rascunho", "publicada"]),
 });
 export type DadosQuestao = z.input<typeof schemaQuestao>;
@@ -251,6 +252,7 @@ export async function salvarQuestao(dados: DadosQuestao): Promise<EstadoForm & {
     tempo_limite_s: r.data.tempo_limite_s,
     conteudo: conteudo.data,
     explicacao: r.data.explicacao || null,
+    dica: r.data.dica || null,
     status: r.data.status,
   };
 
@@ -296,6 +298,7 @@ export async function duplicarQuestao(id: string) {
       tempo_limite_s: q.tempo_limite_s,
       conteudo: q.conteudo,
       explicacao: q.explicacao,
+      dica: q.dica ?? null,
       status: "rascunho",
       origem: "manual",
     })
