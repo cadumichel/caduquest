@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { hojeEmBrasilia } from "@/lib/datas";
 import { agruparPorSemana, calcularConstancia, segundaDaSemana } from "@/lib/constancia";
 import { calcularMetaTurma, montarLigas } from "@/lib/ligas";
+import { arredondarPontos } from "@/lib/pontos";
 import { montarRanking } from "@/lib/ranking";
 import type { Temporada } from "@/lib/tipos-banco";
 
@@ -110,5 +111,15 @@ export async function situacaoDaTemporada(db: SupabaseClient, temporada: Pick<Te
       bonusTurma: meta.bonus,
     });
   }
-  return { ranking: montarRanking([...porAluno.values()]), meta, ligas: montarLigas([...liga.values()]) };
+  return {
+    ranking: montarRanking([...porAluno.values()]),
+    meta,
+    ligas: montarLigas(
+      [...liga.values()].map((l) => ({
+        ...l,
+        pontosAntes: arredondarPontos(l.pontosAntes),
+        pontosSemana: arredondarPontos(l.pontosSemana),
+      })),
+    ),
+  };
 }

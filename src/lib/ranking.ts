@@ -1,3 +1,5 @@
+import { arredondarPontos } from "./pontos";
+
 export type LinhaRanking = {
   alunoId: string;
   apelido: string;
@@ -44,7 +46,7 @@ export function montarRanking(entradas: Entrada[]): LinhaRanking[] {
     apelido: e.apelido,
     avatar: e.avatar ?? 0,
     cor: e.cor ?? 0,
-    pontos: Math.round((e.pontos + (e.bonus ?? 0) + (e.bonusTurma ?? 0)) * 100) / 100,
+    pontos: arredondarPontos(e.pontos + (e.bonus ?? 0) + (e.bonusTurma ?? 0)),
     acerto: e.questoes > 0 ? e.somaFracoes / e.questoes : 0,
     questoes: e.questoes,
     bonus: e.bonus ?? 0,

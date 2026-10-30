@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { exigirProfessor } from "@/lib/professor";
 import { resultadosDoDesafio } from "@/lib/resultados-desafio";
+import { formatarPontos } from "@/lib/pontos";
 
 const celula = (v: string | number | null) => {
   const s = String(v ?? "");
@@ -36,7 +37,7 @@ export async function GET(_: Request, ctx: RouteContext<"/professor/desafios/[id
       l.apelido,
       l.nomeReal,
       l.situacao,
-      String(l.pontos).replace(".", ","),
+      formatarPontos(l.pontos),
       String(l.acertos).replace(".", ","),
       l.respondidas,
       l.esgotadas,
