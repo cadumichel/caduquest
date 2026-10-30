@@ -95,10 +95,6 @@ export function Jogo({
                   zero. Responda só com o mouse ou tocando na tela.
                 </li>
               )}
-              <li className="font-semibold text-red-700">
-                🧩 Extensões do navegador que mexem na tela (como as que respondem com IA) também fazem a questão valer
-                zero.
-              </li>
             </>
           ) : (
             <li className="font-semibold text-emerald-700">
@@ -312,6 +308,7 @@ function TelaQuestao({
 
   // Pesquisa bloqueada: um elemento que aparece na página sem ter sido criado
   // pelo app (botão de IA, marca-texto, barra lateral de extensão) zera a questão.
+  // O aluno não é avisado disso, a pedido do professor, para não dar a ideia.
   useEffect(() => {
     if (!questao.saidaZera) return;
     const observador = new MutationObserver((mudancas) => {
@@ -342,8 +339,8 @@ function TelaQuestao({
       {aviso && <Aviso>{aviso}</Aviso>}
       {questao.saidaZera ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-center text-xs font-semibold text-red-700">
-          🚫 Pesquisa bloqueada: sair desta tela{tecladoLiberado ? "" : ", apertar qualquer tecla"} ou usar extensões
-          que mexem na tela faz esta questão valer zero.
+          🚫 Pesquisa bloqueada: sair desta tela{tecladoLiberado ? "" : " ou apertar qualquer tecla"} faz esta questão
+          valer zero.
         </p>
       ) : (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-center text-xs font-semibold text-emerald-700">
