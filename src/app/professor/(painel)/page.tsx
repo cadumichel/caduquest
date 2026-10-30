@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BotaoEnviar } from "@/components/BotaoEnviar";
+import { ExcluirComConfirmacao } from "@/components/ExcluirComConfirmacao";
 import { FormAcao } from "@/components/FormAcao";
 import { Campo, Cartao, Entrada, Etiqueta, Selecao, Subtitulo, Titulo, Vazio } from "@/components/ui";
 import { formatarData, formatarDataHora, hojeEmBrasilia } from "@/lib/datas";
 import { exigirProfessor } from "@/lib/professor";
 import type { Escola, Turma } from "@/lib/tipos-banco";
-import { criarEscola, criarTurma } from "./actions";
+import { criarEscola, criarTurma, excluirEscola } from "./actions";
 
 export const metadata: Metadata = { title: "Início" };
 
@@ -157,6 +158,13 @@ export default async function InicioProfessor() {
                   <BotaoEnviar>Criar</BotaoEnviar>
                 </FormAcao>
               </details>
+              <ExcluirComConfirmacao acao={excluirEscola.bind(null, e.id)} nome={e.nome} rotulo="Excluir escola">
+                <p>
+                  Apaga a escola, {(turmasPorEscola.get(e.id) ?? []).length} turma(s) e{" "}
+                  {(turmasPorEscola.get(e.id) ?? []).reduce((s, t) => s + (t.alunos[0]?.count ?? 0), 0)} aluno(s),
+                  com temporadas, desafios, respostas, pontos e conquistas. As questões do banco continuam.
+                </p>
+              </ExcluirComConfirmacao>
             </Cartao>
           ))}
         </div>

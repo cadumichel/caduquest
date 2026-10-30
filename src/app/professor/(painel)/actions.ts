@@ -45,6 +45,29 @@ export async function criarTurma(_: EstadoForm, form: FormData): Promise<EstadoF
   return { erro: "Não foi possível gerar um código único. Tente de novo." };
 }
 
+/** Apaga a turma e, em cascata, alunos, temporadas, desafios, tentativas e respostas dela. */
+export async function excluirTurma(turmaId: string, nomeDigitado: string) {
+  const { supabase } = await exigirProfessor();
+  const { data: turma } = await supabase.from("turmas").select("nome").eq("id", turmaId).maybeSingle();
+  if (!turma) return { erro: "Turma não encontrada." };
+  if (turma.nome.trim() !== nomeDigitado.trim()) return { erro: "O nome digitado não confere." };
+  const { error } = await supabase.from("turmas").delete().eq("id", turmaId);
+  if (error) return { erro: "Não foi possível excluir a turma." };
+  revalidatePath("/professor");
+  redirect("/professor");
+}
+
+/** Apaga a escola e, em cascata, todas as turmas dela com tudo o que estiver ligado a elas. */
+export async function excluirEscola(escolaId: string, nomeDigitado: string) {
+  const { supabase } = await exigirProfessor();
+  const { data: escola } = await supabase.from("escolas").select("nome").eq("id", escolaId).maybeSingle();
+  if (!escola) return { erro: "Escola não encontrada." };
+  if (escola.nome.trim() !== nomeDigitado.trim()) return { erro: "O nome digitado não confere." };
+  const { error } = await supabase.from("escolas").delete().eq("id", escolaId);
+  if (error) return { erro: "Não foi possível excluir a escola." };
+  revalidatePath("/professor");
+}
+
 export async function novoCodigoTurma(turmaId: string) {
   const { supabase } = await exigirProfessor();
   await supabase.from("turmas").update({ codigo: gerarCodigoTurma() }).eq("id", turmaId);

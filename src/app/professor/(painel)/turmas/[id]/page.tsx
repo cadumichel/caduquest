@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { BotaoConfirmar } from "@/components/BotaoConfirmar";
 import { BotaoEnviar } from "@/components/BotaoEnviar";
+import { ExcluirComConfirmacao } from "@/components/ExcluirComConfirmacao";
 import { FormAcao } from "@/components/FormAcao";
 import { TabelaRanking } from "@/components/TabelaRanking";
 import { AreaTexto, Botao, Campo, Cartao, Entrada, Etiqueta, Subtitulo, Titulo, Vazio } from "@/components/ui";
@@ -22,6 +23,7 @@ import {
   aprovarTodos,
   atualizarAluno,
   criarTemporada,
+  excluirTurma,
   novoCodigoTurma,
   redefinirPin,
   removerAluno,
@@ -291,6 +293,13 @@ export default async function PaginaTurma({ params }: PageProps<"/professor/turm
           </Cartao>
         </div>
       </div>
+
+      <ExcluirComConfirmacao acao={excluirTurma.bind(null, id)} nome={turma.nome} rotulo="Excluir turma">
+        <p>
+          Apaga a turma {turma.nome}, {todos.length} aluno(s) e {temporadas.length} temporada(s), com desafios,
+          respostas, pontos e conquistas. As questões do banco continuam.
+        </p>
+      </ExcluirComConfirmacao>
     </div>
   );
 }
