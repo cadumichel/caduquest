@@ -12,8 +12,10 @@ export function corrigir(c: Conteudo, permutacao: number[], r: Resposta | null):
     exibido === null || exibido < 0 || exibido >= permutacao.length ? -1 : permutacao[exibido];
 
   switch (c.tipo) {
-    case "multipla_escolha": {
-      const resp = r as Extract<Resposta, { tipo: "multipla_escolha" }>;
+    case "multipla_escolha":
+    case "interpretacao":
+    case "quem_disse": {
+      const resp = r as Extract<Resposta, { tipo: "multipla_escolha" | "interpretacao" | "quem_disse" }>;
       return original(resp.escolha) === c.conteudo.correta ? 1 : 0;
     }
     case "vf_bloco": {
@@ -28,9 +30,10 @@ export function corrigir(c: Conteudo, permutacao: number[], r: Resposta | null):
       }
       return certos / n;
     }
-    case "linha_do_tempo": {
-      const resp = r as Extract<Resposta, { tipo: "linha_do_tempo" }>;
-      const n = c.conteudo.eventos.length;
+    case "linha_do_tempo":
+    case "ordenar_frases": {
+      const resp = r as Extract<Resposta, { tipo: "linha_do_tempo" | "ordenar_frases" }>;
+      const n = c.tipo === "linha_do_tempo" ? c.conteudo.eventos.length : c.conteudo.frases.length;
       if (!ehPermutacao(resp.ordem, n)) return 0;
       // Posição k da resposta deve conter o evento original k.
       const certos = resp.ordem.filter((exibido, k) => permutacao[exibido] === k).length;
@@ -82,8 +85,26 @@ export function corrigir(c: Conteudo, permutacao: number[], r: Resposta | null):
       const marcados = [...new Set(resp.marcados)].slice(0, erros);
       return marcados.filter((i) => trechos[i]?.errado).length / erros;
     }
+    case "completar_lacunas": {
+      // Compara pelo texto: duas lacunas com a mesma palavra aceitam qualquer uma das cópias.
+      const resp = r as Extract<Resposta, { tipo: "completar_lacunas" }>;
+      const { lacunas, extras } = c.conteudo;
+      const banco = [...lacunas, ...extras];
+      const usados = new Set<number>();
+      let certos = 0;
+      lacunas.forEach((certa, k) => {
+        const exibido = resp.preenchidas[k] ?? null;
+        if (exibido === null || usados.has(exibido)) return;
+        usados.add(exibido);
+        const palavra = banco[original(exibido)];
+        if (palavra !== undefined && normalizar(palavra) === normalizar(certa)) certos++;
+      });
+      return certos / lacunas.length;
+    }
   }
 }
+
+const normalizar = (t: string) => t.trim().toLocaleLowerCase("pt-BR");
 
 function ehPermutacao(ordem: number[], n: number): boolean {
   if (ordem.length !== n) return false;

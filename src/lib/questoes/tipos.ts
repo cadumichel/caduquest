@@ -8,6 +8,10 @@ export const TIPOS = [
   "fonte_primaria",
   "causa_consequencia",
   "encontrar_erro",
+  "completar_lacunas",
+  "ordenar_frases",
+  "interpretacao",
+  "quem_disse",
 ] as const;
 export type TipoQuestao = (typeof TIPOS)[number];
 
@@ -22,7 +26,14 @@ export const NOME_TIPO: Record<TipoQuestao, string> = {
   fonte_primaria: "Fonte primária",
   causa_consequencia: "Causa e consequência",
   encontrar_erro: "Encontrar o erro",
+  completar_lacunas: "Completar lacunas",
+  ordenar_frases: "Ordenar frases",
+  interpretacao: "Interpretação correta",
+  quem_disse: "Quem disse?",
 };
+
+/** Tipos de uma resposta só: o aluno precisa escolher antes de confirmar. */
+export const ESCOLHA_UNICA: readonly TipoQuestao[] = ["multipla_escolha", "interpretacao", "quem_disse"];
 
 /** Tempo limite padrão por tipo, em segundos (escopo: 20 a 60 s). */
 /** Limites do tempo por questão, em segundos (o professor escolhe livremente dentro deles). */
@@ -37,6 +48,10 @@ export const TEMPO_PADRAO: Record<TipoQuestao, number> = {
   fonte_primaria: 120,
   causa_consequencia: 90,
   encontrar_erro: 90,
+  completar_lacunas: 90,
+  ordenar_frases: 75,
+  interpretacao: 90,
+  quem_disse: 40,
 };
 
 export const NOME_DIFICULDADE: Record<number, string> = { 1: "Fácil", 2: "Média", 3: "Difícil" };
@@ -115,6 +130,42 @@ export const conteudoEncontrarErro = z
   }, "Marque de 1 a 3 trechos com erro.")
   .refine((c) => c.trechos.filter((t) => !t.errado).length >= 3, "Deixe ao menos 3 trechos corretos.");
 
+/** Marca de lacuna no texto: três ou mais sublinhados. */
+export const MARCA_LACUNA = /_{3,}/g;
+
+export const conteudoCompletarLacunas = z
+  .object({
+    texto: texto.max(1500, "Texto longo demais (máx. 1.500 caracteres)."),
+    // Na ordem em que aparecem no texto.
+    lacunas: z.array(texto).min(1, "Use de 1 a 5 lacunas.").max(5, "Use de 1 a 5 lacunas."),
+    extras: z.array(texto).max(3, "Use no máximo 3 palavras extras.").default([]),
+  })
+  .refine(
+    (c) => (c.texto.match(MARCA_LACUNA) ?? []).length === c.lacunas.length,
+    "Marque no texto uma lacuna (___) para cada resposta.",
+  );
+
+export const conteudoOrdenarFrases = z.object({
+  // Na ordem correta.
+  frases: z.array(texto).min(3, "Use de 3 a 6 frases.").max(6, "Use de 3 a 6 frases."),
+});
+
+export const conteudoInterpretacao = z
+  .object({
+    texto: texto.max(2500, "Texto longo demais (máx. 2.500 caracteres)."),
+    alternativas: z.array(texto).min(4, "Use 4 ou 5 alternativas.").max(5, "Use 4 ou 5 alternativas."),
+    correta: z.number().int().min(0),
+  })
+  .refine((c) => c.correta < c.alternativas.length, "Marque a interpretação correta.");
+
+export const conteudoQuemDisse = z
+  .object({
+    citacao: texto.max(800, "Citação longa demais (máx. 800 caracteres)."),
+    autores: z.array(texto).min(4, "Use 4 ou 5 opções.").max(5, "Use 4 ou 5 opções."),
+    correta: z.number().int().min(0),
+  })
+  .refine((c) => c.correta < c.autores.length, "Marque quem disse.");
+
 export const SCHEMA_CONTEUDO = {
   multipla_escolha: conteudoMultiplaEscolha,
   vf_bloco: conteudoVfBloco,
@@ -123,6 +174,10 @@ export const SCHEMA_CONTEUDO = {
   fonte_primaria: conteudoFontePrimaria,
   causa_consequencia: conteudoCausaConsequencia,
   encontrar_erro: conteudoEncontrarErro,
+  completar_lacunas: conteudoCompletarLacunas,
+  ordenar_frases: conteudoOrdenarFrases,
+  interpretacao: conteudoInterpretacao,
+  quem_disse: conteudoQuemDisse,
 } as const;
 
 export type ConteudoMultiplaEscolha = z.infer<typeof conteudoMultiplaEscolha>;
@@ -132,6 +187,10 @@ export type ConteudoPares = z.infer<typeof conteudoPares>;
 export type ConteudoFontePrimaria = z.infer<typeof conteudoFontePrimaria>;
 export type ConteudoCausaConsequencia = z.infer<typeof conteudoCausaConsequencia>;
 export type ConteudoEncontrarErro = z.infer<typeof conteudoEncontrarErro>;
+export type ConteudoCompletarLacunas = z.infer<typeof conteudoCompletarLacunas>;
+export type ConteudoOrdenarFrases = z.infer<typeof conteudoOrdenarFrases>;
+export type ConteudoInterpretacao = z.infer<typeof conteudoInterpretacao>;
+export type ConteudoQuemDisse = z.infer<typeof conteudoQuemDisse>;
 
 export type Conteudo =
   | { tipo: "multipla_escolha"; conteudo: ConteudoMultiplaEscolha }
@@ -140,7 +199,11 @@ export type Conteudo =
   | { tipo: "pares"; conteudo: ConteudoPares }
   | { tipo: "fonte_primaria"; conteudo: ConteudoFontePrimaria }
   | { tipo: "causa_consequencia"; conteudo: ConteudoCausaConsequencia }
-  | { tipo: "encontrar_erro"; conteudo: ConteudoEncontrarErro };
+  | { tipo: "encontrar_erro"; conteudo: ConteudoEncontrarErro }
+  | { tipo: "completar_lacunas"; conteudo: ConteudoCompletarLacunas }
+  | { tipo: "ordenar_frases"; conteudo: ConteudoOrdenarFrases }
+  | { tipo: "interpretacao"; conteudo: ConteudoInterpretacao }
+  | { tipo: "quem_disse"; conteudo: ConteudoQuemDisse };
 
 export function validarConteudo(tipo: TipoQuestao, conteudo: unknown) {
   return SCHEMA_CONTEUDO[tipo].safeParse(conteudo);
@@ -167,6 +230,14 @@ export function tamanhoPermutacao(c: Conteudo): number {
       return c.conteudo.relacoes.length + c.conteudo.extras.length;
     case "encontrar_erro":
       return 0;
+    case "completar_lacunas":
+      return c.conteudo.lacunas.length + c.conteudo.extras.length;
+    case "ordenar_frases":
+      return c.conteudo.frases.length;
+    case "interpretacao":
+      return c.conteudo.alternativas.length;
+    case "quem_disse":
+      return c.conteudo.autores.length;
   }
 }
 
@@ -220,6 +291,14 @@ export function conteudoVazio(tipo: TipoQuestao): Conteudo {
         tipo,
         conteudo: { trechos: [0, 1, 2, 3, 4].map((i) => ({ texto: "", errado: i === 2, correcao: "" })) },
       };
+    case "completar_lacunas":
+      return { tipo, conteudo: { texto: "", lacunas: ["", ""], extras: ["", ""] } };
+    case "ordenar_frases":
+      return { tipo, conteudo: { frases: ["", "", "", ""] } };
+    case "interpretacao":
+      return { tipo, conteudo: { texto: "", alternativas: ["", "", "", ""], correta: 0 } };
+    case "quem_disse":
+      return { tipo, conteudo: { citacao: "", autores: ["", "", "", ""], correta: 0 } };
   }
 }
 
@@ -231,7 +310,11 @@ export type Vista =
   | { tipo: "pares"; esquerda: string[]; direita: string[] }
   | { tipo: "fonte_primaria"; documento: string; perguntas: { pergunta: string; alternativas: string[] }[] }
   | { tipo: "causa_consequencia"; causas: string[]; consequencias: string[] }
-  | { tipo: "encontrar_erro"; trechos: string[]; erros: number };
+  | { tipo: "encontrar_erro"; trechos: string[]; erros: number }
+  | { tipo: "completar_lacunas"; partes: string[]; banco: string[] }
+  | { tipo: "ordenar_frases"; frases: string[] }
+  | { tipo: "interpretacao"; texto: string; alternativas: string[] }
+  | { tipo: "quem_disse"; citacao: string; alternativas: string[] };
 
 /** Resposta do aluno, sempre em índices da ordem exibida. */
 export type Resposta =
@@ -241,7 +324,11 @@ export type Resposta =
   | { tipo: "pares"; ligacoes: (number | null)[] }
   | { tipo: "fonte_primaria"; escolhas: (number | null)[] }
   | { tipo: "causa_consequencia"; ligacoes: (number | null)[] }
-  | { tipo: "encontrar_erro"; marcados: number[] };
+  | { tipo: "encontrar_erro"; marcados: number[] }
+  | { tipo: "completar_lacunas"; preenchidas: (number | null)[] }
+  | { tipo: "ordenar_frases"; ordem: number[] }
+  | { tipo: "interpretacao"; escolha: number | null }
+  | { tipo: "quem_disse"; escolha: number | null };
 
 export const schemaResposta = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("multipla_escolha"), escolha: z.number().int().nullable() }),
@@ -251,4 +338,8 @@ export const schemaResposta = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("fonte_primaria"), escolhas: z.array(z.number().int().nullable()).max(10) }),
   z.object({ tipo: z.literal("causa_consequencia"), ligacoes: z.array(z.number().int().nullable()).max(10) }),
   z.object({ tipo: z.literal("encontrar_erro"), marcados: z.array(z.number().int()).max(10) }),
+  z.object({ tipo: z.literal("completar_lacunas"), preenchidas: z.array(z.number().int().nullable()).max(10) }),
+  z.object({ tipo: z.literal("ordenar_frases"), ordem: z.array(z.number().int()).max(10) }),
+  z.object({ tipo: z.literal("interpretacao"), escolha: z.number().int().nullable() }),
+  z.object({ tipo: z.literal("quem_disse"), escolha: z.number().int().nullable() }),
 ]);

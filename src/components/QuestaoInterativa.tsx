@@ -68,7 +68,47 @@ export function QuestaoInterativa({
       return (
         <EncontrarErro vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />
       );
+    case "completar_lacunas":
+      return (
+        <CompletarLacunas vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />
+      );
+    case "ordenar_frases":
+      return (
+        <Ordenar
+          itens={vista.frases}
+          ordem={(resposta as Extract<Resposta, { tipo: "ordenar_frases" }>).ordem}
+          dica="Arraste ou use as setas até as frases ficarem na ordem certa."
+          onOrdem={(ordem) => onChange({ tipo: "ordenar_frases", ordem })}
+          desabilitada={desabilitada}
+        />
+      );
+    case "interpretacao":
+      return (
+        <div className="space-y-3">
+          <Documento texto={vista.texto} />
+          <MultiplaEscolha vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />
+        </div>
+      );
+    case "quem_disse":
+      return (
+        <div className="space-y-3">
+          <Citacao texto={vista.citacao} />
+          <MultiplaEscolha vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />
+        </div>
+      );
   }
+}
+
+/** Citação em destaque, para "Quem disse?". */
+export function Citacao({ texto }: { texto: string }) {
+  return (
+    <figure className="relative rounded-2xl bg-marca-900 px-5 pt-7 pb-5 text-white shadow">
+      <span aria-hidden className="absolute top-0 left-3 font-serif text-6xl leading-none text-amber-400">
+        “
+      </span>
+      <blockquote className="font-serif text-lg leading-snug italic">{texto}</blockquote>
+    </figure>
+  );
 }
 
 /** Trecho de documento ou texto-base, com cara de fonte histórica. */
@@ -86,7 +126,7 @@ function MultiplaEscolha({
   resposta,
   onChange,
   desabilitada,
-}: Props<Extract<Vista, { tipo: "multipla_escolha" }>>) {
+}: Props<Extract<Vista, { tipo: "multipla_escolha" | "interpretacao" | "quem_disse" }>>) {
   return (
     <ul className="space-y-2">
       {vista.alternativas.map((texto, i) => {
@@ -96,7 +136,7 @@ function MultiplaEscolha({
             <button
               type="button"
               disabled={desabilitada}
-              onClick={() => onChange({ tipo: "multipla_escolha", escolha: i })}
+              onClick={() => onChange({ tipo: vista.tipo, escolha: i } as never)}
               className={`flex w-full items-start gap-3 rounded-xl border-2 p-3 text-left transition ${
                 marcada ? "border-marca-600 bg-marca-50" : "border-slate-200 bg-white hover:border-marca-200"
               }`}
@@ -217,30 +257,53 @@ function ItemOrdenavel({
 }
 
 function LinhaDoTempo({ vista, resposta, onChange, desabilitada }: Props<Extract<Vista, { tipo: "linha_do_tempo" }>>) {
+  return (
+    <Ordenar
+      itens={vista.eventos}
+      ordem={resposta.ordem}
+      dica="Do mais antigo (1º) para o mais recente."
+      onOrdem={(ordem) => onChange({ tipo: "linha_do_tempo", ordem })}
+      desabilitada={desabilitada}
+    />
+  );
+}
+
+function Ordenar({
+  itens,
+  ordem,
+  dica,
+  onOrdem,
+  desabilitada,
+}: {
+  itens: string[];
+  ordem: number[];
+  dica: string;
+  onOrdem: (ordem: number[]) => void;
+  desabilitada?: boolean;
+}) {
   const sensores = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 120, tolerance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
-  const mover = (de: number, para: number) =>
-    onChange({ tipo: "linha_do_tempo", ordem: arrayMove(resposta.ordem, de, para) });
+  const mover = (de: number, para: number) => onOrdem(arrayMove(ordem, de, para));
   const aoSoltar = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
-    mover(resposta.ordem.indexOf(Number(active.id)), resposta.ordem.indexOf(Number(over.id)));
+    mover(ordem.indexOf(Number(active.id)), ordem.indexOf(Number(over.id)));
   };
   return (
     <div className="space-y-2">
-      <p className="text-sm text-slate-500">Do mais antigo (1º) para o mais recente.</p>
+      <p className="text-sm text-slate-500">{dica}</p>
       <DndContext sensors={sensores} collisionDetection={closestCenter} onDragEnd={aoSoltar}>
-        <SortableContext items={resposta.ordem} strategy={verticalListSortingStrategy}>
+        <SortableContext items={ordem} strategy={verticalListSortingStrategy}>
           <ol className="space-y-2">
-            {resposta.ordem.map((exibido, posicao) => (
+            {ordem.map((exibido, posicao) => (
               <ItemOrdenavel
                 key={exibido}
                 id={exibido}
-                texto={vista.eventos[exibido]}
+                texto={itens[exibido]}
                 posicao={posicao}
-                total={resposta.ordem.length}
+                total={ordem.length}
                 mover={mover}
                 desabilitada={desabilitada}
               />
@@ -487,6 +550,78 @@ function EncontrarErro({ vista, resposta, onChange, desabilitada }: Props<Extrac
       <p className={`text-sm font-medium ${cheio ? "text-marca-700" : "text-slate-500"}`}>
         {resposta.marcados.length} de {vista.erros} marcado{vista.erros > 1 ? "s" : ""}
       </p>
+    </div>
+  );
+}
+
+function CompletarLacunas({
+  vista,
+  resposta,
+  onChange,
+  desabilitada,
+}: Props<Extract<Vista, { tipo: "completar_lacunas" }>>) {
+  const [ativa, setAtiva] = useState<number | null>(0);
+  const preencher = (palavra: number) => {
+    const alvo = ativa ?? resposta.preenchidas.findIndex((p) => p === null);
+    if (alvo < 0) return;
+    const preenchidas = resposta.preenchidas.map((p) => (p === palavra ? null : p));
+    preenchidas[alvo] = palavra;
+    onChange({ tipo: "completar_lacunas", preenchidas });
+    const proxima = preenchidas.findIndex((p, k) => p === null && k !== alvo);
+    setAtiva(proxima >= 0 ? proxima : null);
+  };
+  const tocarLacuna = (k: number) => {
+    if (resposta.preenchidas[k] !== null) {
+      const preenchidas = [...resposta.preenchidas];
+      preenchidas[k] = null;
+      onChange({ tipo: "completar_lacunas", preenchidas });
+    }
+    setAtiva(k);
+  };
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-500">Toque numa lacuna e depois na palavra. Toque de novo para esvaziar.</p>
+      <p className="rounded-xl border border-slate-200 bg-white p-3 leading-9">
+        {vista.partes.map((parte, k) => (
+          <span key={k}>
+            {parte}
+            {k < vista.partes.length - 1 && (
+              <button
+                type="button"
+                disabled={desabilitada}
+                onClick={() => tocarLacuna(k)}
+                className={`mx-0.5 inline-flex min-w-20 justify-center rounded-lg border-2 px-2 align-middle text-sm leading-7 font-medium ${
+                  ativa === k
+                    ? "border-marca-600 bg-marca-50 text-marca-900"
+                    : resposta.preenchidas[k] !== null
+                      ? "border-marca-300 bg-marca-100 text-marca-900"
+                      : "border-dashed border-slate-300 text-slate-400"
+                }`}
+              >
+                {resposta.preenchidas[k] !== null ? vista.banco[resposta.preenchidas[k]!] : `${k + 1}`}
+              </button>
+            )}
+          </span>
+        ))}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {vista.banco.map((palavra, i) => {
+          const usada = resposta.preenchidas.includes(i);
+          return (
+            <button
+              key={i}
+              type="button"
+              disabled={desabilitada}
+              onClick={() => preencher(i)}
+              className={`rounded-full border-2 px-3 py-1.5 text-sm font-medium ${
+                usada ? "border-slate-200 bg-slate-100 text-slate-400" : "border-marca-200 bg-white text-marca-900"
+              }`}
+            >
+              {palavra}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

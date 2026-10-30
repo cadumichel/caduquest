@@ -1,4 +1,4 @@
-import { iniciosPerguntas, subPermutacao, type Conteudo, type Resposta, type Vista } from "./tipos";
+import { iniciosPerguntas, MARCA_LACUNA, subPermutacao, type Conteudo, type Resposta, type Vista } from "./tipos";
 
 /** Monta a vista do aluno a partir do conteúdo e da permutação sorteada para ele. */
 export function montarVista(c: Conteudo, permutacao: number[]): Vista {
@@ -37,12 +37,29 @@ export function montarVista(c: Conteudo, permutacao: number[]): Vista {
         trechos: c.conteudo.trechos.map((t) => t.texto),
         erros: c.conteudo.trechos.filter((t) => t.errado).length,
       };
+    case "completar_lacunas": {
+      const banco = [...c.conteudo.lacunas, ...c.conteudo.extras];
+      // partes[k] vem antes da lacuna k; a última parte fecha o texto.
+      return { tipo: c.tipo, partes: c.conteudo.texto.split(MARCA_LACUNA), banco: permutacao.map((i) => banco[i]) };
+    }
+    case "ordenar_frases":
+      return { tipo: c.tipo, frases: permutacao.map((i) => c.conteudo.frases[i]) };
+    case "interpretacao":
+      return {
+        tipo: c.tipo,
+        texto: c.conteudo.texto,
+        alternativas: permutacao.map((i) => c.conteudo.alternativas[i]),
+      };
+    case "quem_disse":
+      return { tipo: c.tipo, citacao: c.conteudo.citacao, alternativas: permutacao.map((i) => c.conteudo.autores[i]) };
   }
 }
 
 export function respostaInicial(vista: Vista): Resposta {
   switch (vista.tipo) {
     case "multipla_escolha":
+    case "interpretacao":
+    case "quem_disse":
       return { tipo: vista.tipo, escolha: null };
     case "vf_bloco":
       return { tipo: vista.tipo, valores: vista.afirmativas.map(() => null) };
@@ -56,6 +73,10 @@ export function respostaInicial(vista: Vista): Resposta {
       return { tipo: vista.tipo, ligacoes: vista.causas.map(() => null) };
     case "encontrar_erro":
       return { tipo: vista.tipo, marcados: [] };
+    case "completar_lacunas":
+      return { tipo: vista.tipo, preenchidas: vista.partes.slice(1).map(() => null) };
+    case "ordenar_frases":
+      return { tipo: vista.tipo, ordem: vista.frases.map((_, i) => i) };
   }
 }
 
@@ -63,11 +84,16 @@ export function respostaInicial(vista: Vista): Resposta {
 export function respostaCompleta(r: Resposta): boolean {
   switch (r.tipo) {
     case "multipla_escolha":
+    case "interpretacao":
+    case "quem_disse":
       return r.escolha !== null;
     case "vf_bloco":
       return r.valores.every((v) => v !== null);
     case "linha_do_tempo":
+    case "ordenar_frases":
       return true;
+    case "completar_lacunas":
+      return r.preenchidas.every((v) => v !== null);
     case "pares":
     case "causa_consequencia":
       return r.ligacoes.every((v) => v !== null);

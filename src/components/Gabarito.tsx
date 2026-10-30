@@ -1,5 +1,5 @@
-import { iniciosPerguntas, subPermutacao, type Conteudo, type Resposta } from "@/lib/questoes/tipos";
-import { Documento } from "./QuestaoInterativa";
+import { iniciosPerguntas, MARCA_LACUNA, subPermutacao, type Conteudo, type Resposta } from "@/lib/questoes/tipos";
+import { Citacao, Documento } from "./QuestaoInterativa";
 
 const LETRAS = "ABCDEF";
 
@@ -20,11 +20,14 @@ export function Gabarito({
     exibido === null || exibido === undefined || !permutacao ? -1 : (permutacao[exibido] ?? -1);
 
   switch (conteudo.tipo) {
-    case "multipla_escolha": {
-      const escolhida = resposta?.tipo === "multipla_escolha" ? orig(resposta.escolha) : -1;
-      return (
+    case "multipla_escolha":
+    case "interpretacao":
+    case "quem_disse": {
+      const escolhida = resposta?.tipo === conteudo.tipo && "escolha" in resposta ? orig(resposta.escolha) : -1;
+      const alternativas = conteudo.tipo === "quem_disse" ? conteudo.conteudo.autores : conteudo.conteudo.alternativas;
+      const lista = (
         <ul className="space-y-1 text-sm">
-          {conteudo.conteudo.alternativas.map((a, i) => {
+          {alternativas.map((a, i) => {
             const certa = i === conteudo.conteudo.correta;
             return (
               <li
@@ -36,6 +39,17 @@ export function Gabarito({
             );
           })}
         </ul>
+      );
+      if (conteudo.tipo === "multipla_escolha") return lista;
+      return (
+        <div className="space-y-2">
+          {conteudo.tipo === "quem_disse" ? (
+            <Citacao texto={conteudo.conteudo.citacao} />
+          ) : (
+            <Documento texto={conteudo.conteudo.texto} />
+          )}
+          {lista}
+        </div>
       );
     }
     case "vf_bloco": {
@@ -62,6 +76,53 @@ export function Gabarito({
             );
           })}
         </ul>
+      );
+    }
+    case "ordenar_frases": {
+      const ordem = resposta?.tipo === "ordenar_frases" ? resposta.ordem.map((e) => orig(e)) : null;
+      return (
+        <ol className="space-y-1 text-sm">
+          {conteudo.conteudo.frases.map((f, i) => (
+            <li key={i} className="flex gap-2 rounded-lg px-3 py-1.5">
+              <span className="w-6 font-bold text-marca-700">{i + 1}º</span>
+              <span className="flex-1">{f}</span>
+              {ordem && (
+                <span className={ordem[i] === i ? "text-emerald-700" : "text-red-700"}>
+                  {ordem[i] === i ? "✓" : "✗"}
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
+      );
+    }
+    case "completar_lacunas": {
+      const { texto, lacunas, extras } = conteudo.conteudo;
+      const banco = [...lacunas, ...extras];
+      const preenchidas = resposta?.tipo === "completar_lacunas" ? resposta.preenchidas : null;
+      const partes = texto.split(MARCA_LACUNA);
+      return (
+        <div className="space-y-2 text-sm">
+          <p className="leading-7">
+            {partes.map((parte, k) => {
+              if (k === partes.length - 1) return <span key={k}>{parte}</span>;
+              const escolhida = preenchidas ? banco[orig(preenchidas[k])] : undefined;
+              const acertou = escolhida?.trim().toLowerCase() === lacunas[k].trim().toLowerCase();
+              return (
+                <span key={k}>
+                  {parte}
+                  <strong className="rounded bg-emerald-50 px-1 text-emerald-900">{lacunas[k]}</strong>
+                  {preenchidas && !acertou && (
+                    <span className="ml-1 rounded bg-red-50 px-1 text-red-800 line-through">
+                      {escolhida ?? "vazio"}
+                    </span>
+                  )}
+                </span>
+              );
+            })}
+          </p>
+          {extras.length > 0 && <p className="text-slate-500">Palavras que sobravam: {extras.join(", ")}.</p>}
+        </div>
       );
     }
     case "linha_do_tempo": {

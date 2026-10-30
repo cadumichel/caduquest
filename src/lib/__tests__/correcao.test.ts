@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { montarVista } from "../questoes/apresentacao";
 import { calcularPontos, corrigir, tempoEsgotado } from "../questoes/correcao";
 import { permutacaoAleatoria } from "../questoes/embaralhar";
-import type { Conteudo } from "../questoes/tipos";
+import { validarConteudo, type Conteudo } from "../questoes/tipos";
 
 const me: Conteudo = {
   tipo: "multipla_escolha",
@@ -173,5 +173,56 @@ describe("encontrar o erro", () => {
     expect(corrigir(ee, [], { tipo: "encontrar_erro", marcados: [1, 2] })).toBe(0.5);
     expect(corrigir(ee, [], { tipo: "encontrar_erro", marcados: [0, 2, 1, 3] })).toBe(0);
     expect(corrigir(ee, [], { tipo: "encontrar_erro", marcados: [1, 1] })).toBe(0.5);
+  });
+});
+
+describe("completar lacunas", () => {
+  const cl: Conteudo = {
+    tipo: "completar_lacunas",
+    conteudo: {
+      texto: "O ___ dividiu o mundo entre ___ e Espanha; depois, Portugal criou as ___.",
+      lacunas: ["Tratado de Tordesilhas", "Portugal", "capitanias hereditárias"],
+      extras: ["sesmarias"],
+    },
+  };
+
+  it("divide o texto nas lacunas e confere pelo texto da palavra", () => {
+    const perm = [3, 1, 0, 2]; // banco exibido: sesmarias, Portugal, Tratado, capitanias
+    const vista = montarVista(cl, perm);
+    expect(vista).toMatchObject({
+      partes: ["O ", " dividiu o mundo entre ", " e Espanha; depois, Portugal criou as ", "."],
+    });
+    expect(corrigir(cl, perm, { tipo: "completar_lacunas", preenchidas: [2, 1, 3] })).toBe(1);
+    expect(corrigir(cl, perm, { tipo: "completar_lacunas", preenchidas: [2, 1, 0] })).toBeCloseTo(2 / 3);
+    expect(corrigir(cl, perm, { tipo: "completar_lacunas", preenchidas: [2, 2, null] })).toBeCloseTo(1 / 3);
+  });
+
+  it("exige uma marca ___ por resposta", () => {
+    expect(validarConteudo("completar_lacunas", { texto: "Só ___ aqui", lacunas: ["a", "b"] }).success).toBe(false);
+    expect(validarConteudo("completar_lacunas", { texto: "Só ___ aqui", lacunas: ["a"] }).success).toBe(true);
+  });
+});
+
+describe("ordenar frases, interpretação e quem disse", () => {
+  it("ordena como a linha do tempo", () => {
+    const of: Conteudo = { tipo: "ordenar_frases", conteudo: { frases: ["a", "b", "c"] } };
+    expect(corrigir(of, [2, 0, 1], { tipo: "ordenar_frases", ordem: [1, 2, 0] })).toBe(1);
+    expect(corrigir(of, [2, 0, 1], { tipo: "ordenar_frases", ordem: [1, 0, 2] })).toBeCloseTo(1 / 3);
+  });
+
+  it("escolha única vale tudo ou nada", () => {
+    const qd: Conteudo = {
+      tipo: "quem_disse",
+      conteudo: {
+        citacao: "Independência ou morte!",
+        autores: ["D. Pedro I", "José Bonifácio", "D. João VI", "Leopoldina"],
+        correta: 0,
+      },
+    };
+    expect(montarVista(qd, [1, 0, 2, 3])).toMatchObject({
+      alternativas: ["José Bonifácio", "D. Pedro I", "D. João VI", "Leopoldina"],
+    });
+    expect(corrigir(qd, [1, 0, 2, 3], { tipo: "quem_disse", escolha: 1 })).toBe(1);
+    expect(corrigir(qd, [1, 0, 2, 3], { tipo: "quem_disse", escolha: 0 })).toBe(0);
   });
 });

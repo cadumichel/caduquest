@@ -115,6 +115,45 @@ const schemaQuestao = z.object({
     .describe(
       "encontrar_erro: um parágrafo dividido em 4 a 10 trechos (frases ou orações), na ordem, com 1 a 3 trechos errados e ao menos 3 certos. Erros sutis: data, autor, lugar ou conceito de período vizinho, anacronismo, causa trocada. O aluno sabe quantos erros há. Crédito parcial por erro achado.",
     ),
+  completar_lacunas: z
+    .object({
+      texto: z.string().describe("Texto com ___ (três sublinhados) no lugar de cada palavra que falta."),
+      lacunas: z.array(z.string()).describe("Respostas de cada ___, na ordem do texto."),
+      extras: z
+        .array(z.string())
+        .optional()
+        .describe("Até 3 palavras do mesmo campo que não servem em nenhuma lacuna."),
+    })
+    .optional()
+    .describe(
+      "completar_lacunas: texto de até 1.500 caracteres com 1 a 5 lacunas; o aluno monta com um banco de palavras (respostas + extras embaralhadas). Prefira conceitos-chave a datas soltas. Crédito parcial por lacuna.",
+    ),
+  ordenar_frases: z
+    .object({ frases: z.array(z.string()).describe("Na ordem correta.") })
+    .optional()
+    .describe(
+      "ordenar_frases: 3 a 6 frases que só fazem sentido numa ordem (etapas de um processo, encadeamento causal, argumento). Para ordem cronológica de eventos use linha_do_tempo. Crédito parcial por posição.",
+    ),
+  interpretacao: z
+    .object({
+      texto: z.string().describe("Texto-base: trecho de fonte, historiador ou descrição de charge."),
+      alternativas: z.array(z.string()),
+      correta: z.number().int().describe("Índice da interpretação correta, a partir de 0."),
+    })
+    .optional()
+    .describe(
+      "interpretacao: texto-base de até 2.500 caracteres e 4 ou 5 interpretações; só uma é sustentada pelo texto. Distratores: leitura literal, extrapolação, anacronismo, inversão do sentido.",
+    ),
+  quem_disse: z
+    .object({
+      citacao: z.string().describe("Citação curta e real, sem o nome de quem disse."),
+      autores: z.array(z.string()).describe("4 ou 5 personagens ou grupos sociais do mesmo período."),
+      correta: z.number().int().describe("Índice de quem disse, a partir de 0."),
+    })
+    .optional()
+    .describe(
+      "quem_disse: citação real e curta; as outras opções devem ser personagens ou grupos que poderiam plausivelmente dizê-la.",
+    ),
 });
 
 function conteudoBruto(q: z.infer<typeof schemaQuestao>) {

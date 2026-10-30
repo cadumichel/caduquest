@@ -8,6 +8,7 @@ import { montarVista, respostaInicial } from "@/lib/questoes/apresentacao";
 import { permutacaoAleatoria } from "@/lib/questoes/embaralhar";
 import {
   conteudoVazio,
+  MARCA_LACUNA,
   NOME_DIFICULDADE,
   NOME_TIPO,
   tamanhoPermutacao,
@@ -693,5 +694,166 @@ function EditorConteudo({
           </p>
         </fieldset>
       );
+    case "completar_lacunas": {
+      const c = conteudo.conteudo;
+      const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "completar_lacunas", conteudo: { ...c, ...novo } });
+      const marcas = (c.texto.match(MARCA_LACUNA) ?? []).length;
+      return (
+        <div className="space-y-4">
+          <Campo
+            rotulo="Texto"
+            dica="Escreva ___ (três sublinhados) no lugar de cada palavra que o aluno vai completar."
+          >
+            <AreaTexto
+              rows={4}
+              value={c.texto}
+              disabled={bloqueado}
+              onChange={(e) => mudar({ texto: e.target.value })}
+            />
+          </Campo>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Respostas, na ordem das lacunas ({marcas} lacuna{marcas === 1 ? "" : "s"} no texto)
+            </legend>
+            <Linhas
+              itens={c.lacunas}
+              min={1}
+              max={5}
+              novo={() => ""}
+              bloqueado={bloqueado}
+              onChange={(lacunas) => mudar({ lacunas })}
+              render={(x, i, atualizar) => (
+                <>
+                  <span className="w-6 text-sm font-bold text-marca-700">{i + 1}</span>
+                  <input
+                    className={classeInput}
+                    value={x}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar(e.target.value)}
+                  />
+                </>
+              )}
+            />
+          </fieldset>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Palavras extras no banco (até 3): do mesmo campo, mas que não servem
+            </legend>
+            <Linhas
+              itens={c.extras}
+              min={0}
+              max={3}
+              novo={() => ""}
+              bloqueado={bloqueado}
+              onChange={(extras) => mudar({ extras })}
+              render={(x, _i, atualizar) => (
+                <input
+                  className={classeInput}
+                  value={x}
+                  disabled={bloqueado}
+                  onChange={(e) => atualizar(e.target.value)}
+                />
+              )}
+            />
+          </fieldset>
+        </div>
+      );
+    }
+    case "ordenar_frases":
+      return (
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium text-slate-700">
+            Frases na ordem correta (3 a 6): etapas de um processo, cadeia de causas ou argumento
+          </legend>
+          <Linhas
+            itens={conteudo.conteudo.frases}
+            min={3}
+            max={6}
+            novo={() => ""}
+            bloqueado={bloqueado}
+            onChange={(frases) => onChange({ tipo: "ordenar_frases", conteudo: { frases } })}
+            render={(f, i, atualizar) => (
+              <>
+                <span className="w-6 text-sm font-bold text-marca-700">{i + 1}º</span>
+                <input
+                  className={classeInput}
+                  value={f}
+                  disabled={bloqueado}
+                  onChange={(e) => atualizar(e.target.value)}
+                />
+              </>
+            )}
+          />
+        </fieldset>
+      );
+    case "interpretacao":
+    case "quem_disse": {
+      const ehCitacao = conteudo.tipo === "quem_disse";
+      const c = conteudo.conteudo;
+      const base = conteudo.tipo === "quem_disse" ? conteudo.conteudo.citacao : conteudo.conteudo.texto;
+      const opcoes = conteudo.tipo === "quem_disse" ? conteudo.conteudo.autores : conteudo.conteudo.alternativas;
+      const mudar = (novo: { base?: string; opcoes?: string[]; correta?: number }) => {
+        const b = novo.base ?? base;
+        const o = novo.opcoes ?? opcoes;
+        const correta = Math.min(novo.correta ?? c.correta, o.length - 1);
+        onChange(
+          conteudo.tipo === "quem_disse"
+            ? { tipo: "quem_disse", conteudo: { citacao: b, autores: o, correta } }
+            : { tipo: "interpretacao", conteudo: { texto: b, alternativas: o, correta } },
+        );
+      };
+      return (
+        <div className="space-y-4">
+          <Campo
+            rotulo={ehCitacao ? "Citação" : "Texto-base"}
+            dica={
+              ehCitacao
+                ? "Frase real e curta, sem o nome de quem disse. Ponha a referência em Fonte."
+                : "Trecho de fonte, de historiador ou descrição de uma charge (a imagem pode ir acima)."
+            }
+          >
+            <AreaTexto
+              rows={ehCitacao ? 3 : 5}
+              value={base}
+              disabled={bloqueado}
+              onChange={(e) => mudar({ base: e.target.value })}
+            />
+          </Campo>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              {ehCitacao
+                ? "Quem pode ter dito (marque o autor): personagens ou grupos do mesmo período"
+                : "Interpretações (marque a única sustentada pelo texto)"}
+            </legend>
+            <Linhas
+              itens={opcoes}
+              min={4}
+              max={5}
+              novo={() => ""}
+              bloqueado={bloqueado}
+              onChange={(o) => mudar({ opcoes: o })}
+              render={(alt, i, atualizar) => (
+                <>
+                  <input
+                    type="radio"
+                    name="correta"
+                    checked={c.correta === i}
+                    disabled={bloqueado}
+                    onChange={() => mudar({ correta: i })}
+                  />
+                  <span className="w-5 text-sm font-bold text-slate-500">{LETRAS[i]}</span>
+                  <input
+                    className={classeInput}
+                    value={alt}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar(e.target.value)}
+                  />
+                </>
+              )}
+            />
+          </fieldset>
+        </div>
+      );
+    }
   }
 }

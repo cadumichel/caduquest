@@ -5,6 +5,7 @@ import { QuestaoInterativa } from "@/components/QuestaoInterativa";
 import { Aviso, Botao, BotaoLink } from "@/components/ui";
 import type { EstadoJogo } from "@/lib/jogo";
 import { respostaCompleta, respostaInicial } from "@/lib/questoes/apresentacao";
+import { ESCOLHA_UNICA } from "@/lib/questoes/tipos";
 import type { Resposta } from "@/lib/questoes/tipos";
 import { carregarJogo, enviarResposta } from "../../actions";
 
@@ -269,7 +270,7 @@ function TelaQuestao({
       <Botao
         variante="sucesso"
         className="sticky bottom-4 w-full py-4 text-base shadow-lg"
-        disabled={pendente || (!completa && resposta.tipo === "multipla_escolha")}
+        disabled={pendente || (!completa && ESCOLHA_UNICA.includes(resposta.tipo))}
         onClick={() => {
           if (!completa) {
             // O diálogo do navegador tira o foco da página: não conta como saída.
