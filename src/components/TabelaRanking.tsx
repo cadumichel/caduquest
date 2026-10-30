@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { LinhaRanking } from "@/lib/ranking";
 import { Avatar } from "./Avatar";
 import { Vazio } from "./ui";
@@ -30,8 +31,10 @@ export function TabelaRanking({
             <td className="py-1.5 pr-2 font-semibold">{l.posicao}º</td>
             <td className="flex items-center gap-2 py-1.5 pr-2">
               <Avatar avatar={l.avatar} cor={l.cor} medalhas={medalhas?.get(l.alunoId) ?? 0} tamanho={26} />
-              {l.apelido}
-              {nomes?.get(l.alunoId) && <span className="text-slate-500"> · {nomes.get(l.alunoId)}</span>}
+              <Link href={`/professor/alunos/${l.alunoId}`} className="hover:text-marca-700">
+                {l.apelido}
+                {nomes?.get(l.alunoId) && <span className="text-slate-500"> · {nomes.get(l.alunoId)}</span>}
+              </Link>
             </td>
             <td className="py-1.5 pr-2 text-right tabular-nums">{formatarPontos(l.pontos)}</td>
             <td className="py-1.5 text-right tabular-nums">{l.questoes ? `${Math.round(l.acerto * 100)}%` : "–"}</td>

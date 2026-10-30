@@ -208,6 +208,9 @@ export default async function PaginaTurma({ params }: PageProps<"/professor/turm
                     {a.ultimo_acesso ? `Último acesso ${formatarDataHora(a.ultimo_acesso)}` : "Sem acesso registrado"} ·{" "}
                     {a.total_acessos} {a.total_acessos === 1 ? "acesso" : "acessos"}
                   </span>
+                  <Link href={`/professor/alunos/${a.id}`} className="ml-auto font-medium text-marca-700">
+                    Ver perfil →
+                  </Link>
                 </div>
                 <form action={atualizarAluno} className="flex flex-1 flex-wrap items-end gap-2">
                   <input type="hidden" name="id" value={a.id} />

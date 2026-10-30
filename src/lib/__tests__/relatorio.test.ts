@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { celulaCsv, marcaResultado, rotuloResultado } from "../relatorio";
+import { celulaCsv, escolhaEmTexto, marcaResultado, rotuloResultado } from "../relatorio";
 
 const r = (fracao: number | null, extra: { esgotada?: boolean; zerada?: boolean } = {}) => ({
   fracao,
@@ -31,5 +31,24 @@ describe("relatório de desempenho", () => {
   it("protege células com ; e aspas no CSV", () => {
     expect(celulaCsv('Brasil; "Império"')).toBe('"Brasil; ""Império"""');
     expect(celulaCsv(null)).toBe("");
+  });
+});
+
+describe("resposta em texto", () => {
+  const questao = {
+    tipo: "multipla_escolha" as const,
+    conteudo: { alternativas: ["Roma", "Atenas", "Esparta", "Tebas"], correta: 2 },
+  };
+
+  it("traduz a alternativa embaralhada para a ordem original", () => {
+    // O aluno viu [Tebas, Esparta, Roma, Atenas] e marcou a 3ª (Roma).
+    expect(escolhaEmTexto(questao as never, [3, 2, 0, 1], { tipo: "multipla_escolha", escolha: 2 })).toEqual({
+      aluno: "A) Roma",
+      correta: "C) Esparta",
+    });
+  });
+
+  it("deixa em branco quando o aluno não marcou", () => {
+    expect(escolhaEmTexto(questao as never, [0, 1, 2, 3], { tipo: "multipla_escolha", escolha: null })?.aluno).toBe("");
   });
 });

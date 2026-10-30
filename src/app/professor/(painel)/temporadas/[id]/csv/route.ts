@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { formatarDataHora } from "@/lib/datas";
 import { exigirProfessor } from "@/lib/professor";
 import { formatarPontos } from "@/lib/pontos";
-import { respostaCsv, rotuloResultado, type ResultadoQuestao } from "@/lib/relatorio";
+import type { Conteudo, Resposta } from "@/lib/questoes/tipos";
+import { escolhaEmTexto, respostaCsv, rotuloResultado, type ResultadoQuestao } from "@/lib/relatorio";
 
 type DesafioRelatorio = {
   id: string;
@@ -11,7 +12,14 @@ type DesafioRelatorio = {
   abre_em: string;
   desafio_questoes: {
     posicao: number;
-    questoes: { id: string; enunciado: string; capitulo: string | null; habilidades: string[] };
+    questoes: {
+      id: string;
+      tipo: string;
+      conteudo: unknown;
+      enunciado: string;
+      capitulo: string | null;
+      habilidades: string[];
+    };
   }[];
 };
 
@@ -24,6 +32,8 @@ type TentativaRelatorio = {
     pontos: number | null;
     tempo_esgotado: boolean;
     zerada_por_saida: boolean;
+    resposta: unknown;
+    permutacao: number[] | null;
   }[];
 };
 
@@ -51,13 +61,15 @@ export async function GET(_: Request, ctx: RouteContext<"/professor/temporadas/[
       .order("apelido"),
     supabase
       .from("desafios")
-      .select("id, titulo, tipo, abre_em, desafio_questoes(posicao, questoes(id, enunciado, capitulo, habilidades))")
+      .select(
+        "id, titulo, tipo, abre_em, desafio_questoes(posicao, questoes(id, tipo, conteudo, enunciado, capitulo, habilidades))",
+      )
       .eq("temporada_id", id)
       .order("abre_em"),
     supabase
       .from("tentativas")
       .select(
-        "aluno_id, desafio_id, respostas(questao_id, fracao, pontos, tempo_esgotado, zerada_por_saida), desafios!inner(temporada_id)",
+        "aluno_id, desafio_id, respostas(questao_id, fracao, pontos, tempo_esgotado, zerada_por_saida, resposta, permutacao), desafios!inner(temporada_id)",
       )
       .eq("desafios.temporada_id", id),
   ]);
@@ -77,6 +89,8 @@ export async function GET(_: Request, ctx: RouteContext<"/professor/temporadas/[
       "Capítulo",
       "Habilidades",
       "Resultado",
+      "Resposta do aluno",
+      "Resposta correta",
       "Acerto",
       "Pontos",
     ],
@@ -93,6 +107,11 @@ export async function GET(_: Request, ctx: RouteContext<"/professor/temporadas/[
           esgotada: r.tempo_esgotado,
           zerada: r.zerada_por_saida,
         };
+        const escolha = escolhaEmTexto(
+          { tipo: q.tipo, conteudo: q.conteudo } as Conteudo,
+          r?.permutacao,
+          r?.resposta as Resposta | null,
+        );
         linhas.push([
           a.apelido,
           a.nome_real,
@@ -103,6 +122,8 @@ export async function GET(_: Request, ctx: RouteContext<"/professor/temporadas/[
           q.capitulo,
           (q.habilidades ?? []).join(", "),
           t ? rotuloResultado(resultado) : "não fez",
+          !r ? "" : escolha ? escolha.aluno : "ver no app",
+          escolha?.correta ?? "",
           resultado?.fracao === null || resultado?.fracao === undefined
             ? ""
             : String(Math.round(resultado.fracao * 100) / 100).replace(".", ","),
