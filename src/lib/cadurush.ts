@@ -2,6 +2,8 @@
 
 export const PONTOS_RELAMPAGO = 30;
 export const DURACAO_PADRAO_MIN = 45;
+/** Tentativas de código por aluno em cada código do dia (o professor pode trocar o código para zerar). */
+export const LIMITE_TENTATIVAS_CODIGO = 10;
 
 // Sem letras e números que se confundem no projetor (0/O, 1/I/L, 2/Z, 5/S, 8/B).
 const ALFABETO = "ACDEFGHJKMNPQRTUVWXY34679";

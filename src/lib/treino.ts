@@ -6,7 +6,7 @@ import { montarVista } from "@/lib/questoes/apresentacao";
 import { calcularPontos, corrigir } from "@/lib/questoes/correcao";
 import { embaralhar, permutacaoAleatoria, permutacaoValida } from "@/lib/questoes/embaralhar";
 import { schemaResposta, tamanhoPermutacao, type Conteudo, type Vista } from "@/lib/questoes/tipos";
-import { situacaoDesafio, urlImagem, type Desafio } from "@/lib/tipos-banco";
+import { gabaritoLiberado, urlImagem, type Desafio } from "@/lib/tipos-banco";
 
 /**
  * Refazer um desafio como treino: nada é gravado, então ranking, XP e medalhas
@@ -38,7 +38,8 @@ async function desafioParaTreino(
 ): Promise<{ desafio: Desafio } | { erro: string }> {
   const desafio = await desafioDoAluno(db, aluno, desafioId);
   if (!desafio) return { erro: "Desafio não encontrado." };
-  if (situacaoDesafio(desafio) !== "encerrado") return { erro: "O treino abre quando o desafio fechar." };
+  // Mesmo prazo do gabarito: alguns minutos depois de fechar, quando ninguém mais responde.
+  if (!gabaritoLiberado(desafio)) return { erro: "O treino abre alguns minutos depois que o desafio fecha." };
   return { desafio };
 }
 

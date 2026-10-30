@@ -1,3 +1,4 @@
+import { JANELA_APOS_FECHAR_S } from "./questoes/correcao";
 import type { TipoQuestao } from "@/lib/questoes/tipos";
 
 export type Escola = { id: string; nome: string; periodo: "bimestre" | "trimestre" };
@@ -92,6 +93,12 @@ export function situacaoDesafio(d: Pick<Desafio, "abre_em" | "fecha_em">, agora 
   if (agora > new Date(d.fecha_em)) return "encerrado" as const;
   return "aberto" as const;
 }
+
+/** Quando o gabarito do desafio pode ser mostrado: um pouco depois do fechamento. */
+export const gabaritoLiberadoEm = (d: Pick<Desafio, "fecha_em">) =>
+  new Date(new Date(d.fecha_em).getTime() + JANELA_APOS_FECHAR_S * 1000);
+
+export const gabaritoLiberado = (d: Pick<Desafio, "fecha_em">, agora = new Date()) => agora > gabaritoLiberadoEm(d);
 
 export function urlImagem(path: string | null): string | null {
   if (!path) return null;
