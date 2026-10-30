@@ -98,6 +98,18 @@ export async function redefinirPin(alunoId: string) {
   revalidatePath(`/professor/turmas/${aluno.turma_id}`);
 }
 
+/** Acessibilidade: aluno que navega pelo teclado não perde a questão ao apertar uma tecla. */
+export async function alternarTeclado(alunoId: string, liberado: boolean) {
+  const { supabase } = await exigirProfessor();
+  const { data } = await supabase
+    .from("alunos")
+    .update({ teclado_liberado: liberado })
+    .eq("id", alunoId)
+    .select("turma_id")
+    .single();
+  if (data) revalidatePath(`/professor/turmas/${data.turma_id}`);
+}
+
 export async function removerAluno(alunoId: string) {
   const { supabase } = await exigirProfessor();
   const { data } = await supabase.from("alunos").delete().eq("id", alunoId).select("turma_id").single();

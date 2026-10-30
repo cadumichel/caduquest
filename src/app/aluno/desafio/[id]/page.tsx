@@ -15,7 +15,7 @@ export default async function PaginaDesafio({ params }: PageProps<"/aluno/desafi
   const desafio = await desafioDoAluno(db, aluno, id);
   if (!desafio) notFound();
 
-  const [{ data: tentativa }, { count }] = await Promise.all([
+  const [{ data: tentativa }, { count }, { data: perfil }] = await Promise.all([
     db
       .from("tentativas")
       .select("concluida_em, indice_atual, ordem")
@@ -23,6 +23,7 @@ export default async function PaginaDesafio({ params }: PageProps<"/aluno/desafi
       .eq("aluno_id", aluno.id)
       .maybeSingle(),
     db.from("desafio_questoes").select("*", { count: "exact", head: true }).eq("desafio_id", id),
+    db.from("alunos").select("teclado_liberado").eq("id", aluno.id).single(),
   ]);
   const concluido = tentativa && (tentativa.concluida_em || tentativa.indice_atual >= tentativa.ordem.length);
   if (concluido || situacaoDesafio(desafio) === "encerrado") redirect(`/aluno/desafio/${id}/resultado`);
@@ -36,6 +37,7 @@ export default async function PaginaDesafio({ params }: PageProps<"/aluno/desafi
       jaComecou={Boolean(tentativa)}
       tempoFixo={desafio.tempo_por_questao_s}
       saidaZera={desafio.saida_zera_questao}
+      tecladoLiberado={Boolean(perfil?.teclado_liberado)}
       relampago={desafio.tipo === "relampago"}
       pontosPorAcerto={desafio.pontos_por_acerto}
     />

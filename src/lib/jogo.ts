@@ -15,6 +15,7 @@ import { tamanhoPermutacao, type Conteudo, type Resposta, type Vista } from "@/l
 import type { Desafio, RespostaBanco, Tentativa } from "@/lib/tipos-banco";
 import { situacaoDesafio, urlImagem } from "@/lib/tipos-banco";
 import { arredondarPontos } from "./pontos";
+import { AVISO_ZERADA, type MotivoZerada } from "./tela-protegida";
 
 export type QuestaoServida = {
   id: string;
@@ -134,7 +135,7 @@ async function recalcularTentativa(db: SupabaseClient, tentativa: Tentativa, nov
 /**
  * Registra a resposta (ou o tempo esgotado) de uma questão servida.
  * Só a primeira gravação vale: um segundo envio da mesma questão é ignorado.
- * Devolve true se a questão foi zerada porque o aluno saiu da tela.
+ * Devolve o motivo se a questão foi zerada (saída da tela, tecla ou tela alterada).
  */
 async function registrar(
   db: SupabaseClient,
@@ -144,10 +145,12 @@ async function registrar(
   questao: QuestaoBanco,
   resposta: Resposta | null,
   saidasTela: number,
-) {
+  motivo: MotivoZerada | null,
+): Promise<MotivoZerada | null> {
   const agora = new Date();
   const esgotado = tempoEsgotado(new Date(linha.servida_em), agora, tempoDaQuestao(desafio, questao));
-  const zerada = !esgotado && desafio.saida_zera_questao && saidasTela > 0;
+  const causa = esgotado || !desafio.saida_zera_questao ? null : (motivo ?? (saidasTela > 0 ? "saida" : null));
+  const zerada = causa !== null;
   const fracao = esgotado || zerada ? 0 : corrigir(comoConteudo(questao), linha.permutacao, resposta);
   const { data: gravada } = await db
     .from("respostas")
@@ -158,13 +161,14 @@ async function registrar(
       pontos: calcularPontos(fracao, desafio.pontos_por_acerto),
       tempo_esgotado: esgotado,
       zerada_por_saida: zerada,
+      motivo_zerada: causa,
       saidas_tela: Math.max(0, Math.min(saidasTela, 999)),
     })
     .eq("id", linha.id)
     .is("respondida_em", null)
     .select("id");
   if (gravada?.length) await recalcularTentativa(db, tentativa, tentativa.indice_atual + 1);
-  return Boolean(gravada?.length) && zerada;
+  return gravada?.length ? causa : null;
 }
 
 async function obterOuCriarTentativa(db: SupabaseClient, desafioId: string, alunoId: string): Promise<Tentativa> {
@@ -277,7 +281,7 @@ export async function estadoAtual(
     const agora = new Date();
     const tempoLimite = tempoDaQuestao(desafio, questao);
     if (tempoEsgotado(new Date(linha.servida_em), agora, tempoLimite)) {
-      await registrar(db, desafio, tentativa, linha, questao, null, 0);
+      await registrar(db, desafio, tentativa, linha, questao, null, 0, null);
       continue;
     }
 
@@ -318,6 +322,7 @@ export async function responderQuestao(
   questaoId: string,
   resposta: Resposta | null,
   saidasTela: number,
+  motivo: MotivoZerada | null = null,
 ): Promise<EstadoJogo> {
   const desafio = await desafioDoAluno(db, aluno, desafioId);
   if (!desafio) return { fase: "erro", mensagem: "Desafio não encontrado." };
@@ -335,7 +340,7 @@ export async function responderQuestao(
   if (!tentativa) return estadoAtual(db, aluno, desafioId);
   const t = tentativa as Tentativa;
 
-  let zerada = false;
+  let zerada: MotivoZerada | null = null;
   if (t.ordem[t.indice_atual] === questaoId) {
     const { data: linha } = await db
       .from("respostas")
@@ -345,12 +350,17 @@ export async function responderQuestao(
       .maybeSingle();
     if (linha && !linha.respondida_em) {
       const questao = await carregarQuestao(db, questaoId);
-      zerada = await registrar(db, desafio, t, linha as RespostaBanco, questao, resposta, saidasTela);
+      // Teclado liberado pelo professor (acessibilidade): tecla não zera.
+      if (motivo === "teclado") {
+        const { data: a } = await db.from("alunos").select("teclado_liberado").eq("id", aluno.id).single();
+        if (a?.teclado_liberado) motivo = null;
+      }
+      zerada = await registrar(db, desafio, t, linha as RespostaBanco, questao, resposta, saidasTela, motivo);
     }
   }
   const estado = await estadoAtual(db, aluno, desafioId);
   if (zerada && estado.fase !== "erro") {
-    estado.aviso = "Você saiu da tela durante a questão anterior, então ela valeu zero.";
+    estado.aviso = AVISO_ZERADA[zerada];
   }
   return estado;
 }

@@ -26,6 +26,7 @@ import { permutacaoAleatoria, permutacaoValida } from "@/lib/questoes/embaralhar
 import { schemaResposta, tamanhoPermutacao, type Conteudo, type Vista } from "@/lib/questoes/tipos";
 import { errosParaRevisar, QUESTOES_POR_RODADA, registrarRevisao } from "@/lib/revisao";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
+import { ehMotivoZerada } from "@/lib/tela-protegida";
 import { urlImagem } from "@/lib/tipos-banco";
 
 export async function carregarJogo(desafioId: string, codigo?: string): Promise<EstadoJogo> {
@@ -43,6 +44,7 @@ export async function enviarResposta(
   questaoId: string,
   resposta: unknown,
   saidasTela: number,
+  motivo: unknown = null,
 ): Promise<EstadoJogo> {
   const aluno = await exigirAluno();
   const r = resposta === null ? null : schemaResposta.safeParse(resposta);
@@ -53,6 +55,7 @@ export async function enviarResposta(
     questaoId,
     r && r.success ? r.data : null,
     Number.isFinite(saidasTela) ? saidasTela : 0,
+    ehMotivoZerada(motivo) ? motivo : null,
   );
 }
 

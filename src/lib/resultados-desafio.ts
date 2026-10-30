@@ -14,6 +14,9 @@ export type LinhaResultado = {
   esgotadas: number;
   saidasTela: number;
   zeradasPorSaida: number;
+  /** Zeradas por tecla apertada ou por tela alterada (extensão), dentro de zeradasPorSaida. */
+  zeradasTeclado: number;
+  zeradasTela: number;
   /** Resultado em cada questão (por id); ausente = não chegou nela. */
   questoes: Map<string, ResultadoQuestao>;
 };
@@ -28,7 +31,7 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
   const { data: respostas } = tentativas.length
     ? await db
         .from("respostas")
-        .select("tentativa_id, questao_id, fracao, tempo_esgotado, saidas_tela, zerada_por_saida")
+        .select("tentativa_id, questao_id, fracao, tempo_esgotado, saidas_tela, zerada_por_saida, motivo_zerada")
         .in(
           "tentativa_id",
           tentativas.map((t) => t.id),
@@ -41,10 +44,19 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
           tempo_esgotado: boolean;
           saidas_tela: number;
           zerada_por_saida: boolean;
+          motivo_zerada: string | null;
         }[],
       };
 
-  type Agregado = { acertos: number; respondidas: number; esgotadas: number; saidas: number; zeradas: number };
+  type Agregado = {
+    acertos: number;
+    respondidas: number;
+    esgotadas: number;
+    saidas: number;
+    zeradas: number;
+    teclado: number;
+    tela: number;
+  };
   const porTentativa = new Map<string, Agregado>();
   const porQuestao = new Map<string, { soma: number; n: number }>();
   const detalhe = new Map<string, Map<string, ResultadoQuestao>>();
@@ -56,7 +68,15 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
       zerada: r.zerada_por_saida,
     });
     detalhe.set(r.tentativa_id, doAluno);
-    const agg = porTentativa.get(r.tentativa_id) ?? { acertos: 0, respondidas: 0, esgotadas: 0, saidas: 0, zeradas: 0 };
+    const agg = porTentativa.get(r.tentativa_id) ?? {
+      acertos: 0,
+      respondidas: 0,
+      esgotadas: 0,
+      saidas: 0,
+      zeradas: 0,
+      teclado: 0,
+      tela: 0,
+    };
     if (r.fracao !== null) {
       agg.acertos += Number(r.fracao);
       agg.respondidas += 1;
@@ -67,6 +87,8 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
     }
     if (r.tempo_esgotado) agg.esgotadas += 1;
     if (r.zerada_por_saida) agg.zeradas += 1;
+    if (r.motivo_zerada === "teclado") agg.teclado += 1;
+    if (r.motivo_zerada === "tela_alterada") agg.tela += 1;
     agg.saidas += r.saidas_tela;
     porTentativa.set(r.tentativa_id, agg);
   }
@@ -86,6 +108,8 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
       esgotadas: agg?.esgotadas ?? 0,
       saidasTela: agg?.saidas ?? 0,
       zeradasPorSaida: agg?.zeradas ?? 0,
+      zeradasTeclado: agg?.teclado ?? 0,
+      zeradasTela: agg?.tela ?? 0,
       questoes: (t && detalhe.get(t.id)) || new Map(),
     };
   });

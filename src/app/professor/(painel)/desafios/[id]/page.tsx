@@ -96,7 +96,10 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
                 <th className="py-2 text-right" title="Questões com tempo esgotado">
                   ⏱️
                 </th>
-                <th className="py-2 text-right" title="Vezes que saiu da tela durante o desafio">
+                <th
+                  className="py-2 text-right"
+                  title="Vezes que saiu da tela e questões zeradas (saída, tecla ou extensão que mexeu na tela)"
+                >
                   Saídas
                 </th>
               </tr>
@@ -125,6 +128,17 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
                         {l.zeradasPorSaida} zerada{l.zeradasPorSaida > 1 ? "s" : ""}
                       </span>
                     )}
+                    {l.zeradasTeclado > 0 && (
+                      <span className="block text-xs font-normal text-red-700">⌨️ {l.zeradasTeclado} por tecla</span>
+                    )}
+                    {l.zeradasTela > 0 && (
+                      <span
+                        className="block text-xs font-normal text-red-700"
+                        title="Algo de fora do app mexeu na tela"
+                      >
+                        🧩 {l.zeradasTela} por extensão
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -132,7 +146,7 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
           </table>
           <p className="mt-3 text-xs text-slate-500">
             {desafio.saida_zera_questao
-              ? "Neste desafio, sair da tela zera a questão em que o aluno estava."
+              ? "Neste desafio, sair da tela, apertar uma tecla ou usar extensão que mexe na tela zera a questão em que o aluno estava."
               : "Pesquisa liberada: as saídas da tela são só registradas e não tiram pontos."}
           </p>
         </Cartao>

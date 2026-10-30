@@ -555,7 +555,9 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         fecha: formatarDataHora(fecha),
         pontos_por_acerto: pontos,
         tempo_por_questao: args.tempo_por_questao_s ? `${args.tempo_por_questao_s} s em todas` : "o de cada questão",
-        pesquisa: args.saida_zera_questao ? "bloqueada (sair da tela zera a questão)" : "liberada",
+        pesquisa: args.saida_zera_questao
+          ? "bloqueada (sair da tela, apertar tecla ou extensão que mexe na tela zera a questão)"
+          : "liberada",
         questoes: args.questoes.map((id, i) => `${i + 1}. ${porId.get(id)!.enunciado}`),
       };
       if (!args.confirmar) return resultado({ previa, proximo_passo: "Mostre a prévia e confirme com o professor." });
