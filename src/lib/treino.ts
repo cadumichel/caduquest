@@ -10,9 +10,8 @@ import { situacaoDesafio, urlImagem, type Desafio } from "@/lib/tipos-banco";
 
 /**
  * Refazer um desafio como treino: nada é gravado, então ranking, XP e medalhas
- * continuam contando só a primeira tentativa. Com o desafio aberto, só quem já
- * terminou pode treinar, e o treino mostra apenas a nota final (o gabarito só
- * sai quando o desafio fecha, para ninguém passar as respostas).
+ * continuam contando só a primeira tentativa. Só depois que o desafio fecha:
+ * antes disso, corrigir o treino questão a questão revelaria o gabarito.
  */
 
 export type QuestaoTreino = {
@@ -36,23 +35,11 @@ async function desafioParaTreino(
   db: SupabaseClient,
   aluno: AlunoSessao,
   desafioId: string,
-): Promise<{ desafio: Desafio; encerrado: boolean } | { erro: string }> {
+): Promise<{ desafio: Desafio } | { erro: string }> {
   const desafio = await desafioDoAluno(db, aluno, desafioId);
   if (!desafio) return { erro: "Desafio não encontrado." };
-  const situacao = situacaoDesafio(desafio);
-  if (situacao === "agendado") return { erro: "Este desafio ainda não abriu." };
-  if (situacao === "aberto") {
-    const { data: t } = await db
-      .from("tentativas")
-      .select("concluida_em, indice_atual, ordem")
-      .eq("desafio_id", desafio.id)
-      .eq("aluno_id", aluno.id)
-      .maybeSingle();
-    if (!t || !(t.concluida_em || t.indice_atual >= t.ordem.length)) {
-      return { erro: "Termine o desafio valendo antes de treinar com ele." };
-    }
-  }
-  return { desafio, encerrado: situacao === "encerrado" };
+  if (situacaoDesafio(desafio) !== "encerrado") return { erro: "O treino abre quando o desafio fechar." };
+  return { desafio };
 }
 
 export async function iniciarTreino(db: SupabaseClient, aluno: AlunoSessao, desafioId: string) {
@@ -85,13 +72,10 @@ export async function iniciarTreino(db: SupabaseClient, aluno: AlunoSessao, desa
       permutacao,
     };
   });
-  return { questoes, encerrado: ok.encerrado, pontosPorAcerto: ok.desafio.pontos_por_acerto };
+  return { questoes, pontosPorAcerto: ok.desafio.pontos_por_acerto };
 }
 
-/**
- * Corrige respostas do treino. Desafio encerrado: devolve o gabarito de cada uma.
- * Desafio aberto: devolve só o total, sem dizer quais acertou.
- */
+/** Corrige respostas do treino e devolve o gabarito de cada uma. */
 export async function corrigirTreino(db: SupabaseClient, aluno: AlunoSessao, desafioId: string, itens: ItemTreino[]) {
   const ok = await desafioParaTreino(db, aluno, desafioId);
   if ("erro" in ok) return ok;
@@ -124,7 +108,6 @@ export async function corrigirTreino(db: SupabaseClient, aluno: AlunoSessao, des
   return {
     acertos,
     pontos: calcularPontos(acertos, ok.desafio.pontos_por_acerto),
-    // Com o desafio aberto, a nota sai sem dizer quais questões acertou.
-    correcoes: ok.encerrado ? correcoes : [],
+    correcoes,
   };
 }

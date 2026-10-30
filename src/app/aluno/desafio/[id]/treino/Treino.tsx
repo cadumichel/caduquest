@@ -5,7 +5,7 @@ import { QuestaoInterativa } from "@/components/QuestaoInterativa";
 import { Aviso, Botao, BotaoLink } from "@/components/ui";
 import { respostaCompleta, respostaInicial } from "@/lib/questoes/apresentacao";
 import { ESCOLHA_UNICA, type Resposta } from "@/lib/questoes/tipos";
-import type { CorrecaoTreino, ItemTreino, QuestaoTreino } from "@/lib/treino";
+import type { CorrecaoTreino, QuestaoTreino } from "@/lib/treino";
 import { comecarTreino, corrigirRespostasTreino } from "../../../actions";
 
 type Placar = { acertos: number; pontos: number };
@@ -13,16 +13,11 @@ type Placar = { acertos: number; pontos: number };
 /** Nota com até 2 casas decimais, no formato brasileiro. */
 const nota = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
 
-/**
- * Refazer o desafio como treino, sem tempo e sem valer ranking nem XP.
- * Desafio encerrado: gabarito logo após cada resposta. Aberto: só a nota no fim.
- */
+/** Refazer o desafio (já fechado) como treino, sem tempo e sem valer ranking nem XP, com gabarito a cada resposta. */
 export function Treino({ desafioId, titulo }: { desafioId: string; titulo: string }) {
   const [questoes, setQuestoes] = useState<QuestaoTreino[] | null>(null);
-  const [encerrado, setEncerrado] = useState(false);
   const [indice, setIndice] = useState(0);
   const [resposta, setResposta] = useState<Resposta | null>(null);
-  const [itens, setItens] = useState<ItemTreino[]>([]);
   const [correcao, setCorrecao] = useState<CorrecaoTreino | null>(null);
   const [placar, setPlacar] = useState<Placar>({ acertos: 0, pontos: 0 });
   const [fim, setFim] = useState(false);
@@ -36,9 +31,7 @@ export function Treino({ desafioId, titulo }: { desafioId: string; titulo: strin
         const r = await comecarTreino(desafioId);
         if ("erro" in r) return setErro(r.erro);
         setQuestoes(r.questoes);
-        setEncerrado(r.encerrado);
         setIndice(0);
-        setItens([]);
         setCorrecao(null);
         setPlacar({ acertos: 0, pontos: 0 });
         setFim(false);
@@ -65,24 +58,12 @@ export function Treino({ desafioId, titulo }: { desafioId: string; titulo: strin
     iniciar(async () => {
       setErro(null);
       const item = { questaoId: q.id, permutacao: q.permutacao, resposta: r };
-      const ultima = questoes !== null && indice === questoes.length - 1;
       try {
-        if (encerrado) {
-          const c = await corrigirRespostasTreino(desafioId, [item]);
-          if ("erro" in c) return setErro(c.erro);
-          setPlacar((p) => ({ acertos: p.acertos + c.acertos, pontos: p.pontos + c.pontos }));
-          setCorrecao(c.correcoes[0] ?? null);
-          if (!c.correcoes[0]) avancar();
-          return;
-        }
-        // Desafio ainda aberto: corrige tudo de uma vez no fim, sem mostrar questão por questão.
-        const todos = [...itens.filter((i) => i.questaoId !== q.id), item];
-        setItens(todos);
-        if (!ultima) return avancar();
-        const c = await corrigirRespostasTreino(desafioId, todos);
+        const c = await corrigirRespostasTreino(desafioId, [item]);
         if ("erro" in c) return setErro(c.erro);
-        setPlacar({ acertos: c.acertos, pontos: c.pontos });
-        setFim(true);
+        setPlacar((p) => ({ acertos: p.acertos + c.acertos, pontos: p.pontos + c.pontos }));
+        setCorrecao(c.correcoes[0] ?? null);
+        if (!c.correcoes[0]) avancar();
       } catch {
         setErro("Falha de conexão. Tente de novo.");
       }
@@ -106,10 +87,7 @@ export function Treino({ desafioId, titulo }: { desafioId: string; titulo: strin
             <p className="text-sm text-slate-500">acertos</p>
           </div>
         </div>
-        <Aviso tipo="info">
-          Treino não conta para o ranking nem para o XP: vale só a primeira tentativa.
-          {!encerrado && " O gabarito de cada questão sai quando o desafio fechar."}
-        </Aviso>
+        <Aviso tipo="info">Treino não conta para o ranking nem para o XP: vale só a primeira tentativa.</Aviso>
         <div className="flex flex-col gap-3">
           <Botao disabled={pendente} onClick={comecar}>
             {pendente ? "Carregando…" : "Treinar de novo"}

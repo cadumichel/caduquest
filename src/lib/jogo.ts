@@ -396,8 +396,10 @@ export async function eliminarAlternativa(
     .update({ eliminadas })
     .eq("id", linha.id)
     .is("respondida_em", null)
+    // Trava otimista: toques simultâneos leem o mesmo estado e só um grava.
+    .eq("eliminadas", `{${antes.join(",")}}`)
     .select("id");
-  if (!gravada?.length) return { erro: "Esta questão já passou." };
+  if (!gravada?.length) return { erro: "Não foi possível eliminar agora. Tente de novo." };
   return {
     eliminadas: eliminadasNaVista(linha.permutacao, eliminadas),
     podeEliminar: candidatasEliminacao(conteudo, eliminadas).length > 0,

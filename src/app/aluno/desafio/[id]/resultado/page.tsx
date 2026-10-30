@@ -124,7 +124,7 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
           })}
         </section>
       )}
-      {(encerrado || tentativa.concluida_em || tentativa.indice_atual >= total) && (
+      {encerrado && (
         <div className="space-y-2">
           <BotaoLink href={`/aluno/desafio/${id}/treino`}>🏋️ Refazer como treino</BotaoLink>
           <p className="text-center text-xs text-slate-500">

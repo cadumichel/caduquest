@@ -94,8 +94,8 @@ export function Jogo({
             {DICAS_POR_TEMPORADA} dicas. Use quando quiser; acabou, só na próxima temporada.
           </li>
           <li>
-            🎯 Só a primeira tentativa vale para o ranking e o XP. Depois você pode refazer como treino. O gabarito sai
-            quando o desafio fechar.
+            🎯 Só a primeira tentativa vale para o ranking e o XP. Quando o desafio fechar, saem o gabarito e a opção de
+            refazer como treino.
           </li>
         </ul>
         {pedirCodigo && (
