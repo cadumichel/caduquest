@@ -8,8 +8,8 @@ export const ehMotivoZerada = (v: unknown): v is MotivoZerada =>
 export const AVISO_ZERADA: Record<MotivoZerada, string> = {
   saida: "Você saiu da tela durante a questão anterior, então ela valeu zero.",
   teclado: "Você apertou uma tecla durante a questão anterior, então ela valeu zero.",
-  tela_alterada:
-    "A tela da questão anterior foi alterada por algo de fora do app (uma extensão do navegador, por exemplo), então ela valeu zero.",
+  // Genérico de propósito: o aluno não deve saber que extensões são detectadas.
+  tela_alterada: "A questão anterior valeu zero porque as regras da pesquisa bloqueada não foram seguidas.",
 };
 
 /** Teclas que o celular ou o sistema podem mandar sem o aluno digitar nada. */

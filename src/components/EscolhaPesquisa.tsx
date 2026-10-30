@@ -10,7 +10,7 @@ const OPCOES = [
     bloqueada: true,
     titulo: "🚫 Pesquisa bloqueada",
     texto:
-      "Trocar de aba, de app ou de janela, apertar uma tecla ou usar extensão que mexe na tela durante uma questão faz ela valer zero. O aluno é avisado antes.",
+      "Trocar de aba, de app ou de janela, apertar uma tecla ou usar extensão que mexe na tela durante uma questão faz ela valer zero. O aluno é avisado da saída e do teclado; das extensões, não.",
   },
 ] as const;
 
