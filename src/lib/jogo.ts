@@ -8,6 +8,7 @@ import { embaralhar, permutacaoAleatoria } from "@/lib/questoes/embaralhar";
 import { tamanhoPermutacao, type Conteudo, type Resposta, type Vista } from "@/lib/questoes/tipos";
 import type { Desafio, RespostaBanco, Tentativa } from "@/lib/tipos-banco";
 import { situacaoDesafio, urlImagem } from "@/lib/tipos-banco";
+import { arredondarPontos } from "./pontos";
 
 export type QuestaoServida = {
   id: string;
@@ -66,7 +67,7 @@ const tempoDaQuestao = (desafio: Desafio, q: QuestaoBanco) => desafio.tempo_por_
 
 async function recalcularTentativa(db: SupabaseClient, tentativa: Tentativa, novoIndice: number) {
   const { data: respostas } = await db.from("respostas").select("pontos").eq("tentativa_id", tentativa.id);
-  const pontos = (respostas ?? []).reduce((s, r) => s + Number(r.pontos ?? 0), 0);
+  const pontos = arredondarPontos((respostas ?? []).reduce((s, r) => s + Number(r.pontos ?? 0), 0));
   await db
     .from("tentativas")
     .update({

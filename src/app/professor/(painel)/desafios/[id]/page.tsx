@@ -15,6 +15,7 @@ import { resultadosDoDesafio } from "@/lib/resultados-desafio";
 import { situacaoDesafio, type Desafio, type Questao } from "@/lib/tipos-banco";
 import { atualizarJanelaDesafio, excluirDesafio } from "../../actions";
 import { PainelRelampago } from "./PainelRelampago";
+import { formatarPontos } from "@/lib/pontos";
 
 export const metadata: Metadata = { title: "Desafio" };
 
@@ -101,7 +102,7 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
                   <td className="py-1.5">
                     <Etiqueta cor={COR_SITUACAO[l.situacao]}>{l.situacao}</Etiqueta>
                   </td>
-                  <td className="py-1.5 text-right tabular-nums">{l.pontos}</td>
+                  <td className="py-1.5 text-right tabular-nums">{formatarPontos(l.pontos)}</td>
                   <td className="py-1.5 text-right tabular-nums">
                     {l.acertos}/{questoes.length}
                   </td>

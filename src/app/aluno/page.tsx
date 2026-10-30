@@ -19,6 +19,7 @@ import { situacaoDaTemporada } from "@/lib/temporada-dados";
 import { MetaTurma } from "@/components/MetaTurma";
 import { escolherFundo, FUNDOS_TEMPORADA, imagemDoFundo } from "@/lib/fundos-temporada";
 import { situacaoDesafio, type Desafio, type Tentativa } from "@/lib/tipos-banco";
+import { formatarPontos } from "@/lib/pontos";
 
 export const metadata: Metadata = { title: "Início" };
 
@@ -111,7 +112,7 @@ export default async function Inicio() {
           {temporada.narrativa && <p className="mt-2 text-sm text-marca-100">{temporada.narrativa}</p>}
           <div className="mt-5 grid grid-cols-3 gap-3 text-center">
             <div className="rounded-2xl bg-white/10 p-3 ring-1 ring-white/15 backdrop-blur-sm">
-              <p className="text-2xl font-bold">{eu?.pontos ?? 0}</p>
+              <p className="text-2xl font-bold">{formatarPontos(eu?.pontos)}</p>
               <p className="text-xs text-marca-100">pontos</p>
             </div>
             <Link href="/aluno/ranking" className="rounded-2xl bg-white/10 p-3 ring-1 ring-white/15 backdrop-blur-sm">
@@ -150,7 +151,7 @@ export default async function Inicio() {
                   </div>
                   {concluido ? (
                     <BotaoLink href={`/aluno/desafio/${d.id}/resultado`} variante="secundario">
-                      ✓ {Number(t!.pontos)} pts
+                      ✓ {formatarPontos(t!.pontos)} pts
                     </BotaoLink>
                   ) : (
                     <Link
@@ -173,7 +174,7 @@ export default async function Inicio() {
                 </div>
                 {concluido ? (
                   <BotaoLink href={`/aluno/desafio/${d.id}/resultado`} variante="secundario">
-                    ✓ {Number(t!.pontos)} pts
+                    ✓ {formatarPontos(t!.pontos)} pts
                   </BotaoLink>
                 ) : (
                   <BotaoLink href={`/aluno/desafio/${d.id}`}>▶ {t ? "Continuar" : "Começar desafio"}</BotaoLink>
@@ -353,7 +354,7 @@ export default async function Inicio() {
                   <Etiqueta cor="azul">Em breve</Etiqueta>
                 ) : t ? (
                   <BotaoLink href={`/aluno/desafio/${d.id}/resultado`} variante="secundario">
-                    {Number(t.pontos)} pts · ver gabarito
+                    {formatarPontos(t.pontos)} pts · ver gabarito
                   </BotaoLink>
                 ) : (
                   <Etiqueta>Não feito</Etiqueta>

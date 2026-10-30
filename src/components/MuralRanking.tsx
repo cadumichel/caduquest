@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
 import type { LinhaRanking } from "@/lib/ranking";
+import { formatarPontos } from "@/lib/pontos";
 
 const DEGRAU = {
   1: { altura: "h-24", cor: "from-amber-300 to-amber-500", coroa: "👑", tamanho: 64 },
@@ -94,7 +95,7 @@ function Degrau({ linha, medalhas, eu }: { linha: LinhaRanking; medalhas: number
       >
         {eu ? "Você" : linha.apelido}
       </p>
-      <p className="text-xs font-semibold tabular-nums text-slate-600">{linha.pontos} pts</p>
+      <p className="text-xs font-semibold tabular-nums text-slate-600">{formatarPontos(linha.pontos)} pts</p>
       <div
         className={`mt-1 flex w-full items-start justify-center rounded-t-xl bg-gradient-to-b ${d.cor} ${d.altura} pt-1 text-2xl font-black text-white/90`}
       >
@@ -110,7 +111,7 @@ function Linha({ linha, medalhas, eu }: { linha: LinhaRanking; medalhas: number;
       <span className="w-7 text-center text-sm font-bold text-slate-500">{linha.posicao}º</span>
       <Avatar avatar={linha.avatar} cor={linha.cor} medalhas={medalhas} tamanho={32} />
       <span className="flex-1 truncate">{eu ? `Você (${linha.apelido})` : linha.apelido}</span>
-      <span className="text-sm tabular-nums">{linha.pontos} pts</span>
+      <span className="text-sm tabular-nums">{formatarPontos(linha.pontos)} pts</span>
     </li>
   );
 }

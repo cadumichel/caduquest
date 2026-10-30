@@ -20,6 +20,7 @@ import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { rankingDaTemporada } from "@/lib/temporada-dados";
 import { EscolherAvatar } from "./EscolherAvatar";
 import { PersonalizarPerfil } from "./PersonalizarPerfil";
+import { formatarPontos } from "@/lib/pontos";
 
 export const metadata: Metadata = { title: "Meu perfil" };
 
@@ -116,7 +117,7 @@ export default async function Perfil() {
 
         <div className="relative mt-4 grid grid-cols-3 gap-2 text-center">
           <Numero valor={eu ? `${eu.posicao}º` : "–"} rotulo={total ? `de ${total} na turma` : "posição"} />
-          <Numero valor={String(eu?.pontos ?? 0)} rotulo="pontos" />
+          <Numero valor={formatarPontos(eu?.pontos)} rotulo="pontos" />
           <Numero valor={`${medalhas} 🏅`} rotulo={medalhas === 1 ? "desafio vencido" : "desafios vencidos"} />
         </div>
         <div className="relative mt-2 grid grid-cols-2 gap-2 text-center">

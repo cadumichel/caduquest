@@ -8,6 +8,7 @@ import { desafioDoAluno } from "@/lib/jogo";
 import type { Conteudo, Resposta } from "@/lib/questoes/tipos";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { situacaoDesafio, urlImagem, type Questao, type RespostaBanco, type Tentativa } from "@/lib/tipos-banco";
+import { formatarPontos } from "@/lib/pontos";
 
 export const metadata: Metadata = { title: "Resultado" };
 
@@ -59,7 +60,7 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
 
       <div className="grid grid-cols-2 gap-3 text-center">
         <Cartao>
-          <p className="text-3xl font-extrabold text-marca-700">{Number(tentativa.pontos)}</p>
+          <p className="text-3xl font-extrabold text-marca-700">{formatarPontos(tentativa.pontos)}</p>
           <p className="text-sm text-slate-500">pontos</p>
         </Cartao>
         <Cartao>

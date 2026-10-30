@@ -1,6 +1,7 @@
 import type { LinhaRanking } from "@/lib/ranking";
 import { Avatar } from "./Avatar";
 import { Vazio } from "./ui";
+import { formatarPontos } from "@/lib/pontos";
 
 /** Ranking completo (só o professor vê todas as posições). */
 export function TabelaRanking({
@@ -32,7 +33,7 @@ export function TabelaRanking({
               {l.apelido}
               {nomes?.get(l.alunoId) && <span className="text-slate-500"> · {nomes.get(l.alunoId)}</span>}
             </td>
-            <td className="py-1.5 pr-2 text-right tabular-nums">{l.pontos}</td>
+            <td className="py-1.5 pr-2 text-right tabular-nums">{formatarPontos(l.pontos)}</td>
             <td className="py-1.5 text-right tabular-nums">{l.questoes ? `${Math.round(l.acerto * 100)}%` : "–"}</td>
           </tr>
         ))}

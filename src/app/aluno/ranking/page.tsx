@@ -9,6 +9,7 @@ import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { situacaoDaTemporada } from "@/lib/temporada-dados";
 import { MetaTurma } from "@/components/MetaTurma";
 import type { Divisao } from "@/lib/ligas";
+import { formatarPontos } from "@/lib/pontos";
 
 export const metadata: Metadata = { title: "Ranking" };
 
@@ -65,7 +66,7 @@ export default async function Ranking() {
                 {l.apelido}
                 {l.sequencia > 0 && <span className="ml-1 text-xs text-orange-600">🔥{l.sequencia}</span>}
               </span>
-              <span className="tabular-nums">{l.pontos} pts</span>
+              <span className="tabular-nums">{formatarPontos(l.pontos)} pts</span>
             </li>
           ))}
         </ol>
@@ -75,7 +76,7 @@ export default async function Ranking() {
           <span className="w-8 text-center font-bold">{eu.posicao}º</span>
           <Avatar avatar={eu.avatar} cor={eu.cor} medalhas={medalhas.get(eu.alunoId) ?? 0} tamanho={36} />
           <span className="flex-1 font-semibold">Você ({eu.apelido})</span>
-          <span className="tabular-nums font-semibold">{eu.pontos} pts</span>
+          <span className="tabular-nums font-semibold">{formatarPontos(eu.pontos)} pts</span>
         </Cartao>
       )}
       <p className="text-center text-xs text-slate-500">
@@ -119,7 +120,7 @@ function LigaDaSemana({
         <span className="w-8 text-center font-bold">{m.posicao}º</span>
         {l && <Avatar avatar={l.avatar} cor={l.cor} medalhas={medalhas.get(m.alunoId) ?? 0} tamanho={32} />}
         <span className="flex-1">{m.alunoId === alunoId ? `Você (${l?.apelido})` : l?.apelido}</span>
-        <span className="tabular-nums">{m.pontosSemana} pts</span>
+        <span className="tabular-nums">{formatarPontos(m.pontosSemana)} pts</span>
       </li>
     );
   };

@@ -1,4 +1,5 @@
 import { faixaDoAno, iniciosPerguntas, subPermutacao, type Conteudo, type Resposta } from "./tipos";
+import { arredondarPontos } from "../pontos";
 
 /**
  * Fração de acerto (0 a 1) de uma resposta.
@@ -162,7 +163,7 @@ function ehPermutacao(ordem: number[], n: number): boolean {
 }
 
 export function calcularPontos(fracao: number, pontosPorAcerto: number): number {
-  return Math.round(fracao * pontosPorAcerto * 100) / 100;
+  return arredondarPontos(fracao * pontosPorAcerto);
 }
 
 /** Folga de rede, em segundos, além do tempo limite da questão. */
