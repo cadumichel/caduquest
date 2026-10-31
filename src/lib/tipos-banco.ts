@@ -92,7 +92,7 @@ export type RespostaBanco = {
   tempo_esgotado: boolean;
   saidas_tela: number;
   zerada_por_saida: boolean;
-  motivo_zerada: "saida" | "teclado" | "tela_alterada" | null;
+  motivo_zerada: "saida" | "teclado" | "tela_alterada" | "clique_fora" | null;
   /** Ausentes antes do SQL das ajudas. */
   eliminadas?: number[];
   dica_usada?: boolean;

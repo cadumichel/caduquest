@@ -149,6 +149,11 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
                         🧩 {l.zeradasTela} por extensão
                       </span>
                     )}
+                    {l.zeradasClique > 0 && (
+                      <span className="block text-xs font-normal text-red-700">
+                        🖱️ {l.zeradasClique} por clique fora
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}

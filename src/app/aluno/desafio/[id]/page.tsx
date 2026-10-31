@@ -38,6 +38,7 @@ export default async function PaginaDesafio({ params }: PageProps<"/aluno/desafi
       tempoFixo={desafio.tempo_por_questao_s}
       saidaZera={desafio.saida_zera_questao}
       tecladoLiberado={Boolean(perfil?.teclado_liberado)}
+      identificacao={`${aluno.apelido} · ${aluno.turmaNome}`}
       relampago={desafio.tipo === "relampago"}
       pontosPorAcerto={desafio.pontos_por_acerto}
     />

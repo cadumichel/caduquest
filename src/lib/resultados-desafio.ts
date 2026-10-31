@@ -14,9 +14,10 @@ export type LinhaResultado = {
   esgotadas: number;
   saidasTela: number;
   zeradasPorSaida: number;
-  /** Zeradas por tecla apertada ou por tela alterada (extensão), dentro de zeradasPorSaida. */
+  /** Zeradas por tecla, por tela alterada (extensão) ou por clique fora, dentro de zeradasPorSaida. */
   zeradasTeclado: number;
   zeradasTela: number;
+  zeradasClique: number;
   /** Resultado em cada questão (por id); ausente = não chegou nela. */
   questoes: Map<string, ResultadoQuestao>;
 };
@@ -56,6 +57,7 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
     zeradas: number;
     teclado: number;
     tela: number;
+    clique: number;
   };
   const porTentativa = new Map<string, Agregado>();
   const porQuestao = new Map<string, { soma: number; n: number }>();
@@ -76,6 +78,7 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
       zeradas: 0,
       teclado: 0,
       tela: 0,
+      clique: 0,
     };
     if (r.fracao !== null) {
       agg.acertos += Number(r.fracao);
@@ -89,6 +92,7 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
     if (r.zerada_por_saida) agg.zeradas += 1;
     if (r.motivo_zerada === "teclado") agg.teclado += 1;
     if (r.motivo_zerada === "tela_alterada") agg.tela += 1;
+    if (r.motivo_zerada === "clique_fora") agg.clique += 1;
     agg.saidas += r.saidas_tela;
     porTentativa.set(r.tentativa_id, agg);
   }
@@ -110,6 +114,7 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
       zeradasPorSaida: agg?.zeradas ?? 0,
       zeradasTeclado: agg?.teclado ?? 0,
       zeradasTela: agg?.tela ?? 0,
+      zeradasClique: agg?.clique ?? 0,
       questoes: (t && detalhe.get(t.id)) || new Map(),
     };
   });
