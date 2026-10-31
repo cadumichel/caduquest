@@ -9,7 +9,7 @@ import { DICAS_POR_TEMPORADA, ELIMINACOES_POR_TEMPORADA } from "@/lib/questoes/a
 import { respostaCompleta, respostaInicial } from "@/lib/questoes/apresentacao";
 import { ESCOLHA_UNICA } from "@/lib/questoes/tipos";
 import type { Resposta } from "@/lib/questoes/tipos";
-import { elementoEstranho, teclaConta, type MotivoZerada } from "@/lib/tela-protegida";
+import { cliqueFora, elementoEstranho, teclaConta, textoMarca, type MotivoZerada } from "@/lib/tela-protegida";
 import { carregarJogo, eliminar, enviarResposta, pedirDica } from "../../actions";
 
 type QuestaoEmJogo = Extract<EstadoJogo, { fase: "questao" }>;
@@ -31,6 +31,7 @@ export function Jogo({
   tempoFixo,
   saidaZera,
   tecladoLiberado = false,
+  identificacao = "",
   relampago = false,
   pontosPorAcerto,
 }: {
@@ -41,6 +42,8 @@ export function Jogo({
   tempoFixo: number | null;
   saidaZera: boolean;
   tecladoLiberado?: boolean;
+  /** Apelido e turma, para a marca d'água da pesquisa bloqueada. */
+  identificacao?: string;
   relampago?: boolean;
   pontosPorAcerto: number;
 }) {
@@ -96,6 +99,10 @@ export function Jogo({
                   zero. Responda só com o mouse ou tocando na tela.
                 </li>
               )}
+              <li className="font-semibold text-red-700">
+                🖱️ No computador, clique só nas alternativas e nos botões: clicar em outra parte da tela faz a questão
+                valer zero.
+              </li>
             </>
           ) : (
             <li className="font-semibold text-emerald-700">
@@ -177,6 +184,7 @@ export function Jogo({
       pendente={pendente}
       erroRede={erroRede}
       tecladoLiberado={tecladoLiberado}
+      identificacao={identificacao}
       enviar={(resposta, saidas, motivo) =>
         executar(() => enviarResposta(desafioId, estado.questao.id, resposta, saidas, motivo))
       }
@@ -190,6 +198,7 @@ function TelaQuestao({
   pendente,
   erroRede,
   tecladoLiberado,
+  identificacao,
   enviar,
 }: {
   desafioId: string;
@@ -197,6 +206,7 @@ function TelaQuestao({
   pendente: boolean;
   erroRede: boolean;
   tecladoLiberado: boolean;
+  identificacao: string;
   enviar: (resposta: Resposta | null, saidas: number, motivo: MotivoZerada | null) => void;
 }) {
   const { questao, posicao, total, aviso } = estado;
@@ -320,6 +330,20 @@ function TelaQuestao({
     return () => observador.disconnect();
   }, [questao.saidaZera, confirmar]);
 
+  // Pesquisa bloqueada: clique de mouse fora das alternativas e dos botões zera a questão.
+  useEffect(() => {
+    if (!questao.saidaZera) return;
+    const aoClicar = (e: PointerEvent) => {
+      if (enviado.current || !cliqueFora(e, document.documentElement.clientWidth)) return;
+      confirmar(null, "clique_fora");
+    };
+    document.addEventListener("pointerdown", aoClicar, true);
+    return () => document.removeEventListener("pointerdown", aoClicar, true);
+  }, [questao.saidaZera, confirmar]);
+
+  // Marca d'água com quem está respondendo: uma foto da tela mostra de quem é.
+  const [marca] = useState(() => (questao.saidaZera && identificacao ? textoMarca(identificacao) : ""));
+
   const segundos = Math.ceil(restante / 1000);
   const fracao = restante / (questao.tempoLimite * 1000);
   const completa = respostaCompleta(resposta);
@@ -327,12 +351,21 @@ function TelaQuestao({
   return (
     <div
       translate={questao.saidaZera ? "no" : undefined}
-      className={`sem-selecao space-y-4 ${questao.saidaZera ? "notranslate" : ""} ${
+      className={`sem-selecao relative isolate space-y-4 ${questao.saidaZera ? "notranslate" : ""} ${
         questao.relampago ? "rounded-2xl p-3 ring-4 ring-amber-300" : ""
       }`}
       onCopy={(e) => e.preventDefault()}
       onContextMenu={(e) => e.preventDefault()}
     >
+      {marca && (
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden select-none">
+          <div className="absolute -inset-1/2 flex rotate-[-25deg] flex-wrap content-start gap-x-24 gap-y-36 text-sm font-extrabold text-marca-950 opacity-[0.07]">
+            {Array.from({ length: 60 }, (_, i) => (
+              <span key={i}>{marca}</span>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between text-sm font-medium text-slate-600">
         <span>
           Questão {posicao} de {total}
@@ -353,8 +386,8 @@ function TelaQuestao({
       {aviso && <Aviso>{aviso}</Aviso>}
       {questao.saidaZera ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-center text-xs font-semibold text-red-700">
-          🚫 Pesquisa bloqueada: sair desta tela{tecladoLiberado ? "" : " ou apertar qualquer tecla"} faz esta questão
-          valer zero.
+          🚫 Pesquisa bloqueada: sair desta tela{tecladoLiberado ? "" : ", apertar qualquer tecla"} ou clicar fora das
+          alternativas e dos botões faz esta questão valer zero.
         </p>
       ) : (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-center text-xs font-semibold text-emerald-700">
@@ -435,6 +468,7 @@ function TelaQuestao({
       >
         {pendente ? "Enviando…" : "Confirmar resposta"}
       </Botao>
+      {marca && <p className="text-right text-[11px] text-slate-400">{marca}</p>}
       <p className="text-center text-xs text-slate-400">
         <Link href="/aluno">Sair</Link> · o tempo continua correndo
       </p>
