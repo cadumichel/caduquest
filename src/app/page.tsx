@@ -11,6 +11,9 @@ export default function Inicio() {
           Revisão de História em temporadas. Cada desafio conta para o ranking da turma.
         </p>
         <div className="flex w-full flex-col gap-3">
+          <BotaoLink href="/jogar" variante="ouro" className="py-4 text-base">
+            🏛️ Desafios de História · aberto a todos
+          </BotaoLink>
           <BotaoLink href="/entrar" className="py-4 text-base">
             Sou aluno
           </BotaoLink>

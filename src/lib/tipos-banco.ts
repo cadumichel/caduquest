@@ -46,6 +46,8 @@ export type Questao = {
   conteudo: unknown;
   explicacao: string | null;
   dica?: string | null;
+  /** Era do desafio público em que a questão pode ser sorteada (ausente sem o SQL dele). */
+  era_publica?: string | null;
   status: "rascunho" | "publicada";
   origem: "manual" | "claude";
   criado_em: string;
