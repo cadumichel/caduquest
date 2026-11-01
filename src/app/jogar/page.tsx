@@ -7,9 +7,12 @@ import { obterJogador } from "@/lib/publico/sessao";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { BotaoJogar } from "./BotaoJogar";
 
+// Lê o banco a cada acesso: questões publicadas e partidas mudam o tempo todo.
+export const dynamic = "force-dynamic";
+
 export default async function DesafiosPublicos() {
-  const db = criarClienteAdmin();
   const jogador = await obterJogador();
+  const db = criarClienteAdmin();
   const [banco, partidas] = await Promise.all([
     questoesPorEra(db),
     jogador ? partidasDoJogador(db, jogador.id) : Promise.resolve([]),
