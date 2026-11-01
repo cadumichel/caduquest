@@ -46,7 +46,7 @@ export function JogoPublico({
   apelido,
 }: {
   partidaId: string;
-  titulo: string;
+  titulo: React.ReactNode;
   valeRanking: boolean;
   jaComecou: boolean;
   apelido: string;

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { IconeEra } from "@/components/IconeEra";
 import { BotaoLink, Etiqueta } from "@/components/ui";
 import { formatarPontos } from "@/lib/pontos";
 import { partidasDoJogador, questoesPorEra } from "@/lib/publico/jogo";
@@ -55,7 +56,9 @@ export default async function DesafiosPublicos() {
               className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
             >
               <div className={`bg-gradient-to-br ${era.cor} p-4 text-white`}>
-                <p className="text-3xl">{era.emoji}</p>
+                <p className="text-3xl">
+                  <IconeEra era={era.id} />
+                </p>
                 <h2 className="mt-1 text-lg font-extrabold">{era.nome}</h2>
                 <p className="text-xs text-white/85">{era.resumo}</p>
               </div>
@@ -115,7 +118,7 @@ export default async function DesafiosPublicos() {
                     className="flex items-center justify-between px-4 py-2.5 hover:bg-slate-50"
                   >
                     <span>
-                      {ERAS.find((e) => e.id === p.era)?.emoji} {ERAS.find((e) => e.id === p.era)?.nome}{" "}
+                      <IconeEra era={p.era} /> {ERAS.find((e) => e.id === p.era)?.nome}{" "}
                       {p.vale_ranking ? <Etiqueta cor="azul">ranking</Etiqueta> : <Etiqueta>treino</Etiqueta>}
                     </span>
                     <span className="font-semibold tabular-nums">{formatarPontos(p.pontos)} pts</span>

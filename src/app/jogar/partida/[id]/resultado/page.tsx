@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { IconeEra } from "@/components/IconeEra";
 import { notFound, redirect } from "next/navigation";
 import { Gabarito } from "@/components/Gabarito";
 import { Aviso, BotaoLink, Cartao, Etiqueta } from "@/components/ui";
@@ -46,7 +47,15 @@ export default async function ResultadoPublico({ params }: PageProps<"/jogar/par
     <div className="space-y-6">
       <div>
         <p className="text-sm text-slate-500">Resultado {partida.vale_ranking ? "· vale ranking" : "· treino"}</p>
-        <h1 className="text-2xl font-bold">{era ? `${era.emoji} ${era.nome}` : "Desafio"}</h1>
+        <h1 className="text-2xl font-bold">
+          {era ? (
+            <>
+              <IconeEra era={era.id} /> {era.nome}
+            </>
+          ) : (
+            "Desafio"
+          )}
+        </h1>
       </div>
 
       <div className="grid grid-cols-3 gap-3 text-center">

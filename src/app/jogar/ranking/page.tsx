@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { IconeEra } from "@/components/IconeEra";
 import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
 import { Vazio } from "@/components/ui";
@@ -43,7 +44,7 @@ export default async function RankingPublico({ searchParams }: PageProps<"/jogar
             href={`/jogar/ranking?era=${e.id}`}
             className={`shrink-0 rounded-full px-3 py-1.5 ${era === e.id ? "bg-marca-700 text-white" : "bg-marca-50 text-marca-800"}`}
           >
-            {e.emoji} {e.nome}
+            <IconeEra era={e.id} /> {e.nome}
           </Link>
         ))}
       </nav>

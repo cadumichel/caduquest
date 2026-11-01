@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { IconeEra } from "@/components/IconeEra";
 import { notFound, redirect } from "next/navigation";
 import { partidaDoJogador } from "@/lib/publico/jogo";
 import { eraPorId } from "@/lib/publico/regras";
@@ -18,7 +19,15 @@ export default async function PaginaPartida({ params }: PageProps<"/jogar/partid
   return (
     <JogoPublico
       partidaId={id}
-      titulo={era ? `${era.emoji} ${era.nome}` : "Desafio"}
+      titulo={
+        era ? (
+          <>
+            <IconeEra era={era.id} /> {era.nome}
+          </>
+        ) : (
+          "Desafio"
+        )
+      }
       valeRanking={partida.vale_ranking}
       jaComecou={partida.indice_atual > 0}
       apelido={jogador.apelido}

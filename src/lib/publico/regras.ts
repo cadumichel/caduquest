@@ -8,7 +8,7 @@ export const ERAS = [
   {
     id: "pre_historia",
     nome: "Pré-História",
-    emoji: "🦴",
+    emoji: "🪨",
     resumo: "Caçadores-coletores, a revolução agrícola e as primeiras aldeias.",
     cor: "from-amber-700 to-stone-800",
   },
