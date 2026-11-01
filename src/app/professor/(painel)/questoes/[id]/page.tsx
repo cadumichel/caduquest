@@ -11,10 +11,11 @@ export const metadata: Metadata = { title: "Editar questão" };
 export default async function EditarQuestao({ params }: PageProps<"/professor/questoes/[id]">) {
   const { id } = await params;
   const { supabase, professorId } = await exigirProfessor();
-  const [{ data: questao }, { data: caps }, { count }] = await Promise.all([
+  const [{ data: questao }, { data: caps }, { count }, { count: publicas }] = await Promise.all([
     supabase.from("questoes").select("*").eq("id", id).maybeSingle(),
     supabase.from("questoes").select("capitulo").not("capitulo", "is", null),
     supabase.from("respostas").select("*", { count: "exact", head: true }).eq("questao_id", id),
+    supabase.from("respostas_publicas").select("*", { count: "exact", head: true }).eq("questao_id", id),
   ]);
   if (!questao) notFound();
   const capitulos = [...new Set((caps ?? []).map((c) => c.capitulo as string))].sort();
@@ -29,7 +30,7 @@ export default async function EditarQuestao({ params }: PageProps<"/professor/qu
         inicial={questao as Questao}
         professorId={professorId}
         capitulos={capitulos}
-        usada={Boolean(count)}
+        usada={Boolean(count || publicas)}
       />
     </div>
   );

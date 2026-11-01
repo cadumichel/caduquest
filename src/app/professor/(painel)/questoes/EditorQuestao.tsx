@@ -2,6 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { FaixaRelampago } from "@/components/FaixaRelampago";
+import { ERAS } from "@/lib/publico/regras";
 import { QuestaoInterativa } from "@/components/QuestaoInterativa";
 import { AreaTexto, Aviso, Botao, Campo, Cartao, Entrada, Selecao, classeInput } from "@/components/ui";
 import { HABILIDADES } from "@/lib/habilidades";
@@ -66,6 +67,7 @@ export function EditorQuestao({
     relampago: inicial?.relampago ?? false,
     explicacao: inicial?.explicacao ?? "",
     dica: inicial?.dica ?? "",
+    era_publica: inicial?.era_publica ?? "",
   });
   const set = <K extends keyof typeof campos>(k: K, v: (typeof campos)[K]) => setCampos((c) => ({ ...c, [k]: v }));
 
@@ -216,6 +218,19 @@ export function EditorQuestao({
                 <option key={c} value={c} />
               ))}
             </datalist>
+          </Campo>
+          <Campo
+            rotulo="Desafio público (opcional)"
+            dica="Com uma era escolhida, a questão publicada pode ser sorteada no desafio aberto a todos daquela era."
+          >
+            <Selecao value={campos.era_publica} onChange={(e) => set("era_publica", e.target.value)}>
+              <option value="">Só para as minhas turmas</option>
+              {ERAS.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.emoji} {e.nome}
+                </option>
+              ))}
+            </Selecao>
           </Campo>
           <Campo rotulo="Fonte (opcional)">
             <Entrada

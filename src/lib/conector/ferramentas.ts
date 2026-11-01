@@ -5,6 +5,7 @@ import { gerarCodigoDia, PONTOS_RELAMPAGO } from "@/lib/cadurush";
 import { dataHoraLocalParaIso, formatarData, formatarDataHora } from "@/lib/datas";
 import { cartasDaTurma } from "@/lib/carta-coringa";
 import { HABILIDADES } from "@/lib/habilidades";
+import { ERA_IDS, ERAS, eraPorId, QUESTOES_FINAIS, QUESTOES_POR_PARTIDA } from "@/lib/publico/regras";
 import {
   LIMITE_ENUNCIADO,
   LIMITE_ITEM,
@@ -47,7 +48,17 @@ const data = z
 const schemaQuestao = z.object({
   tipo: z.enum(TIPOS),
   enunciado: z.string().describe("Curto: o aluno tem 40 a 60 segundos."),
-  capitulo: z.string().describe("Use o mesmo nome do capítulo cadastrado na temporada (veja listar_turmas)."),
+  capitulo: z
+    .string()
+    .describe(
+      "Use o mesmo nome do capítulo cadastrado na temporada (veja listar_turmas). Em questão do desafio público pode ficar vazio: vale o nome da era.",
+    ),
+  era_publica: z
+    .enum(ERA_IDS)
+    .optional()
+    .describe(
+      `Põe a questão no banco do desafio público (aberto a qualquer pessoa) daquela era: ${ERAS.map((e) => `${e.id} (${e.nome})`).join(", ")}. Omita nas questões das turmas.`,
+    ),
   habilidades: z.array(z.string()).describe(`Use só nomes desta lista: ${HABILIDADES.join(", ")}.`),
   dificuldade: z.number().int().min(1).max(3).describe("1 fácil, 2 média, 3 difícil"),
   explicacao: z
@@ -327,15 +338,16 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         tipo: z.enum(TIPOS).optional(),
         busca: z.string().optional().describe("Trecho do enunciado."),
         relampago: z.boolean().optional().describe("true lista só as questões relâmpago."),
+        era_publica: z.enum(ERA_IDS).optional().describe("Lista só as questões do desafio público desta era."),
         limite: z.number().int().min(1).max(200).optional().describe("Padrão 50."),
       }),
       annotations: { readOnlyHint: true },
     },
-    async ({ capitulo, status, tipo, busca, relampago, limite }) => {
+    async ({ capitulo, status, tipo, busca, relampago, era_publica, limite }) => {
       const professorId = await professorDoConector();
       let consulta = criarClienteAdmin()
         .from("questoes")
-        .select("id, tipo, capitulo, status, dificuldade, habilidades, relampago, tempo_limite_s, enunciado")
+        .select("*")
         .eq("professor_id", professorId)
         .order("criado_em", { ascending: false })
         .limit(limite ?? 50);
@@ -344,9 +356,63 @@ export function registrarFerramentas(server: McpServer, origem: string) {
       if (tipo) consulta = consulta.eq("tipo", tipo);
       if (busca) consulta = consulta.ilike("enunciado", `%${busca}%`);
       if (relampago !== undefined) consulta = consulta.eq("relampago", relampago);
+      if (era_publica) consulta = consulta.eq("era_publica", era_publica);
       const { data, error } = await consulta;
       if (error) return falha("Não foi possível consultar o banco de questões.");
-      return resultado({ total: data.length, questoes: data });
+      const questoes = data.map((q) => ({
+        id: q.id,
+        tipo: q.tipo,
+        capitulo: q.capitulo,
+        status: q.status,
+        dificuldade: q.dificuldade,
+        habilidades: q.habilidades,
+        relampago: q.relampago,
+        ...(q.era_publica && { era_publica: q.era_publica }),
+        tempo_limite_s: q.tempo_limite_s,
+        enunciado: q.enunciado,
+      }));
+      return resultado({ total: questoes.length, questoes });
+    },
+  );
+
+  server.registerTool(
+    "listar_desafios_publicos",
+    {
+      title: "Ver os desafios públicos",
+      description: `Mostra, para cada era do desafio público (aberto a qualquer pessoa), quantas questões publicadas e em rascunho ela tem e quantas partidas já foram jogadas. Uma era só abre com ${QUESTOES_POR_PARTIDA} questões publicadas; o ideal é 30, para quem joga de novo pegar questões diferentes. Use antes de escrever questões públicas, para saber onde faltam.`,
+      inputSchema: z.object({}),
+      annotations: { readOnlyHint: true },
+    },
+    async () => {
+      const professorId = await professorDoConector();
+      const db = criarClienteAdmin();
+      const [{ data: qs, error }, { data: ps }] = await Promise.all([
+        db
+          .from("questoes")
+          .select("era_publica, status, tipo")
+          .eq("professor_id", professorId)
+          .not("era_publica", "is", null),
+        db.from("partidas_publicas").select("era, vale_ranking").not("concluida_em", "is", null).limit(50000),
+      ]);
+      if (error) return falha("Banco sem os desafios públicos: rode o SQL deles no Supabase.");
+      return resultado({
+        endereco: `${origem}/jogar`,
+        eras: ERAS.map((e) => {
+          const daEra = (qs ?? []).filter((q) => q.era_publica === e.id);
+          const publicadas = daEra.filter((q) => q.status === "publicada");
+          const partidas = (ps ?? []).filter((p) => p.era === e.id);
+          return {
+            era: e.id,
+            nome: e.nome,
+            aberta: publicadas.length >= QUESTOES_POR_PARTIDA,
+            publicadas: publicadas.length,
+            rascunhos: daEra.filter((q) => q.status === "rascunho").length,
+            formatos: [...new Set(publicadas.map((q) => q.tipo))],
+            partidas_ranking: partidas.filter((p) => p.vale_ranking).length,
+            partidas_treino: partidas.filter((p) => !p.vale_ranking).length,
+          };
+        }),
+      });
     },
   );
 
@@ -424,6 +490,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         "Antes de gravar, mostre as questões ao professor e grave só depois que ele aprovar.",
         "Toda questão leva uma dica (campo dica), escrita junto com ela.",
         `Questões relâmpago (relampago=true): quando o professor pedir relâmpago, escreva perguntas diretas, sem texto motivador, e chame checar_relampago antes de mostrá-las: mostre o tempo sugerido pelo app (${RELAMPAGO_MIN_S} a ${RELAMPAGO_MAX_S} s) ao lado de cada uma para o professor ajustar, e grave com o tempo que ele aprovar (ou omita tempo_limite_s para usar o sugerido).`,
+        `Desafio público (era_publica): questões abertas a qualquer pessoa, de todas as idades, alunos ou não. Cada partida sorteia ${QUESTOES_POR_PARTIDA} questões da era; as ${QUESTOES_FINAIS} últimas são a rodada final, sem consulta, e qualquer questão pode cair nela. Escreva questões contextuais e conceituais: a resposta nunca é um nome, uma data ou um número decorado, e sim a interpretação de um contexto, de uma fonte ou de um conceito, que alguém sem a apostila consiga raciocinar. Linguagem acessível, sem citar capítulos ou apostilas. Varie os formatos do lote (todos os tipos valem, menos mapa sem posições). Use listar_desafios_publicos para ver quantas questões cada era já tem (o ideal é 30 por era).`,
         "Sempre envie junto, em curiosidades, 2 a 4 curiosidades históricas curtas e verdadeiras sobre os capítulos do lote, sem o professor precisar pedir: elas viram a Curiosidade do dia na tela dos alunos.",
       ].join(" "),
       inputSchema: z.object({
@@ -450,9 +517,10 @@ export function registrarFerramentas(server: McpServer, origem: string) {
 
       for (const [i, q] of questoes.entries()) {
         const conteudo = validarConteudo(q.tipo, conteudoBruto(q));
+        const capitulo = q.capitulo.trim() || (q.era_publica ? (eraPorId(q.era_publica)?.nome ?? "") : "");
         const motivo = !q.enunciado.trim()
           ? "Enunciado vazio."
-          : !q.capitulo.trim()
+          : !capitulo
             ? "Capítulo vazio."
             : !conteudo.success
               ? conteudo.error.issues[0].message
@@ -492,7 +560,8 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           professor_id: professorId,
           tipo: q.tipo,
           enunciado: q.enunciado.trim(),
-          capitulo: q.capitulo.trim(),
+          capitulo,
+          ...(q.era_publica && { era_publica: q.era_publica }),
           habilidades: q.habilidades.filter((h) => permitidas.has(h)),
           dificuldade: q.dificuldade,
           explicacao: q.explicacao.trim(),

@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { Aviso, Botao, Etiqueta } from "@/components/ui";
+import { eraPorId } from "@/lib/publico/regras";
 import { NOME_DIFICULDADE, NOME_TIPO, type TipoQuestao } from "@/lib/questoes/tipos";
 import { duplicarQuestao, excluirQuestao, mudarStatusQuestoes } from "../actions";
 
@@ -16,6 +17,8 @@ export type ItemLista = {
   origem: "manual" | "claude";
   temImagem: boolean;
   relampago: boolean;
+  /** Era do desafio público, se a questão está no banco público. */
+  era: string | null;
   usos: number;
 };
 
@@ -70,6 +73,7 @@ export function ListaQuestoes({ itens }: { itens: ItemLista[] }) {
                 <Etiqueta cor={q.status === "publicada" ? "verde" : "ambar"}>{q.status}</Etiqueta>
                 <Etiqueta cor="azul">{NOME_TIPO[q.tipo]}</Etiqueta>
                 {q.relampago && <Etiqueta cor="ambar">⚡ relâmpago</Etiqueta>}
+                {q.era && <Etiqueta cor="azul">🌎 público · {eraPorId(q.era)?.nome ?? q.era}</Etiqueta>}
                 {q.capitulo && <Etiqueta>{q.capitulo}</Etiqueta>}
                 {q.habilidades.map((h) => (
                   <Etiqueta key={h}>{h}</Etiqueta>

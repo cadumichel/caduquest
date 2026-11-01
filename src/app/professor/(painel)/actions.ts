@@ -6,6 +6,7 @@ import { gerarCodigoDia, janelaLiberadaAgora } from "@/lib/cadurush";
 import { gerarCodigoTurma } from "@/lib/codigo";
 import { dataHoraLocalParaIso } from "@/lib/datas";
 import { exigirProfessor } from "@/lib/professor";
+import { ehEra } from "@/lib/publico/regras";
 import { problemasRelampago } from "@/lib/questoes/relampago";
 import { TEMPO_MAX_S, TEMPO_MIN_S, TIPOS, validarConteudo, type Conteudo } from "@/lib/questoes/tipos";
 
@@ -240,6 +241,10 @@ const schemaQuestao = z.object({
   conteudo: z.unknown(),
   explicacao: z.string().trim().max(2000),
   dica: z.string().trim().max(300).default(""),
+  era_publica: z
+    .string()
+    .refine((v) => v === "" || ehEra(v), "Era inválida.")
+    .default(""),
   status: z.enum(["rascunho", "publicada"]),
 });
 export type DadosQuestao = z.input<typeof schemaQuestao>;
@@ -273,16 +278,17 @@ export async function salvarQuestao(dados: DadosQuestao): Promise<EstadoForm & {
     conteudo: conteudo.data,
     explicacao: r.data.explicacao || null,
     dica: r.data.dica || null,
+    era_publica: r.data.era_publica || null,
     status: r.data.status,
   };
 
   if (r.data.id) {
     // Questão já usada num desafio: o gabarito vira histórico e não pode mudar.
-    const { count } = await supabase
-      .from("respostas")
-      .select("*", { count: "exact", head: true })
-      .eq("questao_id", r.data.id);
-    if (count) {
+    const [{ count }, { count: publicas }] = await Promise.all([
+      supabase.from("respostas").select("*", { count: "exact", head: true }).eq("questao_id", r.data.id),
+      supabase.from("respostas_publicas").select("*", { count: "exact", head: true }).eq("questao_id", r.data.id),
+    ]);
+    if (count || publicas) {
       const { data: atual } = await supabase.from("questoes").select("tipo, conteudo").eq("id", r.data.id).single();
       if (atual && (atual.tipo !== linha.tipo || JSON.stringify(atual.conteudo) !== JSON.stringify(linha.conteudo))) {
         return {
@@ -317,6 +323,7 @@ export async function duplicarQuestao(id: string) {
       imagem_path: q.imagem_path,
       tempo_limite_s: q.tempo_limite_s,
       ...(q.relampago && { relampago: true }),
+      ...(q.era_publica && { era_publica: q.era_publica }),
       conteudo: q.conteudo,
       explicacao: q.explicacao,
       dica: q.dica ?? null,
@@ -342,6 +349,15 @@ export async function excluirQuestao(id: string) {
     .select("*", { count: "exact", head: true })
     .eq("questao_id", id);
   if (count) return { erro: "Esta questão está em um desafio e não pode ser apagada." };
+  const { count: publicas } = await supabase
+    .from("respostas_publicas")
+    .select("*", { count: "exact", head: true })
+    .eq("questao_id", id);
+  if (publicas) {
+    return {
+      erro: "Esta questão já foi jogada no desafio público e não pode ser apagada. Para tirá-la do sorteio, volte-a para rascunho.",
+    };
+  }
   const { data } = await supabase.from("questoes").delete().eq("id", id).select("imagem_path").single();
   if (data?.imagem_path) {
     // Duplicatas compartilham a imagem: só apaga o arquivo se ninguém mais usa.

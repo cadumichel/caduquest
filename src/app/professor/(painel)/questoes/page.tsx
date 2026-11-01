@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Aviso, BotaoLink, Botao, Entrada, Selecao, Titulo, Vazio } from "@/components/ui";
 import { HABILIDADES } from "@/lib/habilidades";
 import { exigirProfessor } from "@/lib/professor";
+import { ehEra, ERAS } from "@/lib/publico/regras";
 import { NOME_DIFICULDADE, NOME_TIPO, TIPOS, type TipoQuestao } from "@/lib/questoes/tipos";
 import { ListaQuestoes, type ItemLista } from "./ListaQuestoes";
 
@@ -18,15 +19,15 @@ export default async function BancoQuestoes({ searchParams }: PageProps<"/profes
     dificuldade: param(sp.dificuldade),
     status: param(sp.status),
     uso: param(sp.uso),
+    publico: param(sp.publico),
   };
   const gerado = Number(param(sp.gerado)) || 0;
   const { supabase } = await exigirProfessor();
 
   let consulta = supabase
     .from("questoes")
-    .select(
-      "id, tipo, enunciado, capitulo, habilidades, dificuldade, status, origem, imagem_path, relampago, desafio_questoes(count)",
-    )
+    // "*" traz também era_publica, quando o SQL dos desafios públicos já rodou.
+    .select("*, desafio_questoes(count)")
     .order("criado_em", { ascending: false })
     .limit(500);
   if (filtros.capitulo) consulta = consulta.ilike("capitulo", `%${filtros.capitulo}%`);
@@ -34,6 +35,8 @@ export default async function BancoQuestoes({ searchParams }: PageProps<"/profes
   if ((TIPOS as readonly string[]).includes(filtros.tipo)) consulta = consulta.eq("tipo", filtros.tipo);
   if (filtros.tipo === "relampago") consulta = consulta.eq("relampago", true);
   if (["1", "2", "3"].includes(filtros.dificuldade)) consulta = consulta.eq("dificuldade", Number(filtros.dificuldade));
+  if (filtros.publico === "todas") consulta = consulta.not("era_publica", "is", null);
+  else if (ehEra(filtros.publico)) consulta = consulta.eq("era_publica", filtros.publico);
   if (filtros.status === "rascunho" || filtros.status === "publicada") consulta = consulta.eq("status", filtros.status);
 
   const [{ data }, { data: capitulosBrutos }] = await Promise.all([
@@ -53,6 +56,7 @@ export default async function BancoQuestoes({ searchParams }: PageProps<"/profes
     origem: q.origem,
     temImagem: Boolean(q.imagem_path),
     relampago: Boolean(q.relampago),
+    era: (q.era_publica as string | null | undefined) ?? null,
     usos: (q.desafio_questoes as { count: number }[])[0]?.count ?? 0,
   }));
   if (filtros.uso === "nova") itens = itens.filter((i) => i.usos === 0);
@@ -80,7 +84,7 @@ export default async function BancoQuestoes({ searchParams }: PageProps<"/profes
         </Aviso>
       )}
 
-      <form className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-3 sm:grid-cols-3 lg:grid-cols-7">
+      <form className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-3 sm:grid-cols-3 lg:grid-cols-8">
         <Entrada name="capitulo" placeholder="Capítulo" defaultValue={filtros.capitulo} list="capitulos" />
         <datalist id="capitulos">
           {capitulos.map((c) => (
@@ -119,6 +123,15 @@ export default async function BancoQuestoes({ searchParams }: PageProps<"/profes
           <option value="">Uso anterior</option>
           <option value="nova">Nunca usada</option>
           <option value="usada">Já usada</option>
+        </Selecao>
+        <Selecao name="publico" defaultValue={filtros.publico}>
+          <option value="">Desafio público</option>
+          <option value="todas">Todas as eras</option>
+          {ERAS.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.emoji} {e.nome}
+            </option>
+          ))}
         </Selecao>
         <Botao variante="secundario">Filtrar</Botao>
       </form>

@@ -9,7 +9,8 @@ import { DICAS_POR_TEMPORADA, ELIMINACOES_POR_TEMPORADA } from "@/lib/questoes/a
 import { respostaCompleta, respostaInicial } from "@/lib/questoes/apresentacao";
 import { ESCOLHA_UNICA } from "@/lib/questoes/tipos";
 import type { Resposta } from "@/lib/questoes/tipos";
-import { cliqueFora, elementoEstranho, teclaConta, textoMarca, type MotivoZerada } from "@/lib/tela-protegida";
+import { useTelaProtegida } from "@/components/useTelaProtegida";
+import { textoMarca, type MotivoZerada } from "@/lib/tela-protegida";
 import { carregarJogo, eliminar, enviarResposta, pedirDica } from "../../actions";
 
 type QuestaoEmJogo = Extract<EstadoJogo, { fase: "questao" }>;
@@ -272,74 +273,20 @@ function TelaQuestao({
     return () => clearInterval(timer);
   }, [questao.restanteMs, confirmar]);
 
-  // Conta cada vez que o aluno sai: troca de aba ou de app, clique em outra
-  // janela ou saída da tela cheia. Com a opção do desafio, a questão é zerada.
+  // Conta cada vez que o aluno sai; com a pesquisa bloqueada, sair, teclar,
+  // clicar fora ou ter a página alterada por extensão zera a questão.
   const fora = useRef(false);
   const dialogoProprio = useRef(false);
-  useEffect(() => {
-    const saiu = () => {
-      if (fora.current || dialogoProprio.current || enviado.current) return;
-      fora.current = true;
-      saidas.current += 1;
-      if (questao.saidaZera) confirmar(null, "saida");
-    };
-    const voltou = () => {
-      if (document.visibilityState === "visible" && document.hasFocus()) fora.current = false;
-    };
-    const aoMudarVisibilidade = () => (document.visibilityState === "hidden" ? saiu() : voltou());
-    const aoMudarTelaCheia = () => {
-      if (!document.fullscreenElement) saiu();
-    };
-    document.addEventListener("visibilitychange", aoMudarVisibilidade);
-    document.addEventListener("fullscreenchange", aoMudarTelaCheia);
-    window.addEventListener("blur", saiu);
-    window.addEventListener("focus", voltou);
-    return () => {
-      document.removeEventListener("visibilitychange", aoMudarVisibilidade);
-      document.removeEventListener("fullscreenchange", aoMudarTelaCheia);
-      window.removeEventListener("blur", saiu);
-      window.removeEventListener("focus", voltou);
-    };
-  }, [questao.saidaZera, confirmar]);
-
-  // Pesquisa bloqueada: qualquer tecla zera a questão (salvo teclado liberado
-  // pelo professor). Atalhos do sistema, como Alt+Tab, nem chegam aqui, mas já
-  // tiram o aluno da tela.
-  const bloquearTeclado = questao.saidaZera && !tecladoLiberado;
-  useEffect(() => {
-    if (!bloquearTeclado) return;
-    const aoTeclar = (e: KeyboardEvent) => {
-      if (enviado.current || dialogoProprio.current || !teclaConta(e.key)) return;
-      e.preventDefault();
-      confirmar(null, "teclado");
-    };
-    window.addEventListener("keydown", aoTeclar, true);
-    return () => window.removeEventListener("keydown", aoTeclar, true);
-  }, [bloquearTeclado, confirmar]);
-
-  // Pesquisa bloqueada: um elemento que aparece na página sem ter sido criado
-  // pelo app (botão de IA, marca-texto, barra lateral de extensão) zera a questão.
-  // O aluno não é avisado disso, a pedido do professor, para não dar a ideia.
-  useEffect(() => {
-    if (!questao.saidaZera) return;
-    const observador = new MutationObserver((mudancas) => {
-      if (enviado.current) return;
-      if (mudancas.some((m) => Array.from(m.addedNodes).some(elementoEstranho))) confirmar(null, "tela_alterada");
-    });
-    observador.observe(document.body, { childList: true, subtree: true });
-    return () => observador.disconnect();
-  }, [questao.saidaZera, confirmar]);
-
-  // Pesquisa bloqueada: clique de mouse fora das alternativas e dos botões zera a questão.
-  useEffect(() => {
-    if (!questao.saidaZera) return;
-    const aoClicar = (e: PointerEvent) => {
-      if (enviado.current || !cliqueFora(e, document.documentElement.clientWidth)) return;
-      confirmar(null, "clique_fora");
-    };
-    document.addEventListener("pointerdown", aoClicar, true);
-    return () => document.removeEventListener("pointerdown", aoClicar, true);
-  }, [questao.saidaZera, confirmar]);
+  const zerar = useCallback((motivo: MotivoZerada) => confirmar(null, motivo), [confirmar]);
+  useTelaProtegida({
+    protegida: questao.saidaZera,
+    tecladoBloqueado: !tecladoLiberado,
+    enviado,
+    saidas,
+    fora,
+    dialogoProprio,
+    zerar,
+  });
 
   // Marca d'água com quem está respondendo: uma foto da tela mostra de quem é.
   const [marca] = useState(() => (questao.saidaZera && identificacao ? textoMarca(identificacao) : ""));
