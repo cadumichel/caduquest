@@ -5,7 +5,7 @@ import { FaixaRelampago } from "@/components/FaixaRelampago";
 import { QuestaoInterativa } from "@/components/QuestaoInterativa";
 import { Aviso, Botao, BotaoLink } from "@/components/ui";
 import type { Ajudas, EstadoJogo, ResultadoAjuda } from "@/lib/jogo";
-import { DICAS_POR_TEMPORADA, ELIMINACOES_POR_TEMPORADA } from "@/lib/questoes/ajudas";
+import { aplicarAjuda, DICAS_POR_TEMPORADA, ELIMINACOES_POR_TEMPORADA, rotuloEliminacao } from "@/lib/questoes/ajudas";
 import { respostaCompleta, respostaInicial } from "@/lib/questoes/apresentacao";
 import { ESCOLHA_UNICA } from "@/lib/questoes/tipos";
 import type { Resposta } from "@/lib/questoes/tipos";
@@ -117,8 +117,8 @@ export function Jogo({
             Errou, a questão vale zero.
           </li>
           <li>
-            🛟 Ajudas da temporada: {ELIMINACOES_POR_TEMPORADA} eliminações de alternativa errada e{" "}
-            {DICAS_POR_TEMPORADA} dicas. Use quando quiser; acabou, só na próxima temporada.
+            🛟 Ajudas da temporada: {ELIMINACOES_POR_TEMPORADA} eliminações (tiram uma opção errada ou revelam um item
+            certo) e {DICAS_POR_TEMPORADA} dicas. Use quando quiser; acabou, só na próxima temporada.
           </li>
           <li>
             🎯 Só a primeira tentativa vale para o ranking e o XP. Quando o desafio fechar, saem o gabarito e a opção de
@@ -232,11 +232,13 @@ function TelaQuestao({
   enviar: (resposta: Resposta | null, saidas: number, motivo: MotivoZerada | null) => void;
 }) {
   const { questao, posicao, total, aviso } = estado;
-  const [resposta, setResposta] = useState<Resposta>(() => respostaInicial(questao.vista));
+  const [resposta, setResposta] = useState<Resposta>(() =>
+    aplicarAjuda(questao.vista, respostaInicial(questao.vista), questao.ajuda),
+  );
   const [restante, setRestante] = useState(questao.restanteMs);
   const saidas = useRef(0);
   const enviado = useRef(false);
-  const [eliminadas, setEliminadas] = useState(questao.eliminadas);
+  const [ajuda, setAjuda] = useState(questao.ajuda);
   const [podeEliminar, setPodeEliminar] = useState(questao.podeEliminar);
   const [dica, setDica] = useState(questao.dica);
   const [ajudas, setAjudas] = useState<Ajudas>(estado.ajudas);
@@ -251,16 +253,12 @@ function TelaQuestao({
         if (r.ajudas !== undefined) setAjudas(r.ajudas);
         if (r.erro) return setErroAjuda(r.erro);
         if (r.dica) setDica(r.dica);
-        if (r.eliminadas) {
-          const novas = r.eliminadas;
-          setEliminadas(novas);
+        if (r.ajuda) {
+          const nova = r.ajuda;
+          setAjuda(nova);
           setPodeEliminar(Boolean(r.podeEliminar));
-          // A alternativa marcada pode ter sido eliminada.
-          setResposta((atual) =>
-            "escolha" in atual && atual.escolha !== null && novas.includes(atual.escolha)
-              ? { ...atual, escolha: null }
-              : atual,
-          );
+          // Trava os itens revelados e tira da resposta as opções riscadas.
+          setResposta((atual) => aplicarAjuda(questao.vista, atual, nova));
         }
       } catch {
         setErroAjuda("Falha de conexão. Tente de novo.");
@@ -385,7 +383,7 @@ function TelaQuestao({
         resposta={resposta}
         onChange={setResposta}
         desabilitada={pendente}
-        eliminadas={eliminadas}
+        ajuda={ajuda}
       />
 
       {ajudas && (questao.podeEliminar || questao.temDica) && (
@@ -398,7 +396,7 @@ function TelaQuestao({
                 onClick={() => usarAjuda(() => eliminar(desafioId, questao.id))}
                 className="flex-1 rounded-xl border-2 border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900 transition hover:bg-amber-100 disabled:opacity-40"
               >
-                ✂️ Eliminar uma errada · {ajudas.eliminacoes}/{ELIMINACOES_POR_TEMPORADA}
+                ✂️ {rotuloEliminacao(questao.vista.tipo)} · {ajudas.eliminacoes}/{ELIMINACOES_POR_TEMPORADA}
               </button>
             )}
             {questao.temDica && !dica && (

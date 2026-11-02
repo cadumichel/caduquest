@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { arredondarPontos } from "@/lib/pontos";
-import { candidatasEliminacao, eliminadasNaVista } from "@/lib/questoes/ajudas";
+import { ajudaNaVista, candidatasEliminacao, respostaComAjuda, type AjudaVista } from "@/lib/questoes/ajudas";
 import { montarVista } from "@/lib/questoes/apresentacao";
 import { corrigir, tempoEsgotado } from "@/lib/questoes/correcao";
 import { permutacaoAleatoria } from "@/lib/questoes/embaralhar";
@@ -60,9 +60,9 @@ export type QuestaoPublica = {
   tempoLimite: number;
   restanteMs: number;
   relampago: boolean;
-  /** Posições (na tela) das alternativas já eliminadas. */
-  eliminadas: number[];
-  /** Ainda dá para eliminar uma alternativa errada nesta questão. */
+  /** O que as eliminações já usadas mudam na tela. */
+  ajuda: AjudaVista;
+  /** Ainda dá para usar uma eliminação nesta questão. */
   podeEliminar: boolean;
   temDica: boolean;
   /** Texto da dica, se o jogador já abriu nesta questão. */
@@ -74,7 +74,7 @@ export type AjudasPartida = { eliminacoes: number; dicas: number } | null;
 
 export type ResultadoAjudaPublica = {
   erro?: string;
-  eliminadas?: number[];
+  ajuda?: AjudaVista;
   podeEliminar?: boolean;
   dica?: string;
   ajudas?: AjudasPartida;
@@ -198,7 +198,10 @@ async function carregarQuestao(db: SupabaseClient, id: string): Promise<QuestaoB
 
 /** Ajudas que restam na partida, contadas pelo uso registrado nas respostas. */
 async function ajudasDaPartida(db: SupabaseClient, partidaId: string): Promise<AjudasPartida> {
-  const { data, error } = await db.from("respostas_publicas").select("eliminadas, dica_usada").eq("partida_id", partidaId);
+  const { data, error } = await db
+    .from("respostas_publicas")
+    .select("eliminadas, dica_usada")
+    .eq("partida_id", partidaId);
   if (error) return null; // SQL das ajudas ainda não rodou
   let eliminacoes = 0;
   let dicas = 0;
@@ -239,6 +242,8 @@ async function registrar(
   saidasTela: number,
   motivo: MotivoZerada | null,
 ): Promise<MotivoZerada | null> {
+  // Os itens travados pelas eliminações valem como estão na tela.
+  resposta = respostaComAjuda(comoConteudo(questao), linha.permutacao, linha.eliminadas, resposta);
   const agora = new Date();
   const servida = new Date(linha.servida_em);
   const esgotado = tempoEsgotado(servida, agora, questao.tempo_limite_s);
@@ -341,7 +346,7 @@ export async function estadoPartida(
         tempoLimite: questao.tempo_limite_s,
         restanteMs: Math.max(0, questao.tempo_limite_s * 1000 - decorrido),
         relampago: Boolean(questao.relampago),
-        eliminadas: eliminadasNaVista(linha.permutacao, eliminadas),
+        ajuda: ajudaNaVista(conteudo, linha.permutacao, eliminadas),
         podeEliminar: candidatasEliminacao(conteudo, eliminadas).length > 0,
         temDica: Boolean(dica),
         dica: linha.dica_usada ? dica : null,
@@ -419,7 +424,7 @@ export async function eliminarPublica(
   const conteudo = comoConteudo(questao);
   const antes = linha.eliminadas ?? [];
   const candidatas = candidatasEliminacao(conteudo, antes);
-  if (!candidatas.length) return { erro: "Não dá para eliminar mais alternativas nesta questão.", ajudas };
+  if (!candidatas.length) return { erro: "Não dá para usar mais eliminações nesta questão.", ajudas };
   const eliminadas = [...antes, candidatas[Math.floor(Math.random() * candidatas.length)]];
   const { data: gravada } = await db
     .from("respostas_publicas")
@@ -431,7 +436,7 @@ export async function eliminarPublica(
     .select("id");
   if (!gravada?.length) return { erro: "Não foi possível eliminar agora. Tente de novo." };
   return {
-    eliminadas: eliminadasNaVista(linha.permutacao, eliminadas),
+    ajuda: ajudaNaVista(conteudo, linha.permutacao, eliminadas),
     podeEliminar: candidatasEliminacao(conteudo, eliminadas).length > 0,
     ajudas: { ...ajudas, eliminacoes: ajudas.eliminacoes - 1 },
   };
