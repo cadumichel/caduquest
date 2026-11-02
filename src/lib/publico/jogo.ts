@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { arredondarPontos } from "@/lib/pontos";
+import { candidatasEliminacao, eliminadasNaVista } from "@/lib/questoes/ajudas";
 import { montarVista } from "@/lib/questoes/apresentacao";
 import { corrigir, tempoEsgotado } from "@/lib/questoes/correcao";
 import { permutacaoAleatoria } from "@/lib/questoes/embaralhar";
@@ -8,7 +9,9 @@ import { tamanhoPermutacao, type Conteudo, type Resposta, type Vista } from "@/l
 import { AVISO_ZERADA, type MotivoZerada } from "@/lib/tela-protegida";
 import { urlImagem } from "@/lib/tipos-banco";
 import {
+  DICAS_POR_PARTIDA,
   ehFinal,
+  ELIMINACOES_POR_PARTIDA,
   ERAS,
   QUESTOES_FINAIS,
   QUESTOES_POR_PARTIDA,
@@ -44,6 +47,9 @@ export type RespostaPublica = {
   pontos: number | null;
   tempo_esgotado: boolean;
   motivo_zerada: MotivoZerada | null;
+  /** Ausentes antes do SQL das ajudas públicas. */
+  eliminadas?: number[];
+  dica_usada?: boolean;
 };
 
 export type QuestaoPublica = {
@@ -54,6 +60,24 @@ export type QuestaoPublica = {
   tempoLimite: number;
   restanteMs: number;
   relampago: boolean;
+  /** Posições (na tela) das alternativas já eliminadas. */
+  eliminadas: number[];
+  /** Ainda dá para eliminar uma alternativa errada nesta questão. */
+  podeEliminar: boolean;
+  temDica: boolean;
+  /** Texto da dica, se o jogador já abriu nesta questão. */
+  dica: string | null;
+};
+
+/** Ajudas que restam na partida. null = sem ajudas (rodada final ou banco sem as colunas). */
+export type AjudasPartida = { eliminacoes: number; dicas: number } | null;
+
+export type ResultadoAjudaPublica = {
+  erro?: string;
+  eliminadas?: number[];
+  podeEliminar?: boolean;
+  dica?: string;
+  ajudas?: AjudasPartida;
 };
 
 export type EstadoPartida =
@@ -64,6 +88,7 @@ export type EstadoPartida =
       total: number;
       final: boolean;
       pontos: number;
+      ajudas: AjudasPartida;
       aviso?: string;
     }
   /** Antes da rodada final: o jogador lê as regras e decide quando começar. */
@@ -78,8 +103,11 @@ type QuestaoBanco = {
   imagem_path: string | null;
   tempo_limite_s: number;
   relampago?: boolean;
+  dica?: string | null;
   conteudo: Conteudo["conteudo"];
 };
+
+const dicaDe = (q: QuestaoBanco) => q.dica?.trim() || null;
 
 const comoConteudo = (q: QuestaoBanco) => ({ tipo: q.tipo, conteudo: q.conteudo }) as Conteudo;
 
@@ -166,6 +194,22 @@ async function carregarQuestao(db: SupabaseClient, id: string): Promise<QuestaoB
   const { data, error } = await db.from("questoes").select("*").eq("id", id).single();
   if (error || !data) throw new Error("Questão não encontrada");
   return data as QuestaoBanco;
+}
+
+/** Ajudas que restam na partida, contadas pelo uso registrado nas respostas. */
+async function ajudasDaPartida(db: SupabaseClient, partidaId: string): Promise<AjudasPartida> {
+  const { data, error } = await db.from("respostas_publicas").select("eliminadas, dica_usada").eq("partida_id", partidaId);
+  if (error) return null; // SQL das ajudas ainda não rodou
+  let eliminacoes = 0;
+  let dicas = 0;
+  for (const r of (data ?? []) as { eliminadas: number[] | null; dica_usada: boolean }[]) {
+    eliminacoes += r.eliminadas?.length ?? 0;
+    if (r.dica_usada) dicas++;
+  }
+  return {
+    eliminacoes: Math.max(0, ELIMINACOES_POR_PARTIDA - eliminacoes),
+    dicas: Math.max(0, DICAS_POR_PARTIDA - dicas),
+  };
 }
 
 async function recalcularPartida(db: SupabaseClient, partida: Partida, novoIndice: number) {
@@ -278,20 +322,29 @@ export async function estadoPartida(
       continue;
     }
     const decorrido = agora.getTime() - new Date(linha.servida_em).getTime();
+    const conteudo = comoConteudo(questao);
+    const eliminadas = linha.eliminadas ?? [];
+    const dica = dicaDe(questao);
+    const ajudas = linha.final ? null : await ajudasDaPartida(db, partida.id);
     return {
       fase: "questao",
       posicao: indice + 1,
       total: partida.ordem.length,
       final: linha.final,
       pontos: Number(partida.pontos),
+      ajudas,
       questao: {
         id: questao.id,
         enunciado: questao.enunciado,
         imagemUrl: urlImagem(questao.imagem_path),
-        vista: montarVista(comoConteudo(questao), linha.permutacao),
+        vista: montarVista(conteudo, linha.permutacao),
         tempoLimite: questao.tempo_limite_s,
         restanteMs: Math.max(0, questao.tempo_limite_s * 1000 - decorrido),
         relampago: Boolean(questao.relampago),
+        eliminadas: eliminadasNaVista(linha.permutacao, eliminadas),
+        podeEliminar: candidatasEliminacao(conteudo, eliminadas).length > 0,
+        temDica: Boolean(dica),
+        dica: linha.dica_usada ? dica : null,
       },
     };
   }
@@ -326,4 +379,84 @@ export async function responderPartida(
   const estado = await estadoPartida(db, jogador, partidaId);
   if (zerada && estado.fase !== "erro") estado.aviso = AVISO_ZERADA[zerada];
   return estado;
+}
+
+/** Questão em andamento da partida, se ainda dá para usar ajuda nela. */
+async function questaoComAjuda(db: SupabaseClient, jogador: JogadorSessao, partidaId: string, questaoId: string) {
+  const partida = await partidaDoJogador(db, jogador.id, partidaId);
+  if (!partida || partida.concluida_em || partida.ordem[partida.indice_atual] !== questaoId) {
+    return { erro: "Esta questão já passou." } as const;
+  }
+  const { data } = await db
+    .from("respostas_publicas")
+    .select("*")
+    .eq("partida_id", partida.id)
+    .eq("questao_id", questaoId)
+    .maybeSingle();
+  const linha = data as RespostaPublica | null;
+  if (!linha || linha.respondida_em) return { erro: "Esta questão já passou." } as const;
+  if (linha.final) return { erro: "A rodada final é sem ajudas." } as const;
+  const questao = await carregarQuestao(db, questaoId);
+  if (tempoEsgotado(new Date(linha.servida_em), new Date(), questao.tempo_limite_s)) {
+    return { erro: "O tempo desta questão acabou." } as const;
+  }
+  const ajudas = await ajudasDaPartida(db, partida.id);
+  if (!ajudas) return { erro: "Ajudas indisponíveis no momento." } as const;
+  return { linha, questao, ajudas };
+}
+
+/** Elimina uma alternativa errada, sorteada, da questão atual. Gasta 1 da cota da partida. */
+export async function eliminarPublica(
+  db: SupabaseClient,
+  jogador: JogadorSessao,
+  partidaId: string,
+  questaoId: string,
+): Promise<ResultadoAjudaPublica> {
+  const atual = await questaoComAjuda(db, jogador, partidaId, questaoId);
+  if ("erro" in atual) return { erro: atual.erro };
+  const { linha, questao, ajudas } = atual;
+  if (ajudas.eliminacoes <= 0) return { erro: "Você já usou todas as eliminações deste desafio.", ajudas };
+  const conteudo = comoConteudo(questao);
+  const antes = linha.eliminadas ?? [];
+  const candidatas = candidatasEliminacao(conteudo, antes);
+  if (!candidatas.length) return { erro: "Não dá para eliminar mais alternativas nesta questão.", ajudas };
+  const eliminadas = [...antes, candidatas[Math.floor(Math.random() * candidatas.length)]];
+  const { data: gravada } = await db
+    .from("respostas_publicas")
+    .update({ eliminadas })
+    .eq("id", linha.id)
+    .is("respondida_em", null)
+    // Trava otimista: toques simultâneos leem o mesmo estado e só um grava.
+    .eq("eliminadas", `{${antes.join(",")}}`)
+    .select("id");
+  if (!gravada?.length) return { erro: "Não foi possível eliminar agora. Tente de novo." };
+  return {
+    eliminadas: eliminadasNaVista(linha.permutacao, eliminadas),
+    podeEliminar: candidatasEliminacao(conteudo, eliminadas).length > 0,
+    ajudas: { ...ajudas, eliminacoes: ajudas.eliminacoes - 1 },
+  };
+}
+
+/** Mostra a dica da questão atual. Gasta 1 da cota só na primeira vez em cada questão. */
+export async function dicaPublica(
+  db: SupabaseClient,
+  jogador: JogadorSessao,
+  partidaId: string,
+  questaoId: string,
+): Promise<ResultadoAjudaPublica> {
+  const atual = await questaoComAjuda(db, jogador, partidaId, questaoId);
+  if ("erro" in atual) return { erro: atual.erro };
+  const { linha, questao, ajudas } = atual;
+  const dica = dicaDe(questao);
+  if (!dica) return { erro: "Esta questão não tem dica." };
+  if (linha.dica_usada) return { dica, ajudas };
+  if (ajudas.dicas <= 0) return { erro: "Você já usou todas as dicas deste desafio.", ajudas };
+  const { data: gravada } = await db
+    .from("respostas_publicas")
+    .update({ dica_usada: true })
+    .eq("id", linha.id)
+    .is("respondida_em", null)
+    .select("id");
+  if (!gravada?.length) return { erro: "Esta questão já passou." };
+  return { dica, ajudas: { ...ajudas, dicas: ajudas.dicas - 1 } };
 }

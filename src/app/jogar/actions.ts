@@ -5,7 +5,15 @@ import { z } from "zod";
 import { CORES_AVATAR } from "@/components/Avatar";
 import { apelidoImproprio } from "@/lib/apelido";
 import { INICIAIS } from "@/lib/personagens";
-import { comecarPartida, estadoPartida, responderPartida, type EstadoPartida } from "@/lib/publico/jogo";
+import {
+  comecarPartida,
+  dicaPublica,
+  eliminarPublica,
+  estadoPartida,
+  responderPartida,
+  type EstadoPartida,
+  type ResultadoAjudaPublica,
+} from "@/lib/publico/jogo";
 import { ehEra } from "@/lib/publico/regras";
 import { encerrarSessaoJogador, exigirJogador, iniciarSessaoJogador } from "@/lib/publico/sessao";
 import { schemaResposta } from "@/lib/questoes/tipos";
@@ -143,4 +151,16 @@ export async function responderPublico(
     Number.isFinite(saidasTela) ? saidasTela : 0,
     ehMotivoZerada(motivo) ? motivo : null,
   );
+}
+
+/** Ajuda da partida: elimina uma alternativa errada da questão atual. */
+export async function eliminarNaPartida(partidaId: string, questaoId: string): Promise<ResultadoAjudaPublica> {
+  const jogador = await exigirJogador();
+  return eliminarPublica(criarClienteAdmin(), jogador, String(partidaId), String(questaoId));
+}
+
+/** Ajuda da partida: mostra a dica da questão atual. */
+export async function dicaNaPartida(partidaId: string, questaoId: string): Promise<ResultadoAjudaPublica> {
+  const jogador = await exigirJogador();
+  return dicaPublica(criarClienteAdmin(), jogador, String(partidaId), String(questaoId));
 }

@@ -68,6 +68,10 @@ export const QUESTOES_POR_PARTIDA = 10;
 export const QUESTOES_FINAIS = 2;
 export const ehFinal = (posicao: number) => posicao >= QUESTOES_POR_PARTIDA - QUESTOES_FINAIS;
 
+/** Ajudas de cada partida, só nas questões com consulta (a rodada final é sem ajuda). */
+export const ELIMINACOES_POR_PARTIDA = 4;
+export const DICAS_POR_PARTIDA = 2;
+
 /** Pontos por acerto e bônus máximo de rapidez. A rodada final vale o dobro. */
 export const PONTOS_ACERTO = 10;
 export const BONUS_RAPIDEZ = 5;

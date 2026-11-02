@@ -6,12 +6,20 @@ import { QuestaoInterativa } from "@/components/QuestaoInterativa";
 import { Aviso, Botao, BotaoLink } from "@/components/ui";
 import { useTelaProtegida } from "@/components/useTelaProtegida";
 import { formatarPontos } from "@/lib/pontos";
-import type { EstadoPartida } from "@/lib/publico/jogo";
-import { BONUS_RAPIDEZ, PESO_FINAL, PONTOS_ACERTO, QUESTOES_FINAIS, QUESTOES_POR_PARTIDA } from "@/lib/publico/regras";
+import type { AjudasPartida, EstadoPartida, ResultadoAjudaPublica } from "@/lib/publico/jogo";
+import {
+  BONUS_RAPIDEZ,
+  DICAS_POR_PARTIDA,
+  ELIMINACOES_POR_PARTIDA,
+  PESO_FINAL,
+  PONTOS_ACERTO,
+  QUESTOES_FINAIS,
+  QUESTOES_POR_PARTIDA,
+} from "@/lib/publico/regras";
 import { respostaCompleta, respostaInicial } from "@/lib/questoes/apresentacao";
 import { ESCOLHA_UNICA, type Resposta } from "@/lib/questoes/tipos";
 import { textoMarca, type MotivoZerada } from "@/lib/tela-protegida";
-import { carregarPartida, responderPublico } from "../../actions";
+import { carregarPartida, dicaNaPartida, eliminarNaPartida, responderPublico } from "../../actions";
 
 type QuestaoEmJogo = Extract<EstadoPartida, { fase: "questao" }>;
 
@@ -32,6 +40,7 @@ function RegrasFinal() {
       <li>🚫 Sem consulta: não saia desta tela nem troque de aba ou de app.</li>
       <li>⌨️ Não use o teclado: responda só com o mouse ou tocando na tela.</li>
       <li>🖱️ No computador, clique só nas alternativas e nos botões.</li>
+      <li>🛟 Sem ajudas: eliminações e dicas não valem na rodada final.</li>
       <li>❗ Se alguma dessas regras for quebrada, aquela questão vale zero.</li>
       <li>⭐ Cada questão da rodada final vale o dobro: até {PESO_FINAL * (PONTOS_ACERTO + BONUS_RAPIDEZ)} pontos.</li>
     </ul>
@@ -81,6 +90,10 @@ export function JogoPublico({
           </li>
           <li>
             ⚡ Cada acerto vale {PONTOS_ACERTO} pontos, mais até {BONUS_RAPIDEZ} de bônus pela rapidez.
+          </li>
+          <li>
+            🛟 Ajudas do desafio: {ELIMINACOES_POR_PARTIDA} eliminações de alternativa errada e {DICAS_POR_PARTIDA}{" "}
+            dicas, para usar nas questões 1 a {NORMAIS}.
           </li>
           <li>
             🔥 Questões {NORMAIS + 1} e {QUESTOES_POR_PARTIDA}: <strong>Rodada final, sem consulta</strong>, valendo o
@@ -171,6 +184,7 @@ export function JogoPublico({
       pendente={pendente}
       erroRede={erroRede}
       apelido={apelido}
+      partidaId={partidaId}
       enviar={(resposta, saidas, motivo) =>
         executar(() => responderPublico(partidaId, estado.questao.id, resposta, saidas, motivo))
       }
@@ -183,12 +197,14 @@ function TelaQuestao({
   pendente,
   erroRede,
   apelido,
+  partidaId,
   enviar,
 }: {
   estado: QuestaoEmJogo;
   pendente: boolean;
   erroRede: boolean;
   apelido: string;
+  partidaId: string;
   enviar: (resposta: Resposta | null, saidas: number, motivo: MotivoZerada | null) => void;
 }) {
   const { questao, posicao, total, final, aviso } = estado;
@@ -198,6 +214,36 @@ function TelaQuestao({
   const enviado = useRef(false);
   const fora = useRef(false);
   const dialogoProprio = useRef(false);
+  const [eliminadas, setEliminadas] = useState(questao.eliminadas);
+  const [podeEliminar, setPodeEliminar] = useState(questao.podeEliminar);
+  const [dica, setDica] = useState(questao.dica);
+  const [ajudas, setAjudas] = useState<AjudasPartida>(estado.ajudas);
+  const [erroAjuda, setErroAjuda] = useState<string | null>(null);
+  const [usandoAjuda, iniciarAjuda] = useTransition();
+
+  const usarAjuda = (acao: () => Promise<ResultadoAjudaPublica>) =>
+    iniciarAjuda(async () => {
+      setErroAjuda(null);
+      try {
+        const r = await acao();
+        if (r.ajudas !== undefined) setAjudas(r.ajudas);
+        if (r.erro) return setErroAjuda(r.erro);
+        if (r.dica) setDica(r.dica);
+        if (r.eliminadas) {
+          const novas = r.eliminadas;
+          setEliminadas(novas);
+          setPodeEliminar(Boolean(r.podeEliminar));
+          // A alternativa marcada pode ter sido eliminada.
+          setResposta((atual) =>
+            "escolha" in atual && atual.escolha !== null && novas.includes(atual.escolha)
+              ? { ...atual, escolha: null }
+              : atual,
+          );
+        }
+      } catch {
+        setErroAjuda("Falha de conexão. Tente de novo.");
+      }
+    });
 
   const confirmar = useCallback(
     (r: Resposta | null, motivo: MotivoZerada | null = null) => {
@@ -287,7 +333,42 @@ function TelaQuestao({
       )}
       <p className="text-lg font-medium whitespace-pre-line">{questao.enunciado}</p>
 
-      <QuestaoInterativa vista={questao.vista} resposta={resposta} onChange={setResposta} desabilitada={pendente} />
+      <QuestaoInterativa
+        vista={questao.vista}
+        resposta={resposta}
+        onChange={setResposta}
+        desabilitada={pendente}
+        eliminadas={eliminadas}
+      />
+
+      {!final && ajudas && (questao.podeEliminar || questao.temDica) && (
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            {questao.podeEliminar && (
+              <button
+                type="button"
+                disabled={pendente || usandoAjuda || !podeEliminar || ajudas.eliminacoes <= 0}
+                onClick={() => usarAjuda(() => eliminarNaPartida(partidaId, questao.id))}
+                className="flex-1 rounded-xl border-2 border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900 transition hover:bg-amber-100 disabled:opacity-40"
+              >
+                ✂️ Eliminar uma errada · {ajudas.eliminacoes}/{ELIMINACOES_POR_PARTIDA}
+              </button>
+            )}
+            {questao.temDica && !dica && (
+              <button
+                type="button"
+                disabled={pendente || usandoAjuda || ajudas.dicas <= 0}
+                onClick={() => usarAjuda(() => dicaNaPartida(partidaId, questao.id))}
+                className="flex-1 rounded-xl border-2 border-sky-300 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-900 transition hover:bg-sky-100 disabled:opacity-40"
+              >
+                💡 Ver dica · {ajudas.dicas}/{DICAS_POR_PARTIDA}
+              </button>
+            )}
+          </div>
+          {dica && <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm whitespace-pre-line text-sky-900">💡 {dica}</p>}
+          {erroAjuda && <Aviso>{erroAjuda}</Aviso>}
+        </div>
+      )}
 
       {erroRede && <Aviso>Falha de conexão. Toque em confirmar de novo.</Aviso>}
       <Botao
