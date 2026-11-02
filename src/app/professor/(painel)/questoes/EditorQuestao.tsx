@@ -67,6 +67,7 @@ export function EditorQuestao({
     relampago: inicial?.relampago ?? false,
     explicacao: inicial?.explicacao ?? "",
     dica: inicial?.dica ?? "",
+    tema: inicial?.tema ?? "",
     era_publica: inicial?.era_publica ?? "",
   });
   const set = <K extends keyof typeof campos>(k: K, v: (typeof campos)[K]) => setCampos((c) => ({ ...c, [k]: v }));
@@ -203,6 +204,12 @@ export function EditorQuestao({
             dica="O aluno pode abrir durante o desafio (3 dicas por temporada). Ajuda a pensar, sem entregar a resposta."
           >
             <AreaTexto rows={2} maxLength={300} value={campos.dica} onChange={(e) => set("dica", e.target.value)} />
+          </Campo>
+          <Campo
+            rotulo="Tema"
+            dica="2 a 6 palavras (ex.: Revolta da Vacina). Vira alternativa da verificação de leitura, ao lado dos temas de outras questões. O Claude escreve junto com a questão."
+          >
+            <Entrada maxLength={80} value={campos.tema} onChange={(e) => set("tema", e.target.value)} />
           </Campo>
         </Cartao>
 

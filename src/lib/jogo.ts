@@ -16,6 +16,13 @@ import type { Desafio, RespostaBanco, Tentativa } from "@/lib/tipos-banco";
 import { situacaoDesafio, urlImagem } from "@/lib/tipos-banco";
 import { arredondarPontos } from "./pontos";
 import { AVISO_ZERADA, type MotivoZerada } from "./tela-protegida";
+import {
+  AVISO_VERIFICACAO,
+  montarOpcoesVerificacao,
+  PERGUNTA_VERIFICACAO,
+  sortearVerificacoes,
+  VERIFICACAO_TEMPO_S,
+} from "./questoes/verificacao";
 
 export type QuestaoServida = {
   id: string;
@@ -48,8 +55,19 @@ export type ResultadoAjuda = {
   ajudas?: Ajudas;
 };
 
+/** Verificação de leitura da questão que o aluno acabou de responder. Sem a correta. */
+export type VerificacaoServida = {
+  questaoId: string;
+  pergunta: string;
+  opcoes: string[];
+  tempoLimite: number;
+  restanteMs: number;
+  saidaZera: boolean;
+};
+
 export type EstadoJogo =
   | { fase: "questao"; questao: QuestaoServida; posicao: number; total: number; ajudas: Ajudas; aviso?: string }
+  | { fase: "verificacao"; verificacao: VerificacaoServida; posicao: number; total: number; aviso?: string }
   | { fase: "fim"; aviso?: string }
   /** CaduRush: falta o código do dia (ou o digitado não confere). */
   | { fase: "codigo"; mensagem?: string; aviso?: string }
@@ -57,6 +75,10 @@ export type EstadoJogo =
 
 type QuestaoBanco = {
   id: string;
+  professor_id: string;
+  capitulo: string | null;
+  /** Ausente se o SQL da verificação de leitura ainda não rodou. */
+  tema?: string | null;
   tipo: Conteudo["tipo"];
   enunciado: string;
   imagem_path: string | null;
@@ -164,13 +186,18 @@ async function registrar(
   const causa = esgotado || !desafio.saida_zera_questao ? null : (motivo ?? (saidasTela > 0 ? "saida" : null));
   const zerada = causa !== null;
   const fracao = esgotado || zerada ? 0 : corrigir(comoConteudo(questao), linha.permutacao, resposta);
+  // Sorteada para a verificação de leitura: vale zero até o aluno acertar o tema.
+  // Respondeu de verdade (sem tempo esgotado nem zerada), mesmo errando: senão
+  // aparecer ou não a verificação entregaria se a resposta estava certa.
+  const verificar = !esgotado && !zerada && precisaVerificar(tentativa, questao);
   const { data: gravada } = await db
     .from("respostas")
     .update({
       respondida_em: agora.toISOString(),
       resposta,
-      fracao,
-      pontos: calcularPontos(fracao, desafio.pontos_por_acerto),
+      fracao: verificar ? 0 : fracao,
+      pontos: verificar ? 0 : calcularPontos(fracao, desafio.pontos_por_acerto),
+      ...(verificar && { verificacao_fracao: fracao }),
       tempo_esgotado: esgotado,
       zerada_por_saida: zerada,
       motivo_zerada: causa,
@@ -179,8 +206,124 @@ async function registrar(
     .eq("id", linha.id)
     .is("respondida_em", null)
     .select("id");
-  if (gravada?.length) await recalcularTentativa(db, tentativa, tentativa.indice_atual + 1);
+  // Com verificação pendente, o índice só avança depois dela.
+  if (gravada?.length && !verificar) await recalcularTentativa(db, tentativa, tentativa.indice_atual + 1);
   return gravada?.length ? causa : null;
+}
+
+const precisaVerificar = (tentativa: Tentativa, questao: QuestaoBanco) =>
+  Boolean(tentativa.verificar?.includes(questao.id) && !questao.relampago && questao.tema?.trim());
+
+const verificacaoPendente = (linha: RespostaBanco) =>
+  linha.verificacao_fracao !== null && linha.verificacao_fracao !== undefined && !linha.verificacao_respondida_em;
+
+/**
+ * Fecha a verificação: acertou devolve a nota real da questão; errou (ou o
+ * tempo acabou, ou zerou pela pesquisa bloqueada) deixa a questão em zero.
+ * Só a primeira gravação vale. Depois, o jogo avança para a próxima questão.
+ */
+async function resolverVerificacao(
+  db: SupabaseClient,
+  desafio: Desafio,
+  tentativa: Tentativa,
+  linha: RespostaBanco,
+  acertou: boolean | null,
+  motivo: MotivoZerada | null = null,
+) {
+  const fracao = Number(linha.verificacao_fracao ?? 0);
+  const { data: gravada } = await db
+    .from("respostas")
+    .update({
+      verificacao_respondida_em: new Date().toISOString(),
+      verificacao_acertou: acertou,
+      ...(acertou === false
+        ? { zerada_por_saida: motivo !== null, motivo_zerada: motivo ?? "verificacao" }
+        : { fracao, pontos: calcularPontos(fracao, desafio.pontos_por_acerto) }),
+    })
+    .eq("id", linha.id)
+    .is("verificacao_respondida_em", null)
+    .select("id");
+  if (gravada?.length) await recalcularTentativa(db, tentativa, tentativa.indice_atual + 1);
+  return Boolean(gravada?.length);
+}
+
+/** Temas para as alternativas erradas: primeiro as outras questões do desafio, depois o banco do professor. */
+async function temasParaDistratores(db: SupabaseClient, tentativa: Tentativa, questao: QuestaoBanco) {
+  const { data: doDesafio } = await db.from("questoes").select("id, tema").in("id", tentativa.ordem);
+  const desafio = (doDesafio ?? []).filter((q) => q.id !== questao.id).map((q) => q.tema as string | null);
+  const fontes: (string | null)[][] = [desafio];
+  if (desafio.filter((t) => t?.trim()).length < 6) {
+    const banco = (capitulo: string | null) => {
+      let c = db
+        .from("questoes")
+        .select("tema")
+        .eq("professor_id", questao.professor_id)
+        .eq("status", "publicada")
+        .not("tema", "is", null)
+        .limit(60);
+      if (capitulo) c = c.eq("capitulo", capitulo);
+      return c;
+    };
+    const [{ data: capitulo }, { data: geral }] = await Promise.all([
+      questao.capitulo ? banco(questao.capitulo) : Promise.resolve({ data: [] }),
+      banco(null),
+    ]);
+    fontes.push(
+      (capitulo ?? []).map((q) => q.tema as string),
+      (geral ?? []).map((q) => q.tema as string),
+    );
+  }
+  return fontes;
+}
+
+/**
+ * Serve a verificação pendente (sorteando as alternativas na primeira vez).
+ * null = já se resolveu (tempo acabou ou faltaram temas) e o jogo segue.
+ */
+async function servirVerificacao(
+  db: SupabaseClient,
+  desafio: Desafio,
+  tentativa: Tentativa,
+  linha: RespostaBanco,
+  questao: QuestaoBanco,
+): Promise<VerificacaoServida | null> {
+  let atual = linha;
+  if (!atual.verificacao_opcoes?.length) {
+    const montada = montarOpcoesVerificacao(questao.tema ?? "", await temasParaDistratores(db, tentativa, questao));
+    // Sem temas diferentes suficientes não dá para verificar: a questão vale o que o aluno acertou.
+    if (!montada) {
+      await resolverVerificacao(db, desafio, tentativa, atual, null);
+      return null;
+    }
+    const { data: gravada } = await db
+      .from("respostas")
+      .update({
+        verificacao_opcoes: montada.opcoes,
+        verificacao_correta: montada.correta,
+        verificacao_servida_em: new Date().toISOString(),
+      })
+      .eq("id", atual.id)
+      .is("verificacao_opcoes", null)
+      .select("*");
+    const relida = gravada?.[0] ?? (await db.from("respostas").select("*").eq("id", atual.id).single()).data;
+    if (!relida) return null;
+    atual = relida as RespostaBanco;
+    if (!verificacaoPendente(atual)) return null;
+  }
+  const servida = new Date(atual.verificacao_servida_em ?? atual.respondida_em ?? Date.now());
+  const agora = new Date();
+  if (tempoEsgotado(servida, agora, VERIFICACAO_TEMPO_S)) {
+    await resolverVerificacao(db, desafio, tentativa, atual, false);
+    return null;
+  }
+  return {
+    questaoId: questao.id,
+    pergunta: PERGUNTA_VERIFICACAO,
+    opcoes: atual.verificacao_opcoes ?? [],
+    tempoLimite: VERIFICACAO_TEMPO_S,
+    restanteMs: Math.max(0, VERIFICACAO_TEMPO_S * 1000 - (agora.getTime() - servida.getTime())),
+    saidaZera: desafio.saida_zera_questao,
+  };
 }
 
 async function obterOuCriarTentativa(db: SupabaseClient, desafioId: string, alunoId: string): Promise<Tentativa> {
@@ -194,11 +337,16 @@ async function obterOuCriarTentativa(db: SupabaseClient, desafioId: string, alun
 
   const { data: questoes } = await db.from("desafio_questoes").select("questao_id").eq("desafio_id", desafioId);
   const ordem = embaralhar((questoes ?? []).map((q) => q.questao_id as string));
-  const { data: nova, error } = await db
-    .from("tentativas")
-    .insert({ desafio_id: desafioId, aluno_id: alunoId, ordem })
-    .select("*")
-    .single();
+  const verificar = await sortearVerificacoesDaTentativa(db, ordem);
+  const inserir = (extra: object) =>
+    db
+      .from("tentativas")
+      .insert({ desafio_id: desafioId, aluno_id: alunoId, ordem, ...extra })
+      .select("*")
+      .single();
+  let { data: nova, error } = await inserir(verificar ? { verificar } : {});
+  // Sem o SQL da verificação de leitura a coluna não existe: cria sem ela.
+  if (error && verificar && error.code !== "23505") ({ data: nova, error } = await inserir({}));
   if (error) {
     // Duas abas ao mesmo tempo: a outra criou primeiro.
     const { data } = await db
@@ -210,6 +358,19 @@ async function obterOuCriarTentativa(db: SupabaseClient, desafioId: string, alun
     return data as Tentativa;
   }
   return nova as Tentativa;
+}
+
+/** Questões da tentativa com verificação de leitura. null = banco sem o SQL dela. */
+async function sortearVerificacoesDaTentativa(db: SupabaseClient, ordem: string[]): Promise<string[] | null> {
+  if (!ordem.length) return [];
+  const { data, error } = await db.from("questoes").select("id, tema, relampago").in("id", ordem);
+  if (error) return null;
+  const porId = new Map((data ?? []).map((q) => [q.id as string, q]));
+  const elegiveis = ordem.map((id) => {
+    const q = porId.get(id);
+    return Boolean(q && !q.relampago && (q.tema as string | null)?.trim());
+  });
+  return sortearVerificacoes(elegiveis).map((i) => ordem[i]);
 }
 
 /**
@@ -268,6 +429,16 @@ export async function estadoAtual(
       .maybeSingle();
 
     let linha = linhaExistente as RespostaBanco | null;
+    if (linha?.respondida_em && verificacaoPendente(linha)) {
+      const verificacao = await servirVerificacao(db, desafio, tentativa, linha, questao);
+      if (!verificacao) continue;
+      return {
+        fase: "verificacao",
+        posicao: tentativa.indice_atual + 1,
+        total: tentativa.ordem.length,
+        verificacao,
+      };
+    }
     if (linha?.respondida_em) {
       // Resposta gravada mas índice não avançou (falha no meio): corrige e segue.
       await recalcularTentativa(db, tentativa, tentativa.indice_atual + 1);
@@ -463,4 +634,67 @@ export async function abrirDica(
     .select("id");
   if (!gravada?.length) return { erro: "Esta questão já passou." };
   return { dica, ajudas: { ...ajudas, dicas: ajudas.dicas - 1 } };
+}
+
+/**
+ * Resposta da verificação de leitura. Errar, deixar o tempo acabar ou zerar
+ * pela pesquisa bloqueada faz a questão anterior valer zero.
+ */
+export async function responderVerificacao(
+  db: SupabaseClient,
+  aluno: AlunoSessao,
+  desafioId: string,
+  questaoId: string,
+  escolha: number | null,
+  motivo: MotivoZerada | null = null,
+): Promise<EstadoJogo> {
+  const desafio = await desafioDoAluno(db, aluno, desafioId);
+  if (!desafio) return { fase: "erro", mensagem: "Desafio não encontrado." };
+  if (new Date() > new Date(new Date(desafio.fecha_em).getTime() + JANELA_APOS_FECHAR_S * 1000)) {
+    return { fase: "fim" };
+  }
+  const { data: tentativa } = await db
+    .from("tentativas")
+    .select("*")
+    .eq("desafio_id", desafio.id)
+    .eq("aluno_id", aluno.id)
+    .maybeSingle();
+  if (!tentativa) return estadoAtual(db, aluno, desafioId);
+  const t = tentativa as Tentativa;
+
+  let aviso: string | null = null;
+  if (t.ordem[t.indice_atual] === questaoId) {
+    const { data } = await db
+      .from("respostas")
+      .select("*")
+      .eq("tentativa_id", t.id)
+      .eq("questao_id", questaoId)
+      .maybeSingle();
+    const linha = data as RespostaBanco | null;
+    if (linha && verificacaoPendente(linha) && linha.verificacao_opcoes?.length && linha.verificacao_servida_em) {
+      if (motivo === "teclado") {
+        const { data: a } = await db.from("alunos").select("teclado_liberado").eq("id", aluno.id).single();
+        if (a?.teclado_liberado) motivo = null;
+      }
+      const causa = desafio.saida_zera_questao ? motivo : null;
+      const esgotado = tempoEsgotado(new Date(linha.verificacao_servida_em), new Date(), VERIFICACAO_TEMPO_S);
+      const acertou =
+        !causa &&
+        !esgotado &&
+        escolha !== null &&
+        Number.isInteger(escolha) &&
+        escolha === Number(linha.verificacao_correta);
+      const gravou = await resolverVerificacao(db, desafio, t, linha, acertou, causa);
+      if (gravou && !acertou) {
+        aviso = causa
+          ? AVISO_ZERADA[causa]
+          : esgotado
+            ? "O tempo da verificação de leitura acabou, então a questão anterior valeu zero."
+            : AVISO_VERIFICACAO;
+      }
+    }
+  }
+  const estado = await estadoAtual(db, aluno, desafioId);
+  if (aviso && estado.fase !== "erro") estado.aviso = aviso;
+  return estado;
 }

@@ -16,6 +16,7 @@ import {
   eliminarAlternativa,
   estadoAtual,
   responderQuestao,
+  responderVerificacao,
   type EstadoJogo,
   type ResultadoAjuda,
 } from "@/lib/jogo";
@@ -55,6 +56,24 @@ export async function enviarResposta(
     questaoId,
     r && r.success ? r.data : null,
     Number.isFinite(saidasTela) ? saidasTela : 0,
+    ehMotivoZerada(motivo) ? motivo : null,
+  );
+}
+
+/** Verificação de leitura: posição da alternativa escolhida (null = tempo acabou ou zerou). */
+export async function enviarVerificacao(
+  desafioId: string,
+  questaoId: string,
+  escolha: unknown,
+  motivo: unknown = null,
+): Promise<EstadoJogo> {
+  const aluno = await exigirAluno();
+  return responderVerificacao(
+    criarClienteAdmin(),
+    aluno,
+    String(desafioId),
+    String(questaoId),
+    Number.isInteger(escolha) ? (escolha as number) : null,
     ehMotivoZerada(motivo) ? motivo : null,
   );
 }

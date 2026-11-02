@@ -18,6 +18,9 @@ export type LinhaResultado = {
   zeradasTeclado: number;
   zeradasTela: number;
   zeradasClique: number;
+  /** Verificações de leitura feitas e erradas (errada = questão zerada). */
+  verificacoes: number;
+  verificacoesErradas: number;
   /** Resultado em cada questão (por id); ausente = não chegou nela. */
   questoes: Map<string, ResultadoQuestao>;
 };
@@ -32,7 +35,8 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
   const { data: respostas } = tentativas.length
     ? await db
         .from("respostas")
-        .select("tentativa_id, questao_id, fracao, tempo_esgotado, saidas_tela, zerada_por_saida, motivo_zerada")
+        // "*" traz também as colunas da verificação de leitura, quando o SQL dela já rodou.
+        .select("*")
         .in(
           "tentativa_id",
           tentativas.map((t) => t.id),
@@ -46,6 +50,7 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
           saidas_tela: number;
           zerada_por_saida: boolean;
           motivo_zerada: string | null;
+          verificacao_acertou?: boolean | null;
         }[],
       };
 
@@ -58,6 +63,8 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
     teclado: number;
     tela: number;
     clique: number;
+    verificacoes: number;
+    verificacoesErradas: number;
   };
   const porTentativa = new Map<string, Agregado>();
   const porQuestao = new Map<string, { soma: number; n: number }>();
@@ -68,6 +75,7 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
       fracao: r.fracao === null ? null : Number(r.fracao),
       esgotada: r.tempo_esgotado,
       zerada: r.zerada_por_saida,
+      verificacaoErrada: r.motivo_zerada === "verificacao",
     });
     detalhe.set(r.tentativa_id, doAluno);
     const agg = porTentativa.get(r.tentativa_id) ?? {
@@ -79,6 +87,8 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
       teclado: 0,
       tela: 0,
       clique: 0,
+      verificacoes: 0,
+      verificacoesErradas: 0,
     };
     if (r.fracao !== null) {
       agg.acertos += Number(r.fracao);
@@ -93,6 +103,8 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
     if (r.motivo_zerada === "teclado") agg.teclado += 1;
     if (r.motivo_zerada === "tela_alterada") agg.tela += 1;
     if (r.motivo_zerada === "clique_fora") agg.clique += 1;
+    if (r.verificacao_acertou === true || r.verificacao_acertou === false) agg.verificacoes += 1;
+    if (r.motivo_zerada === "verificacao") agg.verificacoesErradas += 1;
     agg.saidas += r.saidas_tela;
     porTentativa.set(r.tentativa_id, agg);
   }
@@ -115,6 +127,8 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
       zeradasTeclado: agg?.teclado ?? 0,
       zeradasTela: agg?.tela ?? 0,
       zeradasClique: agg?.clique ?? 0,
+      verificacoes: agg?.verificacoes ?? 0,
+      verificacoesErradas: agg?.verificacoesErradas ?? 0,
       questoes: (t && detalhe.get(t.id)) || new Map(),
     };
   });

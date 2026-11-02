@@ -11,9 +11,10 @@ import { ESCOLHA_UNICA } from "@/lib/questoes/tipos";
 import type { Resposta } from "@/lib/questoes/tipos";
 import { useTelaProtegida } from "@/components/useTelaProtegida";
 import { textoMarca, type MotivoZerada } from "@/lib/tela-protegida";
-import { carregarJogo, eliminar, enviarResposta, pedirDica } from "../../actions";
+import { carregarJogo, eliminar, enviarResposta, enviarVerificacao, pedirDica } from "../../actions";
 
 type QuestaoEmJogo = Extract<EstadoJogo, { fase: "questao" }>;
+type VerificacaoEmJogo = Extract<EstadoJogo, { fase: "verificacao" }>;
 
 /** Tela cheia ajuda a manter o foco quando a pesquisa é bloqueada; o navegador pode recusar (iPhone, por exemplo). */
 function entrarEmTelaCheia() {
@@ -112,6 +113,10 @@ export function Jogo({
           )}
           <li>↩️ Não dá para voltar à questão anterior.</li>
           <li>
+            📖 Verificação de leitura: em algumas questões, logo depois de responder, você marca qual era o tema dela.
+            Errou, a questão vale zero.
+          </li>
+          <li>
             🛟 Ajudas da temporada: {ELIMINACOES_POR_TEMPORADA} eliminações de alternativa errada e{" "}
             {DICAS_POR_TEMPORADA} dicas. Use quando quiser; acabou, só na próxima temporada.
           </li>
@@ -174,6 +179,22 @@ export function Jogo({
           </BotaoLink>
         </div>
       </div>
+    );
+  }
+
+  if (estado.fase === "verificacao") {
+    return (
+      <TelaVerificacao
+        key={`v-${estado.verificacao.questaoId}`}
+        estado={estado}
+        pendente={pendente}
+        erroRede={erroRede}
+        tecladoLiberado={tecladoLiberado}
+        identificacao={identificacao}
+        enviar={(escolha, motivo) =>
+          executar(() => enviarVerificacao(desafioId, estado.verificacao.questaoId, escolha, motivo))
+        }
+      />
     );
   }
 
@@ -419,6 +440,115 @@ function TelaQuestao({
       <p className="text-center text-xs text-slate-400">
         <Link href="/aluno">Sair</Link> · o tempo continua correndo
       </p>
+    </div>
+  );
+}
+
+/** Verificação de leitura: qual era o tema da questão que o aluno acabou de responder. */
+function TelaVerificacao({
+  estado,
+  pendente,
+  erroRede,
+  tecladoLiberado,
+  identificacao,
+  enviar,
+}: {
+  estado: VerificacaoEmJogo;
+  pendente: boolean;
+  erroRede: boolean;
+  tecladoLiberado: boolean;
+  identificacao: string;
+  enviar: (escolha: number | null, motivo: MotivoZerada | null) => void;
+}) {
+  const { verificacao, posicao, total, aviso } = estado;
+  const [restante, setRestante] = useState(verificacao.restanteMs);
+  const enviado = useRef(false);
+  const saidas = useRef(0);
+  const fora = useRef(false);
+  const dialogoProprio = useRef(false);
+
+  const confirmar = useCallback(
+    (escolha: number | null, motivo: MotivoZerada | null = null) => {
+      if (enviado.current) return;
+      enviado.current = true;
+      enviar(escolha, motivo);
+    },
+    [enviar],
+  );
+
+  useEffect(() => {
+    if (erroRede) enviado.current = false;
+  }, [erroRede]);
+
+  useEffect(() => {
+    const fim = Date.now() + verificacao.restanteMs;
+    const timer = setInterval(() => {
+      const r = Math.max(0, fim - Date.now());
+      setRestante(r);
+      if (r === 0) {
+        clearInterval(timer);
+        confirmar(null);
+      }
+    }, 200);
+    return () => clearInterval(timer);
+  }, [verificacao.restanteMs, confirmar]);
+
+  const zerar = useCallback((motivo: MotivoZerada) => confirmar(null, motivo), [confirmar]);
+  useTelaProtegida({
+    protegida: verificacao.saidaZera,
+    tecladoBloqueado: !tecladoLiberado,
+    enviado,
+    saidas,
+    fora,
+    dialogoProprio,
+    zerar,
+  });
+  const [marca] = useState(() => (verificacao.saidaZera && identificacao ? textoMarca(identificacao) : ""));
+
+  const segundos = Math.ceil(restante / 1000);
+  const fracao = restante / (verificacao.tempoLimite * 1000);
+
+  return (
+    <div
+      translate={verificacao.saidaZera ? "no" : undefined}
+      className={`sem-selecao relative isolate space-y-4 ${verificacao.saidaZera ? "notranslate" : ""}`}
+      onCopy={(e) => e.preventDefault()}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <div className="flex items-center justify-between text-sm font-medium text-slate-600">
+        <span>
+          Questão {posicao} de {total} · verificação
+        </span>
+        <span className={`tabular-nums ${segundos <= 5 ? "font-bold text-red-600" : ""}`}>⏱️ {segundos}s</span>
+      </div>
+      {aviso && <Aviso>{aviso}</Aviso>}
+      <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+        <div
+          className={`h-full transition-[width] duration-200 ${fracao < 0.3 ? "bg-red-500" : "bg-sky-500"}`}
+          style={{ width: `${Math.max(0, Math.min(1, fracao)) * 100}%` }}
+        />
+      </div>
+      <div className="rounded-2xl border-2 border-sky-200 bg-sky-50 p-4">
+        <p className="text-xs font-bold tracking-widest text-sky-700 uppercase">📖 Verificação de leitura</p>
+        <p className="mt-1 text-lg font-semibold text-slate-900">{verificacao.pergunta}</p>
+        <p className="mt-1 text-xs text-slate-600">Se errar, a questão que você acabou de responder vale zero.</p>
+      </div>
+      <div className="grid gap-2">
+        {verificacao.opcoes.map((opcao, i) => (
+          <button
+            key={i}
+            type="button"
+            disabled={pendente}
+            onClick={() => confirmar(i)}
+            className="w-full rounded-xl border-2 border-slate-200 bg-white px-4 py-3 text-left font-medium transition hover:border-sky-400 hover:bg-sky-50 disabled:opacity-50"
+          >
+            {opcao}
+          </button>
+        ))}
+      </div>
+      {pendente && <p className="text-center text-sm text-slate-500">Enviando…</p>}
+      {erroRede && <Aviso>Falha de conexão. Toque na alternativa de novo.</Aviso>}
+      {marca && <p className="text-right text-[11px] text-slate-400">{marca}</p>}
     </div>
   );
 }

@@ -98,7 +98,7 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
                 </th>
                 <th
                   className="py-2 text-right"
-                  title="Vezes que saiu da tela e questões zeradas (saída, tecla ou extensão que mexeu na tela)"
+                  title="Vezes que saiu da tela, questões zeradas (saída, tecla, extensão, clique fora) e verificações de leitura erradas"
                 >
                   Saídas
                 </th>
@@ -154,6 +154,15 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
                         🖱️ {l.zeradasClique} por clique fora
                       </span>
                     )}
+                    {l.verificacoes > 0 && (
+                      <span
+                        className={`block text-xs font-normal ${l.verificacoesErradas ? "text-red-700" : "text-slate-500"}`}
+                        title="Verificações de leitura erradas / feitas. Errar zera a questão."
+                      >
+                        📖 {l.verificacoesErradas}/{l.verificacoes} verif. errada
+                        {l.verificacoesErradas === 1 ? "" : "s"}
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -162,7 +171,9 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
           <p className="mt-3 text-xs text-slate-500">
             {desafio.saida_zera_questao
               ? "Neste desafio, sair da tela, apertar uma tecla ou usar extensão que mexe na tela zera a questão em que o aluno estava."
-              : "Pesquisa liberada: as saídas da tela são só registradas e não tiram pontos."}
+              : "Pesquisa liberada: as saídas da tela são só registradas e não tiram pontos."}{" "}
+            📖 Em 2 de cada 10 questões (sorteadas, fora as relâmpago), o aluno marca o tema da questão logo depois de
+            responder; errar zera a questão.
           </p>
         </Cartao>
 

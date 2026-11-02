@@ -46,6 +46,8 @@ export type Questao = {
   conteudo: unknown;
   explicacao: string | null;
   dica?: string | null;
+  /** Tema curto, alternativa da verificação de leitura (ausente sem o SQL dela). */
+  tema?: string | null;
   /** Era do desafio público em que a questão pode ser sorteada (ausente sem o SQL dele). */
   era_publica?: string | null;
   status: "rascunho" | "publicada";
@@ -79,6 +81,8 @@ export type Tentativa = {
   iniciada_em: string;
   concluida_em: string | null;
   pontos: number;
+  /** Questões sorteadas para a verificação de leitura (ausente sem o SQL dela). */
+  verificar?: string[];
 };
 export type RespostaBanco = {
   id: string;
@@ -94,10 +98,21 @@ export type RespostaBanco = {
   tempo_esgotado: boolean;
   saidas_tela: number;
   zerada_por_saida: boolean;
-  motivo_zerada: "saida" | "teclado" | "tela_alterada" | "clique_fora" | null;
+  motivo_zerada: "saida" | "teclado" | "tela_alterada" | "clique_fora" | "verificacao" | null;
   /** Ausentes antes do SQL das ajudas. */
   eliminadas?: number[];
   dica_usada?: boolean;
+  /**
+   * Verificação de leitura (ausentes antes do SQL dela). verificacao_fracao
+   * guarda a nota real enquanto a verificação está pendente; a questão vale 0
+   * até o aluno acertar. verificacao_correta nunca vai para o aluno.
+   */
+  verificacao_fracao?: number | null;
+  verificacao_opcoes?: string[] | null;
+  verificacao_correta?: number | null;
+  verificacao_servida_em?: string | null;
+  verificacao_respondida_em?: string | null;
+  verificacao_acertou?: boolean | null;
 };
 
 export function situacaoDesafio(d: Pick<Desafio, "abre_em" | "fecha_em">, agora = new Date()) {
