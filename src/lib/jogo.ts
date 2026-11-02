@@ -5,10 +5,12 @@ import { montarVista } from "@/lib/questoes/apresentacao";
 import { calcularPontos, corrigir, JANELA_APOS_FECHAR_S, tempoEsgotado } from "@/lib/questoes/correcao";
 import { codigoConfere, LIMITE_TENTATIVAS_CODIGO } from "@/lib/cadurush";
 import {
+  ajudaNaVista,
   candidatasEliminacao,
   DICAS_POR_TEMPORADA,
   ELIMINACOES_POR_TEMPORADA,
-  eliminadasNaVista,
+  respostaComAjuda,
+  type AjudaVista,
 } from "@/lib/questoes/ajudas";
 import { embaralhar, permutacaoAleatoria } from "@/lib/questoes/embaralhar";
 import { tamanhoPermutacao, type Conteudo, type Resposta, type Vista } from "@/lib/questoes/tipos";
@@ -35,9 +37,9 @@ export type QuestaoServida = {
   restanteMs: number;
   /** Sair da tela zera a questão (opção do desafio). */
   saidaZera: boolean;
-  /** Posições (na tela) das alternativas já eliminadas. */
-  eliminadas: number[];
-  /** Ainda dá para eliminar uma alternativa errada nesta questão. */
+  /** O que as eliminações já usadas mudam na tela. */
+  ajuda: AjudaVista;
+  /** Ainda dá para usar uma eliminação nesta questão. */
   podeEliminar: boolean;
   temDica: boolean;
   /** Texto da dica, se o aluno já abriu nesta questão. */
@@ -49,7 +51,7 @@ export type Ajudas = { eliminacoes: number; dicas: number } | null;
 
 export type ResultadoAjuda = {
   erro?: string;
-  eliminadas?: number[];
+  ajuda?: AjudaVista;
   podeEliminar?: boolean;
   dica?: string;
   ajudas?: Ajudas;
@@ -181,6 +183,8 @@ async function registrar(
   saidasTela: number,
   motivo: MotivoZerada | null,
 ): Promise<MotivoZerada | null> {
+  // Os itens travados pelas eliminações valem como estão na tela.
+  resposta = respostaComAjuda(comoConteudo(questao), linha.permutacao, linha.eliminadas, resposta);
   const agora = new Date();
   const esgotado = tempoEsgotado(new Date(linha.servida_em), agora, tempoDaQuestao(desafio, questao));
   const causa = esgotado || !desafio.saida_zera_questao ? null : (motivo ?? (saidasTela > 0 ? "saida" : null));
@@ -489,7 +493,7 @@ export async function estadoAtual(
         relampago: Boolean(questao.relampago),
         restanteMs: Math.max(0, tempoLimite * 1000 - decorrido),
         saidaZera: desafio.saida_zera_questao,
-        eliminadas: eliminadasNaVista(linha.permutacao, eliminadas),
+        ajuda: ajudaNaVista(conteudo, linha.permutacao, eliminadas),
         podeEliminar: candidatasEliminacao(conteudo, eliminadas).length > 0,
         temDica: Boolean(dica),
         dica: linha.dica_usada ? dica : null,
@@ -592,7 +596,7 @@ export async function eliminarAlternativa(
   const conteudo = comoConteudo(questao);
   const antes = linha.eliminadas ?? [];
   const candidatas = candidatasEliminacao(conteudo, antes);
-  if (!candidatas.length) return { erro: "Não dá para eliminar mais alternativas nesta questão.", ajudas };
+  if (!candidatas.length) return { erro: "Não dá para usar mais eliminações nesta questão.", ajudas };
   const eliminadas = [...antes, candidatas[Math.floor(Math.random() * candidatas.length)]];
   const { data: gravada } = await db
     .from("respostas")
@@ -604,7 +608,7 @@ export async function eliminarAlternativa(
     .select("id");
   if (!gravada?.length) return { erro: "Não foi possível eliminar agora. Tente de novo." };
   return {
-    eliminadas: eliminadasNaVista(linha.permutacao, eliminadas),
+    ajuda: ajudaNaVista(conteudo, linha.permutacao, eliminadas),
     podeEliminar: candidatasEliminacao(conteudo, eliminadas).length > 0,
     ajudas: { ...ajudas, eliminacoes: ajudas.eliminacoes - 1 },
   };
