@@ -91,7 +91,14 @@ export default async function RespostasDoAluno({ params }: PageProps<"/professor
                     <Etiqueta
                       cor={!r || fracao === null ? "cinza" : fracao >= 1 ? "verde" : fracao > 0 ? "ambar" : "vermelho"}
                     >
-                      {rotuloResultado(r && { fracao, esgotada: r.tempo_esgotado, zerada: r.zerada_por_saida })}
+                      {rotuloResultado(
+                        r && {
+                          fracao,
+                          esgotada: r.tempo_esgotado,
+                          zerada: r.zerada_por_saida,
+                          verificacaoErrada: r.motivo_zerada === "verificacao",
+                        },
+                      )}
                     </Etiqueta>
                   </div>
                   {r && (
@@ -99,6 +106,9 @@ export default async function RespostasDoAluno({ params }: PageProps<"/professor
                       {tempo !== null && `Respondeu em ${tempo} s`}
                       {r.saidas_tela > 0 && ` · saiu da tela ${r.saidas_tela}×`}
                       {r.pontos !== null && ` · ${formatarPontos(r.pontos)} pts`}
+                      {r.verificacao_acertou === true && " · 📖 acertou a verificação"}
+                      {r.verificacao_acertou === false &&
+                        ` · 📖 errou a verificação${r.verificacao_opcoes && r.verificacao_correta != null ? ` (tema: ${r.verificacao_opcoes[r.verificacao_correta]})` : ""}`}
                     </p>
                   )}
                   {q.imagem_path && (

@@ -115,6 +115,8 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
                   </p>
                   {r?.tempo_esgotado ? (
                     <Etiqueta cor="ambar">Tempo esgotado</Etiqueta>
+                  ) : r?.motivo_zerada === "verificacao" ? (
+                    <Etiqueta cor="vermelho">Zerada: errou a verificação</Etiqueta>
                   ) : fracao === null ? (
                     <Etiqueta>Sem resposta</Etiqueta>
                   ) : fracao === 1 ? (

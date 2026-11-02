@@ -72,6 +72,13 @@ const schemaQuestao = z.object({
     .describe(
       "Dica que o aluno pode abrir durante o desafio (ele tem só 3 por temporada). 1 frase curta que puxa o raciocínio certo (um contexto, uma pista de época ou de causa) sem entregar a resposta nem eliminar alternativas diretamente.",
     ),
+  tema: z
+    .string()
+    .min(3)
+    .max(80)
+    .describe(
+      "Tema específico da questão em 2 a 6 palavras (ex.: 'Revolta da Vacina', 'Causas da Primeira Guerra'). Vira a alternativa certa da verificação de leitura, em que o aluno marca de que tratava a questão que acabou de responder, ao lado dos temas de outras questões: precisa distinguir esta questão das outras do mesmo capítulo, sem ser genérico (nada de só o nome do capítulo).",
+    ),
   fonte: z.string().optional().describe("Origem do texto ou da imagem citada, se houver."),
   imagem_url: z
     .string()
@@ -369,6 +376,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         relampago: q.relampago,
         ...(q.era_publica && { era_publica: q.era_publica }),
         tempo_limite_s: q.tempo_limite_s,
+        tema: q.tema ?? null,
         enunciado: q.enunciado,
       }));
       return resultado({ total: questoes.length, questoes });
@@ -450,6 +458,43 @@ export function registrarFerramentas(server: McpServer, origem: string) {
   );
 
   server.registerTool(
+    "definir_temas",
+    {
+      title: "Escrever o tema de questões que já existem",
+      description:
+        "Grava (ou troca) o tema curto de questões que já estão no banco, pelo id (veja listar_questoes: as que estão com tema null). O tema é a alternativa certa da verificação de leitura (o aluno marca de que tratava a questão que acabou de responder, entre o tema dela e os de outras questões), então precisa ser específico, em 2 a 6 palavras, e diferente dos temas das outras questões do mesmo capítulo. Questão sem tema nunca recebe verificação. Pode gravar direto quando o professor pedir para preencher os temas; mostre a lista gravada depois.",
+      inputSchema: z.object({
+        temas: z
+          .array(z.object({ id: z.string(), tema: z.string().min(3).max(80) }))
+          .min(1)
+          .max(200),
+      }),
+    },
+    async ({ temas }) => {
+      const professorId = await professorDoConector();
+      const db = criarClienteAdmin();
+      const gravadas: string[] = [];
+      const recusadas: { id: string; motivo: string }[] = [];
+      for (const { id, tema } of temas) {
+        const { data, error } = await db
+          .from("questoes")
+          .update({ tema: tema.trim() })
+          .eq("id", id)
+          .eq("professor_id", professorId)
+          .select("id");
+        if (error)
+          recusadas.push({
+            id,
+            motivo: "Banco sem o campo de tema: rode o SQL da verificação de leitura no Supabase.",
+          });
+        else if (!data?.length) recusadas.push({ id, motivo: "Questão não encontrada." });
+        else gravadas.push(id);
+      }
+      return resultado({ gravadas: gravadas.length, recusadas });
+    },
+  );
+
+  server.registerTool(
     "checar_relampago",
     {
       title: "Checar questões relâmpago e sugerir o tempo",
@@ -488,7 +533,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         "Varie os formatos dentro do lote. fonte_primaria, causa_consequencia e encontrar_erro treinam as habilidades mais cobradas na prova: inclua ao menos uma de cada quando o capítulo permitir.",
         "Distratores de alto nível em todos os tipos: plausíveis, do mesmo período e baseados em confusões reais de alunos.",
         "Antes de gravar, mostre as questões ao professor e grave só depois que ele aprovar.",
-        "Toda questão leva uma dica (campo dica), escrita junto com ela.",
+        "Toda questão leva uma dica (campo dica) e um tema curto (campo tema), escritos junto com ela.",
         `Questões relâmpago (relampago=true): quando o professor pedir relâmpago, escreva perguntas diretas, sem texto motivador, e chame checar_relampago antes de mostrá-las: mostre o tempo sugerido pelo app (${RELAMPAGO_MIN_S} a ${RELAMPAGO_MAX_S} s) ao lado de cada uma para o professor ajustar, e grave com o tempo que ele aprovar (ou omita tempo_limite_s para usar o sugerido).`,
         `Desafio público (era_publica): questões abertas a qualquer pessoa, de todas as idades, alunos ou não. Cada partida sorteia ${QUESTOES_POR_PARTIDA} questões da era; as ${QUESTOES_FINAIS} últimas são a rodada final, sem consulta, e qualquer questão pode cair nela. Escreva questões contextuais e conceituais: a resposta nunca é um nome, uma data ou um número decorado, e sim a interpretação de um contexto, de uma fonte ou de um conceito, que alguém sem a apostila consiga raciocinar. Linguagem acessível, sem citar capítulos ou apostilas. Varie os formatos do lote (todos os tipos valem, menos mapa sem posições). Use listar_desafios_publicos para ver quantas questões cada era já tem (o ideal é 30 por era).`,
         "Sempre envie junto, em curiosidades, 2 a 4 curiosidades históricas curtas e verdadeiras sobre os capítulos do lote, sem o professor precisar pedir: elas viram a Curiosidade do dia na tela dos alunos.",
@@ -566,6 +611,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           dificuldade: q.dificuldade,
           explicacao: q.explicacao.trim(),
           dica: q.dica.trim() || null,
+          tema: q.tema.trim(),
           fonte: q.fonte?.trim() || null,
           imagem_path: q.tipo === "mapa" ? null : caminhoImagem,
           tempo_limite_s: relampago?.tempo ?? q.tempo_limite_s ?? TEMPO_PADRAO[q.tipo as TipoQuestao],
@@ -578,8 +624,13 @@ export function registrarFerramentas(server: McpServer, origem: string) {
 
       let gravadas: { id: string; enunciado: string }[] = [];
       if (linhas.length) {
-        const { data, error } = await criarClienteAdmin().from("questoes").insert(linhas).select("id, enunciado");
-        if (error) return falha("Não foi possível gravar as questões. Nada foi salvo.");
+        let { data, error } = await criarClienteAdmin().from("questoes").insert(linhas).select("id, enunciado");
+        // Sem o SQL da verificação de leitura a coluna tema não existe: grava sem ela.
+        if (error) {
+          const semTema = linhas.map(({ tema: _tema, ...resto }) => resto);
+          ({ data, error } = await criarClienteAdmin().from("questoes").insert(semTema).select("id, enunciado"));
+        }
+        if (error || !data) return falha("Não foi possível gravar as questões. Nada foi salvo.");
         gravadas = data;
       }
       let curiosidadesGravadas = 0;
@@ -695,7 +746,20 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           : "liberada",
         questoes: args.questoes.map((id, i) => `${i + 1}. ${porId.get(id)!.enunciado}`),
       };
-      if (!args.confirmar) return resultado({ previa, proximo_passo: "Mostre a prévia e confirme com o professor." });
+      // Verificação de leitura: só questões com tema (e fora as relâmpago) podem recebê-la.
+      const { data: comTema, error: erroTema } = await db.from("questoes").select("id, tema").in("id", args.questoes);
+      const semTema = erroTema
+        ? []
+        : (comTema ?? []).filter((q) => !(q.tema as string | null)?.trim()).map((q) => q.id);
+      if (!args.confirmar)
+        return resultado({
+          previa,
+          ...(semTema.length && {
+            sem_tema: semTema,
+            aviso_tema: `${semTema.length} questão(ões) sem tema não recebem verificação de leitura. Escreva os temas com definir_temas antes de confirmar.`,
+          }),
+          proximo_passo: "Mostre a prévia e confirme com o professor.",
+        });
 
       const { data: desafio, error } = await db
         .from("desafios")

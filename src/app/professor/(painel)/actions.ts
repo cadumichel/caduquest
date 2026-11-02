@@ -241,6 +241,12 @@ const schemaQuestao = z.object({
   conteudo: z.unknown(),
   explicacao: z.string().trim().max(2000),
   dica: z.string().trim().max(300).default(""),
+  tema: z
+    .string()
+    .trim()
+    .max(80, "Tema: até 80 caracteres.")
+    .refine((v) => v === "" || v.length >= 3, "Tema: ao menos 3 caracteres.")
+    .default(""),
   era_publica: z
     .string()
     .refine((v) => v === "" || ehEra(v), "Era inválida.")
@@ -278,9 +284,12 @@ export async function salvarQuestao(dados: DadosQuestao): Promise<EstadoForm & {
     conteudo: conteudo.data,
     explicacao: r.data.explicacao || null,
     dica: r.data.dica || null,
+    tema: r.data.tema || null,
     era_publica: r.data.era_publica || null,
     status: r.data.status,
   };
+  // Sem o SQL da verificação de leitura a coluna tema não existe: salva sem ela.
+  const { tema, ...semTema } = linha;
 
   if (r.data.id) {
     // Questão já usada num desafio: o gabarito vira histórico e não pode mudar.
@@ -296,12 +305,14 @@ export async function salvarQuestao(dados: DadosQuestao): Promise<EstadoForm & {
         };
       }
     }
-    const { error } = await supabase.from("questoes").update(linha).eq("id", r.data.id);
+    let { error } = await supabase.from("questoes").update(linha).eq("id", r.data.id);
+    if (error && !tema) ({ error } = await supabase.from("questoes").update(semTema).eq("id", r.data.id));
     if (error) return { erro: "Não foi possível salvar." };
     revalidatePath("/professor/questoes");
     return { ok: "Questão salva.", id: r.data.id };
   }
-  const { data, error } = await supabase.from("questoes").insert(linha).select("id").single();
+  let { data, error } = await supabase.from("questoes").insert(linha).select("id").single();
+  if (error && !tema) ({ data, error } = await supabase.from("questoes").insert(semTema).select("id").single());
   if (error || !data) return { erro: "Não foi possível salvar." };
   revalidatePath("/professor/questoes");
   return { ok: "Questão criada.", id: data.id };
@@ -327,6 +338,7 @@ export async function duplicarQuestao(id: string) {
       conteudo: q.conteudo,
       explicacao: q.explicacao,
       dica: q.dica ?? null,
+      ...(q.tema && { tema: q.tema }),
       status: "rascunho",
       origem: "manual",
     })

@@ -2,11 +2,18 @@ import type { Conteudo, Resposta } from "@/lib/questoes/tipos";
 
 /** Relatório de desempenho: resultado de cada aluno em cada questão. */
 
-export type ResultadoQuestao = { fracao: number | null; esgotada: boolean; zerada: boolean };
+export type ResultadoQuestao = {
+  fracao: number | null;
+  esgotada: boolean;
+  zerada: boolean;
+  /** Zerada porque o aluno errou a verificação de leitura. */
+  verificacaoErrada?: boolean;
+};
 
 /** Rótulo para o relatório: acertou, errou, parcial ou sem resposta. */
 export function rotuloResultado(r: ResultadoQuestao | undefined): string {
   if (!r || r.fracao === null) return r ? "sem resposta" : "não respondeu";
+  if (r.verificacaoErrada) return "zerada (errou a verificação)";
   if (r.zerada) return "zerada (saiu da tela)";
   if (r.esgotada && r.fracao === 0) return "tempo esgotado";
   if (r.fracao >= 1) return "acertou";
