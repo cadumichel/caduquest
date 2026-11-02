@@ -41,11 +41,39 @@ export const ERAS = [
     cor: "from-slate-600 to-slate-900",
   },
   {
-    id: "brasil",
-    nome: "História do Brasil",
-    emoji: "🇧🇷",
-    resumo: "Da colonização à República: sociedade, trabalho, poder e cultura.",
-    cor: "from-green-600 to-yellow-700",
+    id: "brasil_colonia",
+    nome: "Brasil Pré-Cabralino e Colonial",
+    emoji: "🛶",
+    resumo: "Povos originários, colonização, açúcar, ouro e escravidão.",
+    cor: "from-green-700 to-emerald-900",
+  },
+  {
+    id: "brasil_imperio",
+    nome: "Brasil Império",
+    emoji: "👑",
+    resumo: "Independência, Primeiro Reinado, Regências, Segundo Reinado e abolição.",
+    cor: "from-yellow-600 to-green-800",
+  },
+  {
+    id: "brasil_republica",
+    nome: "Brasil República",
+    emoji: "🗳️",
+    resumo: "Da Primeira República aos dias atuais: poder, trabalho e cidadania.",
+    cor: "from-blue-700 to-green-700",
+  },
+  {
+    id: "america",
+    nome: "História da América",
+    emoji: "🌎",
+    resumo: "Povos originários, colonização, independências e o continente hoje.",
+    cor: "from-teal-600 to-cyan-900",
+  },
+  {
+    id: "arte",
+    nome: "História da Arte",
+    emoji: "🎨",
+    resumo: "Da arte rupestre à arte contemporânea: estilos, artistas e contextos.",
+    cor: "from-pink-600 to-purple-900",
   },
   {
     id: "tematica",
@@ -61,7 +89,22 @@ export type Era = (typeof ERAS)[number];
 export const ERA_IDS = ERAS.map((e) => e.id) as [EraId, ...EraId[]];
 
 export const ehEra = (v: unknown): v is EraId => typeof v === "string" && (ERA_IDS as string[]).includes(v);
-export const eraPorId = (id: string): Era | undefined => ERAS.find((e) => e.id === id);
+/**
+ * Eras que saíram da lista: partidas antigas continuam com o nome e o ícone,
+ * mas ninguém começa partida nova nelas.
+ */
+const ERAS_ANTIGAS = [
+  {
+    id: "brasil",
+    nome: "História do Brasil",
+    emoji: "🇧🇷",
+    resumo: "Dividida em Colônia, Império e República.",
+    cor: "from-green-600 to-yellow-700",
+  },
+] as const;
+
+export const eraPorId = (id: string): Era | (typeof ERAS_ANTIGAS)[number] | undefined =>
+  ERAS.find((e) => e.id === id) ?? ERAS_ANTIGAS.find((e) => e.id === id);
 
 /** Questões por partida; as duas últimas são a rodada final, sem consulta. */
 export const QUESTOES_POR_PARTIDA = 10;
