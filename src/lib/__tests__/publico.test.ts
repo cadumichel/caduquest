@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ehEra,
+  eraPorId,
   ehFinal,
   montarRankingPublico,
   pontosPublicos,
@@ -37,7 +38,11 @@ describe("pontos do desafio público", () => {
     expect(PONTUACAO_MAXIMA).toBe(180);
   });
   it("reconhece as eras", () => {
-    expect(ehEra("brasil")).toBe(true);
+    expect(ehEra("brasil_imperio")).toBe(true);
+    expect(ehEra("arte")).toBe(true);
+    // Era antiga: só mostra partidas já jogadas.
+    expect(ehEra("brasil")).toBe(false);
+    expect(eraPorId("brasil")?.nome).toBe("História do Brasil");
     expect(ehEra("futuro")).toBe(false);
   });
 });
