@@ -14,6 +14,18 @@ import { Citacao, Documento, ImagemComPinos } from "./QuestaoInterativa";
 const LETRAS = "ABCDEF";
 
 /**
+ * Nas questões de ordenar, a lista mostra a ordem certa; numa posição errada,
+ * diz o que o aluno colocou ali, para não parecer que a ordem dele foi a certa.
+ */
+function ColocadoAqui({ rotulo, texto }: { rotulo: string; texto: string | undefined }) {
+  return (
+    <span className="mt-0.5 block text-xs text-red-700">
+      {rotulo}: {texto ?? "sem resposta"}
+    </span>
+  );
+}
+
+/**
  * Mostra o gabarito de uma questão e, se houver, a resposta do aluno.
  * A resposta vem em índices exibidos; a permutação traduz para os originais.
  */
@@ -99,7 +111,12 @@ export function Gabarito({
           {conteudo.conteudo.frases.map((f, i) => (
             <li key={i} className="flex gap-2 rounded-lg px-3 py-1.5">
               <span className="w-6 font-bold text-marca-700">{i + 1}º</span>
-              <span className="flex-1">{f}</span>
+              <span className="flex-1">
+                {f}
+                {ordem && ordem[i] !== i && (
+                  <ColocadoAqui rotulo={rotulo} texto={conteudo.conteudo.frases[ordem[i]]} />
+                )}
+              </span>
               {ordem && (
                 <span className={ordem[i] === i ? "text-emerald-700" : "text-red-700"}>
                   {ordem[i] === i ? "✓" : "✗"}
@@ -148,6 +165,9 @@ export function Gabarito({
               <span className="w-6 font-bold text-marca-700">{i + 1}º</span>
               <span className="flex-1">
                 {e.texto} {e.data && <span className="text-slate-500">({e.data})</span>}
+                {ordem && ordem[i] !== i && (
+                  <ColocadoAqui rotulo={rotulo} texto={conteudo.conteudo.eventos[ordem[i]]?.texto} />
+                )}
               </span>
               {ordem && (
                 <span className={ordem[i] === i ? "text-emerald-700" : "text-red-700"}>
