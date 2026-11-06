@@ -22,6 +22,7 @@ const MOTIVO: Record<MotivoZerada, string> = {
   teclado: "uma tecla foi apertada na rodada final.",
   tela_alterada: "as regras da rodada final não foram seguidas.",
   clique_fora: "houve um clique fora das alternativas na rodada final.",
+  sem_mouse: "uma questão foi respondida sem mexer o mouse na rodada final.",
 };
 
 export default async function ResultadoPublico({ params }: PageProps<"/jogar/partida/[id]/resultado">) {

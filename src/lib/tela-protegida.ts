@@ -1,5 +1,5 @@
 /** Por que uma questão de pesquisa bloqueada foi zerada. */
-export const MOTIVOS_ZERADA = ["saida", "teclado", "tela_alterada", "clique_fora"] as const;
+export const MOTIVOS_ZERADA = ["saida", "teclado", "tela_alterada", "clique_fora", "sem_mouse"] as const;
 export type MotivoZerada = (typeof MOTIVOS_ZERADA)[number];
 
 export const ehMotivoZerada = (v: unknown): v is MotivoZerada =>
@@ -11,6 +11,7 @@ export const AVISO_ZERADA: Record<MotivoZerada, string> = {
   // Genérico de propósito: o aluno não deve saber que extensões são detectadas.
   tela_alterada: "A questão anterior valeu zero porque as regras da pesquisa bloqueada não foram seguidas.",
   clique_fora: "Você clicou fora das alternativas e dos botões durante a questão anterior, então ela valeu zero.",
+  sem_mouse: "Você respondeu a questão anterior sem mexer o mouse, então ela valeu zero.",
 };
 
 /** O que o aluno pode clicar durante a questão: alternativas, botões, links e alças de arrastar. */
@@ -26,6 +27,22 @@ export function cliqueFora(e: Pick<PointerEvent, "pointerType" | "clientX" | "ta
   const alvo = e.target as Element | null;
   return !alvo?.closest?.(CLICAVEIS);
 }
+
+type EventoPonteiro = Pick<PointerEvent, "pointerType" | "isTrusted" | "movementX" | "movementY">;
+
+/**
+ * Movimento real do mouse ou do touchpad. O Chrome manda um "movimento" falso,
+ * parado, quando a página muda debaixo do cursor: esse não conta.
+ */
+export const mouseMexeu = (e: EventoPonteiro) =>
+  e.pointerType === "mouse" && e.isTrusted && (e.movementX !== 0 || e.movementY !== 0);
+
+/**
+ * Clique de mouse sem nenhum movimento desde que a questão apareceu. Toque na
+ * tela, caneta e teclado (Enter) não contam.
+ */
+export const cliqueSemMovimento = (e: Pick<PointerEvent, "pointerType" | "isTrusted">, mexeu: boolean) =>
+  e.pointerType === "mouse" && e.isTrusted && !mexeu;
 
 /** Texto da marca d'água: quem está respondendo e quando. */
 export function textoMarca(identificacao: string, agora = new Date()) {
