@@ -11,7 +11,8 @@ export const AVISO_ZERADA: Record<MotivoZerada, string> = {
   // Genérico de propósito: o aluno não deve saber que extensões são detectadas.
   tela_alterada: "A questão anterior valeu zero porque as regras da pesquisa bloqueada não foram seguidas.",
   clique_fora: "Você clicou fora das alternativas e dos botões durante a questão anterior, então ela valeu zero.",
-  sem_mouse: "Você respondeu a questão anterior sem mexer o mouse até a alternativa, então ela valeu zero.",
+  // Genérico de propósito: o aluno não deve saber que o movimento do mouse é observado.
+  sem_mouse: "A questão anterior valeu zero porque as regras da pesquisa bloqueada não foram seguidas.",
 };
 
 /** O que o aluno pode clicar durante a questão: alternativas, botões, links e alças de arrastar. */

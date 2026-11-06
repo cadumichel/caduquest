@@ -16,13 +16,14 @@ import { BotaoJogar } from "../../../BotaoJogar";
 
 export const metadata: Metadata = { title: "Resultado" };
 
-// Genérico em "tela_alterada": ninguém deve saber que extensões são detectadas.
+// Genérico em "tela_alterada" e "sem_mouse": ninguém deve saber que extensões
+// e o movimento do mouse são observados.
 const MOTIVO: Record<MotivoZerada, string> = {
   saida: "você saiu da tela na rodada final.",
   teclado: "uma tecla foi apertada na rodada final.",
   tela_alterada: "as regras da rodada final não foram seguidas.",
   clique_fora: "houve um clique fora das alternativas na rodada final.",
-  sem_mouse: "uma questão foi respondida sem mexer o mouse na rodada final.",
+  sem_mouse: "as regras da rodada final não foram seguidas.",
 };
 
 export default async function ResultadoPublico({ params }: PageProps<"/jogar/partida/[id]/resultado">) {
