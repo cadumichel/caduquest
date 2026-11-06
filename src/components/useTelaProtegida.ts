@@ -1,11 +1,19 @@
 "use client";
 import { useEffect, type RefObject } from "react";
-import { cliqueFora, elementoEstranho, teclaConta, type MotivoZerada } from "@/lib/tela-protegida";
+import {
+  cliqueFora,
+  cliqueSemMovimento,
+  elementoEstranho,
+  mouseMexeu,
+  teclaConta,
+  type MotivoZerada,
+} from "@/lib/tela-protegida";
 
 /**
  * Vigia a questão em andamento e chama `zerar` quando o jogador sai da tela,
- * aperta uma tecla, clica fora das alternativas ou quando algo de fora do app
- * (extensão) mexe na página. Usado pela pesquisa bloqueada dos desafios da
+ * aperta uma tecla, clica fora das alternativas, responde sem mexer o mouse ou
+ * quando algo de fora do app (extensão ou script) mexe na página ou clica. Usado
+ * pela pesquisa bloqueada dos desafios da
  * turma e pela rodada final dos desafios públicos.
  *
  * As saídas são contadas sempre (vão para o relatório); `protegida` diz se
@@ -85,13 +93,34 @@ export function useTelaProtegida({
   }, [protegida, zerar, enviado]);
 
   // Clique de mouse fora das alternativas e dos botões zera a questão.
+  // Clique de mouse sem caminho de movimento desde que a questão apareceu
+  // (nenhum movimento ou um salto só, como faz o Claude no Chrome) também zera. A questão monta de novo a cada troca, então o movimento começa do
+  // zero. Esse teste fica no "click", não no "pointerdown", para não pegar quem
+  // começa a arrastar um item (ordenar) com o cursor já em cima dele.
   useEffect(() => {
     if (!protegida) return;
-    const aoClicar = (e: PointerEvent) => {
+    let movimentos = 0;
+    const aoMover = (e: PointerEvent) => {
+      if (mouseMexeu(e)) movimentos += 1;
+    };
+    const aoApertar = (e: PointerEvent) => {
       if (enviado.current || !cliqueFora(e, document.documentElement.clientWidth)) return;
       zerar("clique_fora");
     };
-    document.addEventListener("pointerdown", aoClicar, true);
-    return () => document.removeEventListener("pointerdown", aoClicar, true);
+    const aoClicar = (e: MouseEvent) => {
+      if (enviado.current) return;
+      // Clique feito por script (extensão que responde sozinha) não vem
+      // marcado como do usuário. Zera com o aviso genérico, para não dar a ideia.
+      if (!e.isTrusted) zerar("tela_alterada");
+      else if (e instanceof PointerEvent && cliqueSemMovimento(e, movimentos)) zerar("sem_mouse");
+    };
+    document.addEventListener("pointermove", aoMover, true);
+    document.addEventListener("pointerdown", aoApertar, true);
+    document.addEventListener("click", aoClicar, true);
+    return () => {
+      document.removeEventListener("pointermove", aoMover, true);
+      document.removeEventListener("pointerdown", aoApertar, true);
+      document.removeEventListener("click", aoClicar, true);
+    };
   }, [protegida, zerar, enviado]);
 }

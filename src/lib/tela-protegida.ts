@@ -1,5 +1,5 @@
 /** Por que uma questão de pesquisa bloqueada foi zerada. */
-export const MOTIVOS_ZERADA = ["saida", "teclado", "tela_alterada", "clique_fora"] as const;
+export const MOTIVOS_ZERADA = ["saida", "teclado", "tela_alterada", "clique_fora", "sem_mouse"] as const;
 export type MotivoZerada = (typeof MOTIVOS_ZERADA)[number];
 
 export const ehMotivoZerada = (v: unknown): v is MotivoZerada =>
@@ -11,6 +11,8 @@ export const AVISO_ZERADA: Record<MotivoZerada, string> = {
   // Genérico de propósito: o aluno não deve saber que extensões são detectadas.
   tela_alterada: "A questão anterior valeu zero porque as regras da pesquisa bloqueada não foram seguidas.",
   clique_fora: "Você clicou fora das alternativas e dos botões durante a questão anterior, então ela valeu zero.",
+  // Genérico de propósito: o aluno não deve saber que o movimento do mouse é observado.
+  sem_mouse: "A questão anterior valeu zero porque as regras da pesquisa bloqueada não foram seguidas.",
 };
 
 /** O que o aluno pode clicar durante a questão: alternativas, botões, links e alças de arrastar. */
@@ -26,6 +28,31 @@ export function cliqueFora(e: Pick<PointerEvent, "pointerType" | "clientX" | "ta
   const alvo = e.target as Element | null;
   return !alvo?.closest?.(CLICAVEIS);
 }
+
+type EventoPonteiro = Pick<PointerEvent, "pointerType" | "isTrusted" | "movementX" | "movementY">;
+
+/**
+ * Movimento real do mouse ou do touchpad. O Chrome manda um "movimento" falso,
+ * parado, quando a página muda debaixo do cursor: esse não conta.
+ */
+export const mouseMexeu = (e: EventoPonteiro) =>
+  e.pointerType === "mouse" && e.isTrusted && (e.movementX !== 0 || e.movementY !== 0);
+
+/**
+ * Quantos movimentos reais o mouse precisa ter feito, desde que a questão
+ * apareceu, para o clique valer. Uma mão no mouse ou no touchpad gera dezenas
+ * até chegar na alternativa. O Claude no Chrome (testado em 2026-11-06) gera
+ * um só: o cursor "salta" para o ponto e clica 1 ms depois.
+ */
+export const MOVIMENTOS_MIN = 3;
+
+/**
+ * Clique de mouse sem caminho de movimento desde que a questão apareceu
+ * (nenhum movimento ou um salto só). Toque na tela, caneta e teclado (Enter)
+ * não contam.
+ */
+export const cliqueSemMovimento = (e: Pick<PointerEvent, "pointerType" | "isTrusted">, movimentos: number) =>
+  e.pointerType === "mouse" && e.isTrusted && movimentos < MOVIMENTOS_MIN;
 
 /** Texto da marca d'água: quem está respondendo e quando. */
 export function textoMarca(identificacao: string, agora = new Date()) {

@@ -18,6 +18,7 @@ export type LinhaResultado = {
   zeradasTeclado: number;
   zeradasTela: number;
   zeradasClique: number;
+  zeradasSemMouse: number;
   /** Verificações de leitura feitas e erradas (errada = questão zerada). */
   verificacoes: number;
   verificacoesErradas: number;
@@ -63,6 +64,7 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
     teclado: number;
     tela: number;
     clique: number;
+    semMouse: number;
     verificacoes: number;
     verificacoesErradas: number;
   };
@@ -87,6 +89,7 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
       teclado: 0,
       tela: 0,
       clique: 0,
+      semMouse: 0,
       verificacoes: 0,
       verificacoesErradas: 0,
     };
@@ -103,6 +106,7 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
     if (r.motivo_zerada === "teclado") agg.teclado += 1;
     if (r.motivo_zerada === "tela_alterada") agg.tela += 1;
     if (r.motivo_zerada === "clique_fora") agg.clique += 1;
+    if (r.motivo_zerada === "sem_mouse") agg.semMouse += 1;
     if (r.verificacao_acertou === true || r.verificacao_acertou === false) agg.verificacoes += 1;
     if (r.motivo_zerada === "verificacao") agg.verificacoesErradas += 1;
     agg.saidas += r.saidas_tela;
@@ -127,6 +131,7 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
       zeradasTeclado: agg?.teclado ?? 0,
       zeradasTela: agg?.tela ?? 0,
       zeradasClique: agg?.clique ?? 0,
+      zeradasSemMouse: agg?.semMouse ?? 0,
       verificacoes: agg?.verificacoes ?? 0,
       verificacoesErradas: agg?.verificacoesErradas ?? 0,
       questoes: (t && detalhe.get(t.id)) || new Map(),

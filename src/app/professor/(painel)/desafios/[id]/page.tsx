@@ -166,6 +166,14 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
                         🖱️ {l.zeradasClique} por clique fora
                       </span>
                     )}
+                    {l.zeradasSemMouse > 0 && (
+                      <span
+                        className="block text-xs font-normal text-red-700"
+                        title="Respondeu sem mexer o mouse desde que a questão apareceu"
+                      >
+                        🖱️ {l.zeradasSemMouse} sem mexer o mouse
+                      </span>
+                    )}
                     {l.verificacoes > 0 && (
                       <span
                         className={`block text-xs font-normal ${l.verificacoesErradas ? "text-red-700" : "text-slate-500"}`}

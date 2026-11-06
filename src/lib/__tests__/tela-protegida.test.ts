@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { cliqueFora, ehMotivoZerada, elementoEstranho, teclaConta, textoMarca } from "../tela-protegida";
+import {
+  cliqueFora,
+  cliqueSemMovimento,
+  ehMotivoZerada,
+  mouseMexeu,
+  MOVIMENTOS_MIN,
+  elementoEstranho,
+  teclaConta,
+  textoMarca,
+} from "../tela-protegida";
 
 const elemento = (tagName: string, extra: Record<string, unknown> = {}) =>
   ({ nodeType: 1, tagName, ...extra }) as unknown as Node;
@@ -47,6 +56,32 @@ describe("clique fora", () => {
   it("toque no celular e clique na barra de rolagem não contam", () => {
     expect(cliqueFora(clique("touch", null), 800)).toBe(false);
     expect(cliqueFora(clique("mouse", null, 805), 800)).toBe(false);
+  });
+});
+
+describe("resposta sem mexer o mouse", () => {
+  const mov = (pointerType: string, movementX: number, movementY = 0, isTrusted = true) =>
+    ({ pointerType, movementX, movementY, isTrusted }) as unknown as PointerEvent;
+
+  it("movimento real do mouse ou touchpad conta", () => {
+    expect(mouseMexeu(mov("mouse", 3))).toBe(true);
+    expect(mouseMexeu(mov("mouse", 0, -1))).toBe(true);
+  });
+  it("movimento parado (página mudou sob o cursor), por script ou por toque não conta", () => {
+    expect(mouseMexeu(mov("mouse", 0, 0))).toBe(false);
+    expect(mouseMexeu(mov("mouse", 5, 0, false))).toBe(false);
+    expect(mouseMexeu(mov("touch", 5))).toBe(false);
+  });
+  it("clique sem movimento ou depois de um salto só (agente de navegador) zera", () => {
+    const clique = { pointerType: "mouse", isTrusted: true } as PointerEvent;
+    expect(cliqueSemMovimento(clique, 0)).toBe(true);
+    expect(cliqueSemMovimento(clique, 1)).toBe(true);
+    expect(cliqueSemMovimento(clique, MOVIMENTOS_MIN)).toBe(false);
+    expect(cliqueSemMovimento(clique, 40)).toBe(false);
+  });
+  it("toque na tela e caneta não zeram", () => {
+    expect(cliqueSemMovimento({ pointerType: "touch", isTrusted: true } as PointerEvent, 0)).toBe(false);
+    expect(cliqueSemMovimento({ pointerType: "pen", isTrusted: true } as PointerEvent, 0)).toBe(false);
   });
 });
 
