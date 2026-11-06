@@ -23,8 +23,8 @@ import {
   montarOpcoesVerificacao,
   PERGUNTA_VERIFICACAO,
   sortearVerificacoes,
-  VERIFICACAO_TEMPO_S,
 } from "./questoes/verificacao";
+import { tempoEfetivo, tempoVerificacao } from "./questoes/tempos";
 
 export type QuestaoServida = {
   id: string;
@@ -88,6 +88,8 @@ type QuestaoBanco = {
   /** Ausente se o SQL do relâmpago ainda não rodou. */
   relampago?: boolean;
   conteudo: Conteudo["conteudo"];
+  /** Tempo escrito para esta questão no desafio (null = automático). */
+  tempo_no_desafio?: number | null;
 };
 
 /** Desafio só se for da turma do aluno. */
@@ -102,15 +104,20 @@ export async function desafioDoAluno(db: SupabaseClient, aluno: AlunoSessao, des
   return (data as (Desafio & { temporadas: unknown }) | null) ?? null;
 }
 
-async function carregarQuestao(db: SupabaseClient, id: string): Promise<QuestaoBanco> {
-  const { data, error } = await db
-    .from("questoes")
-    // "*" traz também relampago, quando o SQL dele já rodou.
-    .select("*")
-    .eq("id", id)
-    .single();
+async function carregarQuestao(db: SupabaseClient, id: string, desafioId: string): Promise<QuestaoBanco> {
+  const [{ data, error }, { data: noDesafio }] = await Promise.all([
+    db
+      .from("questoes")
+      // "*" traz também relampago, quando o SQL dele já rodou.
+      .select("*")
+      .eq("id", id)
+      .single(),
+    // "*" traz o tempo escrito no desafio, quando o SQL dos tempos já rodou.
+    db.from("desafio_questoes").select("*").eq("desafio_id", desafioId).eq("questao_id", id).maybeSingle(),
+  ]);
   if (error || !data) throw new Error("Questão não encontrada");
-  return data as QuestaoBanco;
+  const tempo = (noDesafio as { tempo_limite_s?: number | null } | null)?.tempo_limite_s ?? null;
+  return { ...(data as QuestaoBanco), tempo_no_desafio: tempo };
 }
 
 /** Lida à parte: se o SQL das ajudas ainda não rodou, a questão carrega sem dica. */
@@ -145,14 +152,16 @@ export async function ajudasRestantes(db: SupabaseClient, alunoId: string, tempo
 const comoConteudo = (q: QuestaoBanco) => ({ tipo: q.tipo, conteudo: q.conteudo }) as Conteudo;
 
 /**
- * O desafio pode fixar um tempo único para todas as questões; a relâmpago
- * nunca ganha mais que o seu próprio tempo.
+ * O professor pode escrever o tempo de cada questão no desafio, ou um tempo
+ * único para todas (a relâmpago nunca ganha mais que o seu próprio tempo).
  */
-const tempoDaQuestao = (desafio: Desafio, q: QuestaoBanco) => {
-  const fixo = desafio.tempo_por_questao_s;
-  if (fixo == null) return q.tempo_limite_s;
-  return q.relampago ? Math.min(fixo, q.tempo_limite_s) : fixo;
-};
+const tempoDaQuestao = (desafio: Desafio, q: QuestaoBanco) =>
+  tempoEfetivo({
+    daQuestao: q.tempo_limite_s,
+    relampago: q.relampago,
+    noDesafio: q.tempo_no_desafio,
+    fixoDoDesafio: desafio.tempo_por_questao_s,
+  });
 
 async function recalcularTentativa(db: SupabaseClient, tentativa: Tentativa, novoIndice: number) {
   const { data: respostas } = await db.from("respostas").select("pontos").eq("tentativa_id", tentativa.id);
@@ -316,7 +325,8 @@ async function servirVerificacao(
   }
   const servida = new Date(atual.verificacao_servida_em ?? atual.respondida_em ?? Date.now());
   const agora = new Date();
-  if (tempoEsgotado(servida, agora, VERIFICACAO_TEMPO_S)) {
+  const limite = tempoVerificacao(desafio);
+  if (tempoEsgotado(servida, agora, limite)) {
     await resolverVerificacao(db, desafio, tentativa, atual, false);
     return null;
   }
@@ -324,8 +334,8 @@ async function servirVerificacao(
     questaoId: questao.id,
     pergunta: PERGUNTA_VERIFICACAO,
     opcoes: atual.verificacao_opcoes ?? [],
-    tempoLimite: VERIFICACAO_TEMPO_S,
-    restanteMs: Math.max(0, VERIFICACAO_TEMPO_S * 1000 - (agora.getTime() - servida.getTime())),
+    tempoLimite: limite,
+    restanteMs: Math.max(0, limite * 1000 - (agora.getTime() - servida.getTime())),
     saidaZera: desafio.saida_zera_questao,
   };
 }
@@ -424,7 +434,7 @@ export async function estadoAtual(
     if (tentativa.indice_atual >= tentativa.ordem.length || tentativa.concluida_em) return { fase: "fim" };
 
     const questaoId = tentativa.ordem[tentativa.indice_atual];
-    const questao = await carregarQuestao(db, questaoId);
+    const questao = await carregarQuestao(db, questaoId, desafio.id);
     const { data: linhaExistente } = await db
       .from("respostas")
       .select("*")
@@ -537,7 +547,7 @@ export async function responderQuestao(
       .eq("questao_id", questaoId)
       .maybeSingle();
     if (linha && !linha.respondida_em) {
-      const questao = await carregarQuestao(db, questaoId);
+      const questao = await carregarQuestao(db, questaoId, desafio.id);
       // Teclado liberado pelo professor (acessibilidade): tecla não zera.
       if (motivo === "teclado") {
         const { data: a } = await db.from("alunos").select("teclado_liberado").eq("id", aluno.id).single();
@@ -573,7 +583,7 @@ async function questaoEmAndamento(db: SupabaseClient, aluno: AlunoSessao, desafi
     .maybeSingle();
   const l = linha as RespostaBanco | null;
   if (!l || l.respondida_em) return { erro: "Esta questão já passou." } as const;
-  const questao = await carregarQuestao(db, questaoId);
+  const questao = await carregarQuestao(db, questaoId, desafio.id);
   if (tempoEsgotado(new Date(l.servida_em), new Date(), tempoDaQuestao(desafio, questao))) {
     return { erro: "O tempo desta questão acabou." } as const;
   }
@@ -681,7 +691,7 @@ export async function responderVerificacao(
         if (a?.teclado_liberado) motivo = null;
       }
       const causa = desafio.saida_zera_questao ? motivo : null;
-      const esgotado = tempoEsgotado(new Date(linha.verificacao_servida_em), new Date(), VERIFICACAO_TEMPO_S);
+      const esgotado = tempoEsgotado(new Date(linha.verificacao_servida_em), new Date(), tempoVerificacao(desafio));
       const acertou =
         !causa &&
         !esgotado &&

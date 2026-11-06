@@ -17,6 +17,8 @@ import { gabaritoLiberado, gabaritoLiberadoEm, situacaoDesafio, type Desafio, ty
 import { atualizarJanelaDesafio, excluirDesafio } from "../../actions";
 import { ControlesDesafio } from "./ControlesDesafio";
 import { PainelRelampago } from "./PainelRelampago";
+import { TemposDesafio, type QuestaoComTempo } from "./TemposDesafio";
+import { tempoVerificacao } from "@/lib/questoes/tempos";
 import { formatarPontos } from "@/lib/pontos";
 
 export const metadata: Metadata = { title: "Desafio" };
@@ -35,15 +37,25 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
   const { supabase } = await exigirProfessor();
   const { data } = await supabase
     .from("desafios")
-    .select("*, temporadas(id, nome, turma_id, turmas(nome)), desafio_questoes(posicao, questoes(*))")
+    // "*" em desafio_questoes traz o tempo de cada questão, quando o SQL dos tempos já rodou.
+    .select("*, temporadas(id, nome, turma_id, turmas(nome)), desafio_questoes(*, questoes(*))")
     .eq("id", id)
     .maybeSingle();
   if (!data) notFound();
   const desafio = data as Desafio & {
     temporadas: { id: string; nome: string; turma_id: string; turmas: { nome: string } };
-    desafio_questoes: { posicao: number; questoes: Questao }[];
+    desafio_questoes: { posicao: number; tempo_limite_s?: number | null; questoes: Questao }[];
   };
-  const questoes = [...desafio.desafio_questoes].sort((a, b) => a.posicao - b.posicao).map((dq) => dq.questoes);
+  const ordenadas = [...desafio.desafio_questoes].sort((a, b) => a.posicao - b.posicao);
+  const questoes = ordenadas.map((dq) => dq.questoes);
+  const comTempo: QuestaoComTempo[] = ordenadas.map((dq) => ({
+    id: dq.questoes.id,
+    enunciado: dq.questoes.enunciado,
+    relampago: Boolean(dq.questoes.relampago),
+    tempoQuestao: dq.questoes.tempo_limite_s,
+    tempoNoDesafio: dq.tempo_limite_s ?? null,
+  }));
+  const temposPersonalizados = comTempo.filter((q) => q.tempoNoDesafio !== null).length;
   const { linhas, acertoPorQuestao } = await resultadosDoDesafio(supabase, id, desafio.temporadas.turma_id);
   const situacao = situacaoDesafio(desafio);
   const concluiram = linhas.filter((l) => l.situacao === "concluiu").length;
@@ -197,7 +209,8 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
               {desafio.tempo_por_questao_s
                 ? `${desafio.tempo_por_questao_s} s em todas as questões`
                 : "Tempo de cada questão"}
-              {" · "}
+              {temposPersonalizados > 0 && ` (${temposPersonalizados} com tempo próprio)`}
+              {" · "}📖 verificação {tempoVerificacao(desafio)} s{" · "}
               {desafio.saida_zera_questao ? "🚫 pesquisa bloqueada" : "🔎 pesquisa liberada"}
             </p>
             <FormAcao acao={atualizarJanelaDesafio}>
@@ -225,6 +238,15 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
           </Cartao>
         </div>
       </div>
+
+      <Cartao>
+        <TemposDesafio
+          id={id}
+          todas={desafio.tempo_por_questao_s}
+          verificacao={desafio.tempo_verificacao_s ?? null}
+          questoes={comTempo}
+        />
+      </Cartao>
 
       <Cartao className="overflow-x-auto">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
