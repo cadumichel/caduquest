@@ -93,15 +93,15 @@ export function useTelaProtegida({
   }, [protegida, zerar, enviado]);
 
   // Clique de mouse fora das alternativas e dos botões zera a questão.
-  // Clique de mouse sem nenhum movimento desde que a questão apareceu também
-  // zera. A questão monta de novo a cada troca, então o movimento começa do
+  // Clique de mouse sem caminho de movimento desde que a questão apareceu
+  // (nenhum movimento ou um salto só, como faz o Claude no Chrome) também zera. A questão monta de novo a cada troca, então o movimento começa do
   // zero. Esse teste fica no "click", não no "pointerdown", para não pegar quem
   // começa a arrastar um item (ordenar) com o cursor já em cima dele.
   useEffect(() => {
     if (!protegida) return;
-    let mexeu = false;
+    let movimentos = 0;
     const aoMover = (e: PointerEvent) => {
-      if (mouseMexeu(e)) mexeu = true;
+      if (mouseMexeu(e)) movimentos += 1;
     };
     const aoApertar = (e: PointerEvent) => {
       if (enviado.current || !cliqueFora(e, document.documentElement.clientWidth)) return;
@@ -112,7 +112,7 @@ export function useTelaProtegida({
       // Clique feito por script (extensão que responde sozinha) não vem
       // marcado como do usuário. Zera com o aviso genérico, para não dar a ideia.
       if (!e.isTrusted) zerar("tela_alterada");
-      else if (e instanceof PointerEvent && cliqueSemMovimento(e, mexeu)) zerar("sem_mouse");
+      else if (e instanceof PointerEvent && cliqueSemMovimento(e, movimentos)) zerar("sem_mouse");
     };
     document.addEventListener("pointermove", aoMover, true);
     document.addEventListener("pointerdown", aoApertar, true);

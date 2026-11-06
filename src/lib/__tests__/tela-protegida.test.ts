@@ -4,6 +4,7 @@ import {
   cliqueSemMovimento,
   ehMotivoZerada,
   mouseMexeu,
+  MOVIMENTOS_MIN,
   elementoEstranho,
   teclaConta,
   textoMarca,
@@ -71,14 +72,16 @@ describe("resposta sem mexer o mouse", () => {
     expect(mouseMexeu(mov("mouse", 5, 0, false))).toBe(false);
     expect(mouseMexeu(mov("touch", 5))).toBe(false);
   });
-  it("clique de mouse sem movimento zera; com movimento, não", () => {
+  it("clique sem movimento ou depois de um salto só (agente de navegador) zera", () => {
     const clique = { pointerType: "mouse", isTrusted: true } as PointerEvent;
-    expect(cliqueSemMovimento(clique, false)).toBe(true);
-    expect(cliqueSemMovimento(clique, true)).toBe(false);
+    expect(cliqueSemMovimento(clique, 0)).toBe(true);
+    expect(cliqueSemMovimento(clique, 1)).toBe(true);
+    expect(cliqueSemMovimento(clique, MOVIMENTOS_MIN)).toBe(false);
+    expect(cliqueSemMovimento(clique, 40)).toBe(false);
   });
   it("toque na tela e caneta não zeram", () => {
-    expect(cliqueSemMovimento({ pointerType: "touch", isTrusted: true } as PointerEvent, false)).toBe(false);
-    expect(cliqueSemMovimento({ pointerType: "pen", isTrusted: true } as PointerEvent, false)).toBe(false);
+    expect(cliqueSemMovimento({ pointerType: "touch", isTrusted: true } as PointerEvent, 0)).toBe(false);
+    expect(cliqueSemMovimento({ pointerType: "pen", isTrusted: true } as PointerEvent, 0)).toBe(false);
   });
 });
 

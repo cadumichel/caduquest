@@ -11,7 +11,7 @@ export const AVISO_ZERADA: Record<MotivoZerada, string> = {
   // Genérico de propósito: o aluno não deve saber que extensões são detectadas.
   tela_alterada: "A questão anterior valeu zero porque as regras da pesquisa bloqueada não foram seguidas.",
   clique_fora: "Você clicou fora das alternativas e dos botões durante a questão anterior, então ela valeu zero.",
-  sem_mouse: "Você respondeu a questão anterior sem mexer o mouse, então ela valeu zero.",
+  sem_mouse: "Você respondeu a questão anterior sem mexer o mouse até a alternativa, então ela valeu zero.",
 };
 
 /** O que o aluno pode clicar durante a questão: alternativas, botões, links e alças de arrastar. */
@@ -38,11 +38,20 @@ export const mouseMexeu = (e: EventoPonteiro) =>
   e.pointerType === "mouse" && e.isTrusted && (e.movementX !== 0 || e.movementY !== 0);
 
 /**
- * Clique de mouse sem nenhum movimento desde que a questão apareceu. Toque na
- * tela, caneta e teclado (Enter) não contam.
+ * Quantos movimentos reais o mouse precisa ter feito, desde que a questão
+ * apareceu, para o clique valer. Uma mão no mouse ou no touchpad gera dezenas
+ * até chegar na alternativa. O Claude no Chrome (testado em 2026-11-06) gera
+ * um só: o cursor "salta" para o ponto e clica 1 ms depois.
  */
-export const cliqueSemMovimento = (e: Pick<PointerEvent, "pointerType" | "isTrusted">, mexeu: boolean) =>
-  e.pointerType === "mouse" && e.isTrusted && !mexeu;
+export const MOVIMENTOS_MIN = 3;
+
+/**
+ * Clique de mouse sem caminho de movimento desde que a questão apareceu
+ * (nenhum movimento ou um salto só). Toque na tela, caneta e teclado (Enter)
+ * não contam.
+ */
+export const cliqueSemMovimento = (e: Pick<PointerEvent, "pointerType" | "isTrusted">, movimentos: number) =>
+  e.pointerType === "mouse" && e.isTrusted && movimentos < MOVIMENTOS_MIN;
 
 /** Texto da marca d'água: quem está respondendo e quando. */
 export function textoMarca(identificacao: string, agora = new Date()) {
