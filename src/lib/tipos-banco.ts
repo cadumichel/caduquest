@@ -67,6 +67,8 @@ export type Desafio = {
   fecha_em: string;
   pontos_por_acerto: number;
   tempo_por_questao_s: number | null;
+  /** Tempo da verificação de leitura (null = 15 s; ausente sem o SQL dos tempos). */
+  tempo_verificacao_s?: number | null;
   saida_zera_questao: boolean;
   /** O gabarito só aparece quando o professor liberar (ausente sem o SQL dos controles). */
   gabarito_manual?: boolean;

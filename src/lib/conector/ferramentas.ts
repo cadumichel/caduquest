@@ -26,6 +26,14 @@ import {
   type Conteudo,
   type TipoQuestao,
 } from "@/lib/questoes/tipos";
+import {
+  problemaTempoQuestao,
+  problemaTempoVerificacao,
+  tempoEfetivo,
+  VERIFICACAO_MAX_S,
+  VERIFICACAO_MIN_S,
+} from "@/lib/questoes/tempos";
+import { VERIFICACAO_TEMPO_S } from "@/lib/questoes/verificacao";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { guardarImagemDaUrl } from "./imagem";
 import { professorDoConector } from "./professor";
@@ -34,6 +42,63 @@ const resultado = (dados: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(dados, null, 2) }],
 });
 const falha = (mensagem: string) => ({ content: [{ type: "text" as const, text: mensagem }], isError: true });
+
+const temposQuestoes = z
+  .array(
+    z.object({
+      questao_id: z.string().uuid(),
+      tempo_s: z
+        .number()
+        .int()
+        .min(0)
+        .max(TEMPO_MAX_S)
+        .describe(
+          `Segundos (${TEMPO_MIN_S} a ${TEMPO_MAX_S}; relâmpago ${RELAMPAGO_MIN_S} a ${RELAMPAGO_MAX_S}); 0 = automático.`,
+        ),
+    }),
+  )
+  .max(15)
+  .optional()
+  .describe(
+    "Tempo de resposta de questões específicas só neste desafio (vence o tempo único). Omita as que ficam no automático (o tempo da própria questão).",
+  );
+
+const tempoVerificacaoArg = z
+  .number()
+  .int()
+  .min(0)
+  .max(VERIFICACAO_MAX_S)
+  .optional()
+  .describe(
+    `Tempo da verificação de leitura neste desafio, em segundos (${VERIFICACAO_MIN_S} a ${VERIFICACAO_MAX_S}); 0 ou omitido = automático (${VERIFICACAO_TEMPO_S} s).`,
+  );
+
+const ERRO_SQL_TEMPOS = "Rode antes o SQL 20261106120000_tempos_editaveis.sql no Supabase.";
+
+type QuestaoTempo = { id: string; enunciado: string; relampago?: boolean | null; tempo_limite_s: number };
+
+/** Confere os tempos pedidos para as questões do desafio. Devolve o mapa (0 = automático) ou o erro. */
+function conferirTempos(
+  pedidos: { questao_id: string; tempo_s: number }[] | undefined,
+  questoes: Map<string, QuestaoTempo>,
+): { tempos: Map<string, number | null> } | { erro: string } {
+  const tempos = new Map<string, number | null>();
+  for (const p of pedidos ?? []) {
+    const q = questoes.get(p.questao_id);
+    if (!q) return { erro: `${p.questao_id}: não está entre as questões do desafio.` };
+    if (p.tempo_s === 0) {
+      tempos.set(p.questao_id, null);
+      continue;
+    }
+    const problema = problemaTempoQuestao(p.tempo_s, Boolean(q.relampago));
+    if (problema) return { erro: `${q.enunciado.slice(0, 60)}: ${problema}` };
+    tempos.set(p.questao_id, p.tempo_s);
+  }
+  return { tempos };
+}
+
+const linhaComTempo = (q: QuestaoTempo, i: number, noDesafio: number | null, fixo: number | null) =>
+  `${i + 1}. ${q.enunciado} (⏱️ ${tempoEfetivo({ daQuestao: q.tempo_limite_s, relampago: Boolean(q.relampago), noDesafio, fixoDoDesafio: fixo })} s${noDesafio != null ? ", escrito para este desafio" : ""})`;
 
 const dataHora = z
   .string()
@@ -692,6 +757,8 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           .max(TEMPO_MAX_S)
           .optional()
           .describe("Tempo único para todas as questões, em segundos. Omita para usar o tempo de cada questão."),
+        tempos_questoes: temposQuestoes,
+        tempo_verificacao_s: tempoVerificacaoArg,
         saida_zera_questao: z
           .boolean()
           .optional()
@@ -719,10 +786,10 @@ export function registrarFerramentas(server: McpServer, origem: string) {
 
       const { data: encontradas } = await db
         .from("questoes")
-        .select("id, status, enunciado")
+        .select("*")
         .in("id", args.questoes)
         .eq("professor_id", professorId);
-      const porId = new Map((encontradas ?? []).map((q) => [q.id, q]));
+      const porId = new Map(((encontradas ?? []) as (QuestaoTempo & { status: string })[]).map((q) => [q.id, q]));
       const problemas = args.questoes.flatMap((id) => {
         const q = porId.get(id);
         if (!q) return [`${id}: não existe`];
@@ -730,6 +797,14 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         return [];
       });
       if (problemas.length) return falha(`Questões inválidas:\n${problemas.join("\n")}`);
+      const conferidos = conferirTempos(args.tempos_questoes, porId);
+      if ("erro" in conferidos) return falha(conferidos.erro);
+      const { tempos } = conferidos;
+      const verificacao = args.tempo_verificacao_s || null;
+      if (verificacao !== null) {
+        const problema = problemaTempoVerificacao(verificacao);
+        if (problema) return falha(problema);
+      }
 
       const relampago = args.tipo === "relampago";
       const pontos = args.pontos_por_acerto ?? (relampago ? PONTOS_RELAMPAGO : 10);
@@ -744,7 +819,10 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         pesquisa: args.saida_zera_questao
           ? "bloqueada (sair da tela, apertar tecla ou extensão que mexe na tela zera a questão)"
           : "liberada",
-        questoes: args.questoes.map((id, i) => `${i + 1}. ${porId.get(id)!.enunciado}`),
+        verificacao_de_leitura: `${verificacao ?? VERIFICACAO_TEMPO_S} s${verificacao === null ? " (automático)" : ""}`,
+        questoes: args.questoes.map((id, i) =>
+          linhaComTempo(porId.get(id)!, i, tempos.get(id) ?? null, args.tempo_por_questao_s ?? null),
+        ),
       };
       // Verificação de leitura: só questões com tema (e fora as relâmpago) podem recebê-la.
       const { data: comTema, error: erroTema } = await db.from("questoes").select("id, tema").in("id", args.questoes);
@@ -773,14 +851,21 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           fecha_em: fecha,
           pontos_por_acerto: pontos,
           tempo_por_questao_s: args.tempo_por_questao_s ?? null,
+          // Só envia se pedido: sem o SQL dos tempos a coluna não existe.
+          ...(verificacao !== null && { tempo_verificacao_s: verificacao }),
           saida_zera_questao: args.saida_zera_questao ?? false,
         })
         .select("id")
         .single();
       if (error || !desafio) return falha("Não foi possível criar o desafio.");
-      const { error: erroQuestoes } = await db
-        .from("desafio_questoes")
-        .insert(args.questoes.map((questao_id, posicao) => ({ desafio_id: desafio.id, questao_id, posicao })));
+      const { error: erroQuestoes } = await db.from("desafio_questoes").insert(
+        args.questoes.map((questao_id, posicao) => ({
+          desafio_id: desafio.id,
+          questao_id,
+          posicao,
+          ...(tempos.get(questao_id) != null && { tempo_limite_s: tempos.get(questao_id) }),
+        })),
+      );
       if (erroQuestoes) {
         await db.from("desafios").delete().eq("id", desafio.id);
         return falha("Não foi possível salvar as questões do desafio. Nada foi criado.");
@@ -919,7 +1004,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
     {
       title: "Editar desafio",
       description:
-        "Altera título, datas, pontos, tempo por questão, regra de saída de tela ou as questões de um desafio. Só os campos enviados mudam. As questões só podem ser trocadas enquanto nenhum aluno tiver começado o desafio. Em duas etapas: confirmar=false mostra o antes e depois; confirmar=true grava, só depois da aprovação do professor.",
+        "Altera título, datas, pontos, tempo único, tempo de questões específicas, tempo da verificação de leitura, regra de saída de tela ou as questões de um desafio. Só os campos enviados mudam. Tempos valem na hora, inclusive para quem já está jogando. As questões só podem ser trocadas enquanto nenhum aluno tiver começado o desafio. Em duas etapas: confirmar=false mostra o antes e depois; confirmar=true grava, só depois da aprovação do professor.",
       inputSchema: z.object({
         desafio_id: z.string().uuid(),
         titulo: z.string().min(1).optional(),
@@ -933,6 +1018,8 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           .max(TEMPO_MAX_S)
           .optional()
           .describe(`Segundos (${TEMPO_MIN_S} a ${TEMPO_MAX_S}); 0 volta a usar o tempo de cada questão.`),
+        tempos_questoes: temposQuestoes,
+        tempo_verificacao_s: tempoVerificacaoArg,
         saida_zera_questao: z
           .boolean()
           .optional()
@@ -951,9 +1038,8 @@ export function registrarFerramentas(server: McpServer, origem: string) {
       const db = criarClienteAdmin();
       const { data: atual } = await db
         .from("desafios")
-        .select(
-          "id, titulo, abre_em, fecha_em, pontos_por_acerto, tempo_por_questao_s, saida_zera_questao, desafio_questoes(posicao, questoes(id, enunciado))",
-        )
+        // "*" traz os tempos de cada questão e da verificação, quando o SQL deles já rodou.
+        .select("*, desafio_questoes(*, questoes(id, enunciado, relampago, tempo_limite_s))")
         .eq("id", args.desafio_id)
         .eq("professor_id", professorId)
         .maybeSingle();
@@ -964,14 +1050,15 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         );
       }
 
-      const questoesAtuais = (
+      const linhasAtuais = (
         (atual.desafio_questoes ?? []) as unknown as {
           posicao: number;
-          questoes: { id: string; enunciado: string };
+          tempo_limite_s?: number | null;
+          questoes: QuestaoTempo;
         }[]
-      )
-        .sort((a, b) => a.posicao - b.posicao)
-        .map((dq) => dq.questoes);
+      ).sort((a, b) => a.posicao - b.posicao);
+      const questoesAtuais = linhasAtuais.map((dq) => dq.questoes);
+      const temposAtuais = new Map(linhasAtuais.map((dq) => [dq.questoes.id, dq.tempo_limite_s ?? null]));
       let novasQuestoes = questoesAtuais;
       if (args.questoes) {
         const { count } = await db
@@ -983,10 +1070,10 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         if (new Set(args.questoes).size !== args.questoes.length) return falha("Há questões repetidas na lista.");
         const { data: encontradas } = await db
           .from("questoes")
-          .select("id, status, enunciado")
+          .select("*")
           .in("id", args.questoes)
           .eq("professor_id", professorId);
-        const porId = new Map((encontradas ?? []).map((q) => [q.id, q]));
+        const porId = new Map(((encontradas ?? []) as (QuestaoTempo & { status: string })[]).map((q) => [q.id, q]));
         const problemas = args.questoes.flatMap((id) => {
           const q = porId.get(id);
           if (!q) return [`${id}: não existe`];
@@ -996,6 +1083,22 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         if (problemas.length) return falha(`Questões inválidas:\n${problemas.join("\n")}`);
         novasQuestoes = args.questoes.map((id) => porId.get(id)!);
       }
+      const conferidos = conferirTempos(args.tempos_questoes, new Map(novasQuestoes.map((q) => [q.id, q])));
+      if ("erro" in conferidos) return falha(conferidos.erro);
+      // Questão que continua no desafio mantém o tempo que já tinha, se não veio um novo.
+      const novosTempos = new Map(
+        novasQuestoes.map((q) => [
+          q.id,
+          conferidos.tempos.has(q.id) ? conferidos.tempos.get(q.id)! : (temposAtuais.get(q.id) ?? null),
+        ]),
+      );
+      if (args.tempo_verificacao_s) {
+        const problema = problemaTempoVerificacao(args.tempo_verificacao_s);
+        if (problema) return falha(problema);
+      }
+      const verificacaoAtual = (atual.tempo_verificacao_s as number | null | undefined) ?? null;
+      const novaVerificacao =
+        args.tempo_verificacao_s === undefined ? verificacaoAtual : args.tempo_verificacao_s || null;
 
       const novo = {
         titulo: args.titulo?.trim() ?? atual.titulo,
@@ -1007,31 +1110,65 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         saida_zera_questao: args.saida_zera_questao ?? atual.saida_zera_questao,
       };
       if (new Date(novo.fecha_em) <= new Date(novo.abre_em)) return falha("O fechamento deve ser depois da abertura.");
-      const resumo = (d: typeof novo, qs: { enunciado: string }[]) => ({
+      const resumo = (
+        d: typeof novo,
+        qs: QuestaoTempo[],
+        tempos: Map<string, number | null>,
+        verificacao: number | null,
+      ) => ({
         titulo: d.titulo,
         abre: formatarDataHora(d.abre_em),
         fecha: formatarDataHora(d.fecha_em),
         pontos_por_acerto: d.pontos_por_acerto,
         tempo_por_questao: d.tempo_por_questao_s ? `${d.tempo_por_questao_s} s em todas` : "o de cada questão",
+        verificacao_de_leitura: `${verificacao ?? VERIFICACAO_TEMPO_S} s${verificacao === null ? " (automático)" : ""}`,
         sair_da_tela_zera: d.saida_zera_questao,
-        questoes: qs.map((q, i) => `${i + 1}. ${q.enunciado}`),
+        questoes: qs.map((q, i) => linhaComTempo(q, i, tempos.get(q.id) ?? null, d.tempo_por_questao_s)),
       });
-      const previa = { antes: resumo(atual, questoesAtuais), depois: resumo(novo, novasQuestoes) };
+      const previa = {
+        antes: resumo(atual, questoesAtuais, temposAtuais, verificacaoAtual),
+        depois: resumo(novo, novasQuestoes, novosTempos, novaVerificacao),
+      };
       if (!args.confirmar) return resultado({ previa, proximo_passo: "Mostre a prévia e confirme com o professor." });
 
-      const { error } = await db.from("desafios").update(novo).eq("id", atual.id);
-      if (error) return falha("Não foi possível salvar o desafio.");
+      const mudouVerificacao = novaVerificacao !== verificacaoAtual;
+      const { error } = await db
+        .from("desafios")
+        .update({ ...novo, ...(mudouVerificacao && { tempo_verificacao_s: novaVerificacao }) })
+        .eq("id", atual.id);
+      if (error) return falha(mudouVerificacao ? ERRO_SQL_TEMPOS : "Não foi possível salvar o desafio.");
+      const linhaDq = (questao_id: string, posicao: number, tempo: number | null) => ({
+        desafio_id: atual.id,
+        questao_id,
+        posicao,
+        ...(tempo != null && { tempo_limite_s: tempo }),
+      });
       if (args.questoes) {
         await db.from("desafio_questoes").delete().eq("desafio_id", atual.id);
         const { error: erroQuestoes } = await db
           .from("desafio_questoes")
-          .insert(args.questoes.map((questao_id, posicao) => ({ desafio_id: atual.id, questao_id, posicao })));
+          .insert(
+            args.questoes.map((questao_id, posicao) =>
+              linhaDq(questao_id, posicao, novosTempos.get(questao_id) ?? null),
+            ),
+          );
         if (erroQuestoes) {
           await db
             .from("desafio_questoes")
-            .insert(questoesAtuais.map((q, posicao) => ({ desafio_id: atual.id, questao_id: q.id, posicao })));
+            .insert(questoesAtuais.map((q, posicao) => linhaDq(q.id, posicao, temposAtuais.get(q.id) ?? null)));
           return falha("Não foi possível trocar as questões; as anteriores foram mantidas.");
         }
+      } else if (conferidos.tempos.size) {
+        const resultados = await Promise.all(
+          [...conferidos.tempos].map(([questao_id, tempo]) =>
+            db
+              .from("desafio_questoes")
+              .update({ tempo_limite_s: tempo })
+              .eq("desafio_id", atual.id)
+              .eq("questao_id", questao_id),
+          ),
+        );
+        if (resultados.some((r) => r.error)) return falha(ERRO_SQL_TEMPOS);
       }
       return resultado({ salvo: previa.depois, ver_em: `${origem}/professor/desafios/${atual.id}` });
     },

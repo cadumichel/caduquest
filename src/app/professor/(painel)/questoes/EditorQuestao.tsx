@@ -260,7 +260,7 @@ export function EditorQuestao({
             dica={
               campos.relampago
                 ? `Sugestão do app pelo tamanho do texto: ${sugestao} s. Ajuste de ${RELAMPAGO_MIN_S} a ${RELAMPAGO_MAX_S} s.`
-                : undefined
+                : `Padrão deste tipo: ${TEMPO_PADRAO[conteudo.tipo]} s. De ${TEMPO_MIN_S} a ${TEMPO_MAX_S} s. Cada desafio pode mudar este tempo na página dele.`
             }
           >
             <div className="flex items-center gap-2">
@@ -271,6 +271,15 @@ export function EditorQuestao({
                 value={campos.tempo_limite_s}
                 onChange={(e) => set("tempo_limite_s", Number(e.target.value))}
               />
+              {!campos.relampago && campos.tempo_limite_s !== TEMPO_PADRAO[conteudo.tipo] && (
+                <button
+                  type="button"
+                  className="shrink-0 text-sm font-medium text-marca-700"
+                  onClick={() => set("tempo_limite_s", TEMPO_PADRAO[conteudo.tipo])}
+                >
+                  Usar {TEMPO_PADRAO[conteudo.tipo]} s
+                </button>
+              )}
               {campos.relampago && campos.tempo_limite_s !== sugestao && (
                 <button
                   type="button"

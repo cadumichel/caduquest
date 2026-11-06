@@ -9,6 +9,12 @@ import { exigirProfessor } from "@/lib/professor";
 import { ehEra } from "@/lib/publico/regras";
 import { problemasRelampago } from "@/lib/questoes/relampago";
 import { TEMPO_MAX_S, TEMPO_MIN_S, TIPOS, validarConteudo, type Conteudo } from "@/lib/questoes/tipos";
+import {
+  problemaTempoQuestao,
+  problemaTempoVerificacao,
+  VERIFICACAO_MAX_S,
+  VERIFICACAO_MIN_S,
+} from "@/lib/questoes/tempos";
 
 export type EstadoForm = { erro?: string; ok?: string };
 
@@ -398,6 +404,13 @@ const schemaDesafio = z.object({
     .min(TEMPO_MIN_S, `Tempo mínimo: ${TEMPO_MIN_S} s.`)
     .max(TEMPO_MAX_S, `Tempo máximo: ${TEMPO_MAX_S} s.`)
     .nullable(),
+  tempo_verificacao_s: z
+    .number()
+    .int()
+    .min(VERIFICACAO_MIN_S, `Verificação de leitura: mínimo ${VERIFICACAO_MIN_S} s.`)
+    .max(VERIFICACAO_MAX_S, `Verificação de leitura: máximo ${VERIFICACAO_MAX_S} s.`)
+    .nullable()
+    .default(null),
   saida_zera_questao: z.boolean(),
   questoes: z.array(z.uuid()).min(5, "Escolha de 5 a 15 questões.").max(15, "Escolha de 5 a 15 questões."),
 });
@@ -432,6 +445,8 @@ export async function criarDesafio(dados: z.input<typeof schemaDesafio>): Promis
       fecha_em: fecha,
       pontos_por_acerto: r.data.pontos_por_acerto,
       tempo_por_questao_s: r.data.tempo_por_questao_s,
+      // Só envia se escrito: sem o SQL dos tempos a coluna não existe.
+      ...(r.data.tempo_verificacao_s !== null && { tempo_verificacao_s: r.data.tempo_verificacao_s }),
       saida_zera_questao: r.data.saida_zera_questao,
     })
     .select("id")
@@ -465,6 +480,70 @@ export async function atualizarJanelaDesafio(_: EstadoForm, form: FormData): Pro
   if (error) return { erro: "Não foi possível salvar." };
   revalidatePath(`/professor/desafios/${id}`);
   return { ok: "Desafio atualizado." };
+}
+
+const ERRO_SQL_TEMPOS = "Rode antes o SQL 20261106120000_tempos_editaveis.sql no Supabase.";
+
+export type DadosTempos = {
+  /** Tempo único para todas as questões (null = o de cada questão). */
+  todas: number | null;
+  /** Tempo de cada questão neste desafio (null = automático). */
+  questoes: { questao_id: string; tempo: number | null }[];
+  /** Tempo da verificação de leitura (null = 15 s). */
+  verificacao: number | null;
+};
+
+/**
+ * Tempos de resposta do desafio. Valem na hora, inclusive para quem já está
+ * jogando: o servidor confere o tempo de cada questão ao receber a resposta.
+ */
+export async function salvarTemposDesafio(id: string, dados: DadosTempos): Promise<EstadoForm> {
+  const { supabase } = await exigirProfessor();
+  const { data: linhas } = await supabase
+    .from("desafio_questoes")
+    .select("questao_id, questoes(relampago, enunciado)")
+    .eq("desafio_id", id);
+  if (!linhas?.length) return { erro: "Desafio não encontrado." };
+  const doDesafio = new Map(
+    (linhas as unknown as { questao_id: string; questoes: { relampago?: boolean; enunciado: string } }[]).map((l) => [
+      l.questao_id,
+      l.questoes,
+    ]),
+  );
+
+  if (dados.todas !== null) {
+    const problema = problemaTempoQuestao(dados.todas, false);
+    if (problema) return { erro: `Tempo para todas as questões: ${problema}` };
+  }
+  if (dados.verificacao !== null) {
+    const problema = problemaTempoVerificacao(dados.verificacao);
+    if (problema) return { erro: problema };
+  }
+  for (const [i, q] of dados.questoes.entries()) {
+    const questao = doDesafio.get(q.questao_id);
+    if (!questao) return { erro: "Questão fora deste desafio." };
+    if (q.tempo === null) continue;
+    const problema = problemaTempoQuestao(q.tempo, Boolean(questao.relampago));
+    if (problema) return { erro: `Questão ${i + 1}: ${problema}` };
+  }
+
+  const { error } = await supabase
+    .from("desafios")
+    .update({ tempo_por_questao_s: dados.todas, tempo_verificacao_s: dados.verificacao })
+    .eq("id", id);
+  if (error) return { erro: ERRO_SQL_TEMPOS };
+  const resultados = await Promise.all(
+    dados.questoes.map((q) =>
+      supabase
+        .from("desafio_questoes")
+        .update({ tempo_limite_s: q.tempo })
+        .eq("desafio_id", id)
+        .eq("questao_id", q.questao_id),
+    ),
+  );
+  if (resultados.some((r) => r.error)) return { erro: ERRO_SQL_TEMPOS };
+  revalidatePath(`/professor/desafios/${id}`);
+  return { ok: "Tempos salvos. Já valem para quem está jogando." };
 }
 
 /** Fecha o desafio agora (quem está respondendo termina a questão atual). */

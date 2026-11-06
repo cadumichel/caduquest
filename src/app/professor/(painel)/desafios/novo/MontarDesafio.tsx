@@ -4,6 +4,8 @@ import { EscolhaPesquisa } from "@/components/EscolhaPesquisa";
 import { Aviso, Botao, Campo, Cartao, Entrada, Etiqueta, Selecao } from "@/components/ui";
 import { PONTOS_RELAMPAGO } from "@/lib/cadurush";
 import { NOME_DIFICULDADE, NOME_TIPO, TEMPO_MAX_S, TEMPO_MIN_S, type TipoQuestao } from "@/lib/questoes/tipos";
+import { VERIFICACAO_MAX_S, VERIFICACAO_MIN_S } from "@/lib/questoes/tempos";
+import { VERIFICACAO_TEMPO_S } from "@/lib/questoes/verificacao";
 import { criarDesafio } from "../../actions";
 
 type Opcao = {
@@ -39,6 +41,7 @@ export function MontarDesafio({
   const relampago = tipo === "relampago";
   const [pontos, setPontos] = useState(relampago ? PONTOS_RELAMPAGO : 10);
   const [tempoFixo, setTempoFixo] = useState("");
+  const [tempoVerificacao, setTempoVerificacao] = useState("");
   const [saidaZera, setSaidaZera] = useState(false);
   const [escolhidas, setEscolhidas] = useState<string[]>([]);
   const [filtroCapitulo, setFiltroCapitulo] = useState("");
@@ -76,6 +79,7 @@ export function MontarDesafio({
         fecha_em: fecha,
         pontos_por_acerto: pontos,
         tempo_por_questao_s: tempoFixo ? Number(tempoFixo) : null,
+        tempo_verificacao_s: tempoVerificacao ? Number(tempoVerificacao) : null,
         saida_zera_questao: saidaZera,
         questoes: escolhidas,
       });
@@ -178,6 +182,19 @@ export function MontarDesafio({
               placeholder="Tempo de cada questão"
               value={tempoFixo}
               onChange={(e) => setTempoFixo(e.target.value)}
+            />
+          </Campo>
+          <Campo
+            rotulo="📖 Tempo da verificação de leitura (segundos)"
+            dica={`Em branco: ${VERIFICACAO_TEMPO_S} s. De ${VERIFICACAO_MIN_S} a ${VERIFICACAO_MAX_S} s. O tempo de cada questão se ajusta depois, na página do desafio.`}
+          >
+            <Entrada
+              type="number"
+              min={VERIFICACAO_MIN_S}
+              max={VERIFICACAO_MAX_S}
+              placeholder={`${VERIFICACAO_TEMPO_S} (automático)`}
+              value={tempoVerificacao}
+              onChange={(e) => setTempoVerificacao(e.target.value)}
             />
           </Campo>
           <EscolhaPesquisa bloqueada={saidaZera} onChange={setSaidaZera} />
