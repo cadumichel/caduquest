@@ -9,6 +9,7 @@ import { exigirProfessor } from "@/lib/professor";
 import { ehEra } from "@/lib/publico/regras";
 import { problemasRelampago } from "@/lib/questoes/relampago";
 import { TEMPO_MAX_S, TEMPO_MIN_S, TIPOS, validarConteudo, type Conteudo } from "@/lib/questoes/tipos";
+import { conferirRegras, ERRO_SQL_REGRAS, regrasParaGravar } from "@/lib/questoes/regras-desafio";
 import {
   problemaTempoQuestao,
   problemaTempoVerificacao,
@@ -412,6 +413,20 @@ const schemaDesafio = z.object({
     .nullable()
     .default(null),
   saida_zera_questao: z.boolean(),
+  // Regras do desafio: conferidas à parte em conferirRegras.
+  regra_cliques: z.string().default("proibido"),
+  tolerancia_cliques: z.number().nullable().default(null),
+  verificacoes: z.number().nullable().default(null),
+  regra_saidas: z.string().default("proibido"),
+  tolerancia_saidas: z.number().nullable().default(null),
+  eliminacoes_max: z.number().nullable().default(null),
+  dicas_max: z.number().nullable().default(null),
+  ordem_fixa: z.boolean().default(false),
+  embaralhar_alternativas: z.boolean().default(true),
+  teclado_bloqueado: z.boolean().default(true),
+  gabarito_nunca: z.boolean().default(false),
+  treino_liberado: z.boolean().default(true),
+  bonus_rapidez: z.boolean().default(false),
   questoes: z.array(z.uuid()).min(5, "Escolha de 5 a 15 questões.").max(15, "Escolha de 5 a 15 questões."),
 });
 
@@ -422,6 +437,9 @@ export async function criarDesafio(dados: z.input<typeof schemaDesafio>): Promis
   const abre = dataHoraLocalParaIso(r.data.abre_em);
   const fecha = dataHoraLocalParaIso(r.data.fecha_em);
   if (fecha <= abre) return { erro: "O fechamento deve ser depois da abertura." };
+  const conferidas = conferirRegras(r.data);
+  if ("erro" in conferidas) return { erro: conferidas.erro };
+  const { regras } = conferidas;
   const { data: temporada } = await supabase.from("temporadas").select("*").eq("id", r.data.temporada_id).maybeSingle();
   if ((temporada as { encerrada_em?: string | null } | null)?.encerrada_em) {
     return { erro: "Esta temporada foi encerrada. Reabra a temporada para criar desafios nela." };
@@ -448,10 +466,14 @@ export async function criarDesafio(dados: z.input<typeof schemaDesafio>): Promis
       // Só envia se escrito: sem o SQL dos tempos a coluna não existe.
       ...(r.data.tempo_verificacao_s !== null && { tempo_verificacao_s: r.data.tempo_verificacao_s }),
       saida_zera_questao: r.data.saida_zera_questao,
+      ...regrasParaGravar(regras),
     })
     .select("id")
     .single();
-  if (error || !desafio) return { erro: "Não foi possível criar o desafio." };
+  if (error || !desafio)
+    return {
+      erro: Object.keys(regrasParaGravar(regras)).length ? ERRO_SQL_REGRAS : "Não foi possível criar o desafio.",
+    };
   const { error: erroQuestoes } = await supabase
     .from("desafio_questoes")
     .insert(r.data.questoes.map((questao_id, posicao) => ({ desafio_id: desafio.id, questao_id, posicao })));
@@ -544,6 +566,21 @@ export async function salvarTemposDesafio(id: string, dados: DadosTempos): Promi
   if (resultados.some((r) => r.error)) return { erro: ERRO_SQL_TEMPOS };
   revalidatePath(`/professor/desafios/${id}`);
   return { ok: "Tempos salvos. Já valem para quem está jogando." };
+}
+
+/**
+ * Regras do desafio: cliques fora (sem consulta) e número de questões teste.
+ * Os cliques valem na hora; as questões teste são sorteadas quando o aluno
+ * começa, então só valem para quem ainda não começou.
+ */
+export async function salvarRegrasDesafio(id: string, dados: Record<string, unknown>): Promise<EstadoForm> {
+  const { supabase } = await exigirProfessor();
+  const conferidas = conferirRegras(dados);
+  if ("erro" in conferidas) return { erro: conferidas.erro };
+  const { error } = await supabase.from("desafios").update(conferidas.regras).eq("id", id);
+  if (error) return { erro: ERRO_SQL_REGRAS };
+  revalidatePath(`/professor/desafios/${id}`);
+  return { ok: "Regras salvas." };
 }
 
 /** Fecha o desafio agora (quem está respondendo termina a questão atual). */

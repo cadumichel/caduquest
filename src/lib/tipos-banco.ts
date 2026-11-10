@@ -69,6 +69,30 @@ export type Desafio = {
   tempo_por_questao_s: number | null;
   /** Tempo da verificação de leitura (null = 15 s; ausente sem o SQL dos tempos). */
   tempo_verificacao_s?: number | null;
+  /** Clique fora no sem consulta: proibido (padrão), tolerancia ou permitido (ausente sem o SQL). */
+  regra_cliques?: string | null;
+  /** Quantos cliques fora passam só com aviso, na regra "tolerancia". */
+  tolerancia_cliques?: number | null;
+  /** Quantas verificações de leitura (questões teste) por tentativa; null = automático (2 a cada 10). */
+  verificacoes?: number | null;
+  /** Saída da tela no sem consulta: proibido (padrão) ou tolerancia (ausente sem o SQL das regras extras). */
+  regra_saidas?: string | null;
+  tolerancia_saidas?: number | null;
+  /** Teto de ajudas neste desafio, além da cota da temporada (null = só a cota; 0 = desligadas). */
+  eliminacoes_max?: number | null;
+  dicas_max?: number | null;
+  /** Questões na ordem do desafio, igual para todos (padrão: embaralhadas por aluno). */
+  ordem_fixa?: boolean;
+  /** Alternativas embaralhadas nas questões de escolher (padrão true). */
+  embaralhar_alternativas?: boolean;
+  /** Apertar tecla zera no sem consulta (padrão true). */
+  teclado_bloqueado?: boolean;
+  /** O gabarito nunca é mostrado aos alunos. */
+  gabarito_nunca?: boolean;
+  /** Refazer como treino depois do fechamento (padrão true). */
+  treino_liberado?: boolean;
+  /** Acerto rápido ganha até 50% a mais (padrão false). */
+  bonus_rapidez?: boolean;
   saida_zera_questao: boolean;
   /** O gabarito só aparece quando o professor liberar (ausente sem o SQL dos controles). */
   gabarito_manual?: boolean;
@@ -85,6 +109,10 @@ export type Tentativa = {
   pontos: number;
   /** Questões sorteadas para a verificação de leitura (ausente sem o SQL dela). */
   verificar?: string[];
+  /** Cliques fora já tolerados com aviso neste desafio (ausente sem o SQL). */
+  cliques_fora?: number;
+  /** Saídas da tela já toleradas com aviso neste desafio (ausente sem o SQL). */
+  saidas_toleradas?: number;
 };
 export type RespostaBanco = {
   id: string;
@@ -127,10 +155,11 @@ export function situacaoDesafio(d: Pick<Desafio, "abre_em" | "fecha_em">, agora 
 export const gabaritoLiberadoEm = (d: Pick<Desafio, "fecha_em">) =>
   new Date(new Date(d.fecha_em).getTime() + JANELA_APOS_FECHAR_S * 1000);
 
-type DesafioGabarito = Pick<Desafio, "fecha_em" | "gabarito_manual" | "gabarito_liberado_em">;
+type DesafioGabarito = Pick<Desafio, "fecha_em" | "gabarito_manual" | "gabarito_liberado_em" | "gabarito_nunca">;
 
-/** O professor escolheu liberar o gabarito ele mesmo e ainda não liberou. */
-export const gabaritoAguardaProfessor = (d: DesafioGabarito) => !!d.gabarito_manual && !d.gabarito_liberado_em;
+/** O professor escolheu liberar o gabarito ele mesmo e ainda não liberou (ou escolheu nunca mostrar). */
+export const gabaritoAguardaProfessor = (d: DesafioGabarito) =>
+  !!d.gabarito_nunca || (!!d.gabarito_manual && !d.gabarito_liberado_em);
 
 /**
  * Gabarito visível ao aluno: depois do fim do prazo (com a janela de quem ainda
@@ -138,6 +167,10 @@ export const gabaritoAguardaProfessor = (d: DesafioGabarito) => !!d.gabarito_man
  */
 export const gabaritoLiberado = (d: DesafioGabarito, agora = new Date()) =>
   agora > gabaritoLiberadoEm(d) && !gabaritoAguardaProfessor(d);
+
+/** Refazer como treino: só com o gabarito visível e se o professor não desligou. */
+export const treinoLiberado = (d: DesafioGabarito & Pick<Desafio, "treino_liberado">, agora = new Date()) =>
+  d.treino_liberado !== false && gabaritoLiberado(d, agora);
 
 export function urlImagem(path: string | null): string | null {
   if (!path) return null;

@@ -166,6 +166,19 @@ export function calcularPontos(fracao: number, pontosPorAcerto: number): number 
   return arredondarPontos(fracao * pontosPorAcerto);
 }
 
+/** Bônus por rapidez (opção do desafio): responder logo de cara vale até 50% a mais. */
+export const BONUS_RAPIDEZ_FRACAO = 0.5;
+
+/**
+ * Pontos com o bônus por rapidez: cai em linha reta do máximo (resposta
+ * imediata) até zero (fim do tempo). Erro não ganha bônus; crédito parcial,
+ * proporcional.
+ */
+export function pontosComRapidez(fracao: number, pontosPorAcerto: number, decorridoMs: number, limiteS: number) {
+  const sobra = Math.max(0, Math.min(1, 1 - decorridoMs / (limiteS * 1000)));
+  return arredondarPontos(fracao * pontosPorAcerto * (1 + BONUS_RAPIDEZ_FRACAO * sobra));
+}
+
 /** Folga de rede, em segundos, além do tempo limite da questão. */
 export const FOLGA_SEGUNDOS = 3;
 

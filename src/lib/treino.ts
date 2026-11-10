@@ -6,7 +6,7 @@ import { montarVista } from "@/lib/questoes/apresentacao";
 import { calcularPontos, corrigir } from "@/lib/questoes/correcao";
 import { embaralhar, permutacaoAleatoria, permutacaoValida } from "@/lib/questoes/embaralhar";
 import { schemaResposta, tamanhoPermutacao, type Conteudo, type Vista } from "@/lib/questoes/tipos";
-import { gabaritoLiberado, urlImagem, type Desafio } from "@/lib/tipos-banco";
+import { treinoLiberado, urlImagem, type Desafio } from "@/lib/tipos-banco";
 
 /**
  * Refazer um desafio como treino: nada é gravado, então ranking, XP e medalhas
@@ -39,7 +39,9 @@ async function desafioParaTreino(
   const desafio = await desafioDoAluno(db, aluno, desafioId);
   if (!desafio) return { erro: "Desafio não encontrado." };
   // Mesmo prazo do gabarito: alguns minutos depois de fechar, quando ninguém mais responde.
-  if (!gabaritoLiberado(desafio)) return { erro: "O treino abre alguns minutos depois que o desafio fecha." };
+  if (desafio.treino_liberado === false || desafio.gabarito_nunca)
+    return { erro: "O professor não liberou o treino deste desafio." };
+  if (!treinoLiberado(desafio)) return { erro: "O treino abre alguns minutos depois que o desafio fecha." };
   return { desafio };
 }
 

@@ -2,7 +2,13 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AlunoSessao } from "@/lib/aluno-sessao";
 import { montarVista } from "@/lib/questoes/apresentacao";
-import { calcularPontos, corrigir, JANELA_APOS_FECHAR_S, tempoEsgotado } from "@/lib/questoes/correcao";
+import {
+  calcularPontos,
+  corrigir,
+  JANELA_APOS_FECHAR_S,
+  pontosComRapidez,
+  tempoEsgotado,
+} from "@/lib/questoes/correcao";
 import { codigoConfere, LIMITE_TENTATIVAS_CODIGO } from "@/lib/cadurush";
 import {
   ajudaNaVista,
@@ -17,7 +23,14 @@ import { tamanhoPermutacao, type Conteudo, type Resposta, type Vista } from "@/l
 import type { Desafio, RespostaBanco, Tentativa } from "@/lib/tipos-banco";
 import { situacaoDesafio, urlImagem } from "@/lib/tipos-banco";
 import { arredondarPontos } from "./pontos";
-import { AVISO_ZERADA, type MotivoZerada } from "./tela-protegida";
+import {
+  AVISO_ZERADA,
+  cliquesRestantes,
+  regraCliques,
+  regraSaidas,
+  saidasRestantes,
+  type MotivoZerada,
+} from "./tela-protegida";
 import {
   AVISO_VERIFICACAO,
   montarOpcoesVerificacao,
@@ -37,6 +50,10 @@ export type QuestaoServida = {
   restanteMs: number;
   /** Sair da tela zera a questão (opção do desafio). */
   saidaZera: boolean;
+  /** Cliques fora que ainda passam só com aviso (0 = o próximo zera; null = liberados). */
+  cliquesRestantes: number | null;
+  /** Saídas da tela que ainda passam só com aviso (0 = a próxima zera). */
+  saidasRestantes: number;
   /** O que as eliminações já usadas mudam na tela. */
   ajuda: AjudaVista;
   /** Ainda dá para usar uma eliminação nesta questão. */
@@ -65,6 +82,8 @@ export type VerificacaoServida = {
   tempoLimite: number;
   restanteMs: number;
   saidaZera: boolean;
+  cliquesRestantes: number | null;
+  saidasRestantes: number;
 };
 
 export type EstadoJogo =
@@ -127,26 +146,61 @@ async function dicaDaQuestao(db: SupabaseClient, id: string): Promise<string | n
   return dica || null;
 }
 
-/** Cota da temporada menos o que o aluno já usou nos desafios dela. */
-export async function ajudasRestantes(db: SupabaseClient, alunoId: string, temporadaId: string): Promise<Ajudas> {
+/**
+ * Cota da temporada menos o que o aluno já usou nos desafios dela. Se o
+ * professor pôs um teto no desafio, também não passa do que sobra dele.
+ */
+export async function ajudasRestantes(db: SupabaseClient, alunoId: string, desafio: Desafio): Promise<Ajudas> {
   const { data, error } = await db
     .from("tentativas")
-    .select("id, desafios!inner(temporada_id), respostas(eliminadas, dica_usada)")
+    .select("id, desafio_id, desafios!inner(temporada_id), respostas(eliminadas, dica_usada)")
     .eq("aluno_id", alunoId)
-    .eq("desafios.temporada_id", temporadaId);
+    .eq("desafios.temporada_id", desafio.temporada_id);
   if (error) return null;
   let eliminacoes = 0;
   let dicas = 0;
-  for (const t of (data ?? []) as { respostas: { eliminadas: number[] | null; dica_usada: boolean }[] }[]) {
+  let eliminacoesAqui = 0;
+  let dicasAqui = 0;
+  type Linha = { desafio_id: string; respostas: { eliminadas: number[] | null; dica_usada: boolean }[] };
+  for (const t of (data ?? []) as Linha[]) {
     for (const r of t.respostas ?? []) {
-      eliminacoes += r.eliminadas?.length ?? 0;
+      const e = r.eliminadas?.length ?? 0;
+      eliminacoes += e;
       if (r.dica_usada) dicas++;
+      if (t.desafio_id === desafio.id) {
+        eliminacoesAqui += e;
+        if (r.dica_usada) dicasAqui++;
+      }
     }
   }
+  const teto = (max: number | null | undefined, usadas: number) => (max == null ? Infinity : Math.max(0, max - usadas));
   return {
-    eliminacoes: Math.max(0, ELIMINACOES_POR_TEMPORADA - eliminacoes),
-    dicas: Math.max(0, DICAS_POR_TEMPORADA - dicas),
+    eliminacoes: Math.min(
+      Math.max(0, ELIMINACOES_POR_TEMPORADA - eliminacoes),
+      teto(desafio.eliminacoes_max, eliminacoesAqui),
+    ),
+    dicas: Math.min(Math.max(0, DICAS_POR_TEMPORADA - dicas), teto(desafio.dicas_max, dicasAqui)),
   };
+}
+
+/**
+ * Tipos em que a permutação só muda a posição das opções (e não é o próprio
+ * desafio, como em ordenar ou ligar pares): o professor pode deixar na ordem
+ * em que foram escritas.
+ */
+const TIPOS_SO_OPCOES = new Set<Conteudo["tipo"]>([
+  "multipla_escolha",
+  "interpretacao",
+  "fonte_primaria",
+  "vf_bloco",
+  "intruso",
+]);
+
+function permutacaoDaQuestao(desafio: Desafio, conteudo: Conteudo) {
+  const n = tamanhoPermutacao(conteudo);
+  if (desafio.embaralhar_alternativas === false && TIPOS_SO_OPCOES.has(conteudo.tipo))
+    return Array.from({ length: n }, (_, i) => i);
+  return permutacaoAleatoria(n);
 }
 
 const comoConteudo = (q: QuestaoBanco) => ({ tipo: q.tipo, conteudo: q.conteudo }) as Conteudo;
@@ -196,7 +250,9 @@ async function registrar(
   resposta = respostaComAjuda(comoConteudo(questao), linha.permutacao, linha.eliminadas, resposta);
   const agora = new Date();
   const esgotado = tempoEsgotado(new Date(linha.servida_em), agora, tempoDaQuestao(desafio, questao));
-  const causa = esgotado || !desafio.saida_zera_questao ? null : (motivo ?? (saidasTela > 0 ? "saida" : null));
+  // Com tolerância de saídas, quem decide que a saída zerou é o aviso esgotado (motivo "saida").
+  const saidaZeraSozinha = regraSaidas(desafio).regra === "proibido" && saidasTela > 0;
+  const causa = esgotado || !desafio.saida_zera_questao ? null : (motivo ?? (saidaZeraSozinha ? "saida" : null));
   const zerada = causa !== null;
   const fracao = esgotado || zerada ? 0 : corrigir(comoConteudo(questao), linha.permutacao, resposta);
   // Sorteada para a verificação de leitura: vale zero até o aluno acertar o tema.
@@ -209,7 +265,7 @@ async function registrar(
       respondida_em: agora.toISOString(),
       resposta,
       fracao: verificar ? 0 : fracao,
-      pontos: verificar ? 0 : calcularPontos(fracao, desafio.pontos_por_acerto),
+      pontos: verificar ? 0 : pontosDaResposta(desafio, fracao, new Date(linha.servida_em), agora, questao),
       ...(verificar && { verificacao_fracao: fracao }),
       tempo_esgotado: esgotado,
       zerada_por_saida: zerada,
@@ -222,6 +278,17 @@ async function registrar(
   // Com verificação pendente, o índice só avança depois dela.
   if (gravada?.length && !verificar) await recalcularTentativa(db, tentativa, tentativa.indice_atual + 1);
   return gravada?.length ? causa : null;
+}
+
+/** Pontos da resposta, com o bônus por rapidez se o desafio tiver. */
+function pontosDaResposta(desafio: Desafio, fracao: number, servida: Date, respondida: Date, questao: QuestaoBanco) {
+  if (!desafio.bonus_rapidez) return calcularPontos(fracao, desafio.pontos_por_acerto);
+  return pontosComRapidez(
+    fracao,
+    desafio.pontos_por_acerto,
+    respondida.getTime() - servida.getTime(),
+    tempoDaQuestao(desafio, questao),
+  );
 }
 
 const precisaVerificar = (tentativa: Tentativa, questao: QuestaoBanco) =>
@@ -240,6 +307,7 @@ async function resolverVerificacao(
   desafio: Desafio,
   tentativa: Tentativa,
   linha: RespostaBanco,
+  questao: QuestaoBanco,
   acertou: boolean | null,
   motivo: MotivoZerada | null = null,
 ) {
@@ -251,7 +319,16 @@ async function resolverVerificacao(
       verificacao_acertou: acertou,
       ...(acertou === false
         ? { zerada_por_saida: motivo !== null, motivo_zerada: motivo ?? "verificacao" }
-        : { fracao, pontos: calcularPontos(fracao, desafio.pontos_por_acerto) }),
+        : {
+            fracao,
+            pontos: pontosDaResposta(
+              desafio,
+              fracao,
+              new Date(linha.servida_em),
+              new Date(linha.respondida_em ?? Date.now()),
+              questao,
+            ),
+          }),
     })
     .eq("id", linha.id)
     .is("verificacao_respondida_em", null)
@@ -305,7 +382,7 @@ async function servirVerificacao(
     const montada = montarOpcoesVerificacao(questao.tema ?? "", await temasParaDistratores(db, tentativa, questao));
     // Sem temas diferentes suficientes não dá para verificar: a questão vale o que o aluno acertou.
     if (!montada) {
-      await resolverVerificacao(db, desafio, tentativa, atual, null);
+      await resolverVerificacao(db, desafio, tentativa, atual, questao, null);
       return null;
     }
     const { data: gravada } = await db
@@ -327,7 +404,7 @@ async function servirVerificacao(
   const agora = new Date();
   const limite = tempoVerificacao(desafio);
   if (tempoEsgotado(servida, agora, limite)) {
-    await resolverVerificacao(db, desafio, tentativa, atual, false);
+    await resolverVerificacao(db, desafio, tentativa, atual, questao, false);
     return null;
   }
   return {
@@ -337,10 +414,13 @@ async function servirVerificacao(
     tempoLimite: limite,
     restanteMs: Math.max(0, limite * 1000 - (agora.getTime() - servida.getTime())),
     saidaZera: desafio.saida_zera_questao,
+    cliquesRestantes: cliquesRestantes(desafio, tentativa.cliques_fora ?? 0),
+    saidasRestantes: saidasRestantes(desafio, tentativa.saidas_toleradas ?? 0),
   };
 }
 
-async function obterOuCriarTentativa(db: SupabaseClient, desafioId: string, alunoId: string): Promise<Tentativa> {
+async function obterOuCriarTentativa(db: SupabaseClient, desafio: Desafio, alunoId: string): Promise<Tentativa> {
+  const desafioId = desafio.id;
   const { data: existente } = await db
     .from("tentativas")
     .select("*")
@@ -349,9 +429,15 @@ async function obterOuCriarTentativa(db: SupabaseClient, desafioId: string, alun
     .maybeSingle();
   if (existente) return existente as Tentativa;
 
-  const { data: questoes } = await db.from("desafio_questoes").select("questao_id").eq("desafio_id", desafioId);
-  const ordem = embaralhar((questoes ?? []).map((q) => q.questao_id as string));
-  const verificar = await sortearVerificacoesDaTentativa(db, ordem);
+  const { data: questoes } = await db
+    .from("desafio_questoes")
+    .select("questao_id, posicao")
+    .eq("desafio_id", desafioId)
+    .order("posicao");
+  const ids = (questoes ?? []).map((q) => q.questao_id as string);
+  // Ordem fixa (opção do desafio): todos na ordem montada pelo professor.
+  const ordem = desafio.ordem_fixa ? ids : embaralhar(ids);
+  const verificar = await sortearVerificacoesDaTentativa(db, ordem, desafio.verificacoes ?? null);
   const inserir = (extra: object) =>
     db
       .from("tentativas")
@@ -374,8 +460,15 @@ async function obterOuCriarTentativa(db: SupabaseClient, desafioId: string, alun
   return nova as Tentativa;
 }
 
-/** Questões da tentativa com verificação de leitura. null = banco sem o SQL dela. */
-async function sortearVerificacoesDaTentativa(db: SupabaseClient, ordem: string[]): Promise<string[] | null> {
+/**
+ * Questões da tentativa com verificação de leitura. null = banco sem o SQL dela.
+ * `quantas` = número escolhido pelo professor (null = automático, 2 a cada 10).
+ */
+async function sortearVerificacoesDaTentativa(
+  db: SupabaseClient,
+  ordem: string[],
+  quantas: number | null,
+): Promise<string[] | null> {
   if (!ordem.length) return [];
   const { data, error } = await db.from("questoes").select("id, tema, relampago").in("id", ordem);
   if (error) return null;
@@ -384,7 +477,7 @@ async function sortearVerificacoesDaTentativa(db: SupabaseClient, ordem: string[
     const q = porId.get(id);
     return Boolean(q && !q.relampago && (q.tema as string | null)?.trim());
   });
-  return sortearVerificacoes(elegiveis).map((i) => ordem[i]);
+  return sortearVerificacoes(elegiveis, Math.random, quantas).map((i) => ordem[i]);
 }
 
 /**
@@ -430,7 +523,7 @@ export async function estadoAtual(
     const situacao = situacaoDesafio(desafio);
     if (situacao === "agendado") return { fase: "erro", mensagem: "Este desafio ainda não abriu." };
     if (situacao === "encerrado") return { fase: "fim" };
-    const tentativa = await obterOuCriarTentativa(db, desafio.id, aluno.id);
+    const tentativa = await obterOuCriarTentativa(db, desafio, aluno.id);
     if (tentativa.indice_atual >= tentativa.ordem.length || tentativa.concluida_em) return { fase: "fim" };
 
     const questaoId = tentativa.ordem[tentativa.indice_atual];
@@ -466,7 +559,7 @@ export async function estadoAtual(
             tentativa_id: tentativa.id,
             questao_id: questaoId,
             posicao: tentativa.indice_atual,
-            permutacao: permutacaoAleatoria(tamanhoPermutacao(comoConteudo(questao))),
+            permutacao: permutacaoDaQuestao(desafio, comoConteudo(questao)),
           },
           { onConflict: "tentativa_id,questao_id", ignoreDuplicates: true },
         )
@@ -485,10 +578,7 @@ export async function estadoAtual(
     const decorrido = agora.getTime() - new Date(linha.servida_em).getTime();
     const conteudo = comoConteudo(questao);
     const eliminadas = linha.eliminadas ?? [];
-    const [dica, ajudas] = await Promise.all([
-      dicaDaQuestao(db, questao.id),
-      ajudasRestantes(db, aluno.id, desafio.temporada_id),
-    ]);
+    const [dica, ajudas] = await Promise.all([dicaDaQuestao(db, questao.id), ajudasRestantes(db, aluno.id, desafio)]);
     return {
       fase: "questao",
       posicao: tentativa.indice_atual + 1,
@@ -503,9 +593,11 @@ export async function estadoAtual(
         relampago: Boolean(questao.relampago),
         restanteMs: Math.max(0, tempoLimite * 1000 - decorrido),
         saidaZera: desafio.saida_zera_questao,
+        cliquesRestantes: cliquesRestantes(desafio, tentativa.cliques_fora ?? 0),
+        saidasRestantes: saidasRestantes(desafio, tentativa.saidas_toleradas ?? 0),
         ajuda: ajudaNaVista(conteudo, linha.permutacao, eliminadas),
-        podeEliminar: candidatasEliminacao(conteudo, eliminadas).length > 0,
-        temDica: Boolean(dica),
+        podeEliminar: desafio.eliminacoes_max !== 0 && candidatasEliminacao(conteudo, eliminadas).length > 0,
+        temDica: Boolean(dica) && desafio.dicas_max !== 0,
         dica: linha.dica_usada ? dica : null,
       },
     };
@@ -548,6 +640,9 @@ export async function responderQuestao(
       .maybeSingle();
     if (linha && !linha.respondida_em) {
       const questao = await carregarQuestao(db, questaoId, desafio.id);
+      // Cliques fora liberados pelo professor neste desafio: não zera.
+      if (motivo === "clique_fora" && regraCliques(desafio).regra === "permitido") motivo = null;
+      if (motivo === "teclado" && desafio.teclado_bloqueado === false) motivo = null;
       // Teclado liberado pelo professor (acessibilidade): tecla não zera.
       if (motivo === "teclado") {
         const { data: a } = await db.from("alunos").select("teclado_liberado").eq("id", aluno.id).single();
@@ -600,9 +695,17 @@ export async function eliminarAlternativa(
   const atual = await questaoEmAndamento(db, aluno, desafioId, questaoId);
   if ("erro" in atual) return { erro: atual.erro };
   const { desafio, linha, questao } = atual;
-  const ajudas = await ajudasRestantes(db, aluno.id, desafio.temporada_id);
+  const ajudas = await ajudasRestantes(db, aluno.id, desafio);
   if (!ajudas) return { erro: "Ajudas indisponíveis. Peça ao professor para atualizar o app." };
-  if (ajudas.eliminacoes <= 0) return { erro: "Você já usou todas as eliminações desta temporada.", ajudas };
+  if (desafio.eliminacoes_max === 0) return { erro: "Este desafio não tem eliminações.", ajudas };
+  if (ajudas.eliminacoes <= 0)
+    return {
+      erro:
+        desafio.eliminacoes_max != null
+          ? "Você já usou as eliminações permitidas neste desafio (ou na temporada)."
+          : "Você já usou todas as eliminações desta temporada.",
+      ajudas,
+    };
   const conteudo = comoConteudo(questao);
   const antes = linha.eliminadas ?? [];
   const candidatas = candidatasEliminacao(conteudo, antes);
@@ -636,10 +739,18 @@ export async function abrirDica(
   const { desafio, linha } = atual;
   const dica = await dicaDaQuestao(db, questaoId);
   if (!dica) return { erro: "Esta questão não tem dica." };
-  const ajudas = await ajudasRestantes(db, aluno.id, desafio.temporada_id);
+  const ajudas = await ajudasRestantes(db, aluno.id, desafio);
   if (!ajudas) return { erro: "Ajudas indisponíveis. Peça ao professor para atualizar o app." };
   if (linha.dica_usada) return { dica, ajudas };
-  if (ajudas.dicas <= 0) return { erro: "Você já usou todas as dicas desta temporada.", ajudas };
+  if (desafio.dicas_max === 0) return { erro: "Este desafio não tem dicas." };
+  if (ajudas.dicas <= 0)
+    return {
+      erro:
+        desafio.dicas_max != null
+          ? "Você já usou as dicas permitidas neste desafio (ou na temporada)."
+          : "Você já usou todas as dicas desta temporada.",
+      ajudas,
+    };
   const { data: gravada } = await db
     .from("respostas")
     .update({ dica_usada: true })
@@ -686,6 +797,8 @@ export async function responderVerificacao(
       .maybeSingle();
     const linha = data as RespostaBanco | null;
     if (linha && verificacaoPendente(linha) && linha.verificacao_opcoes?.length && linha.verificacao_servida_em) {
+      if (motivo === "clique_fora" && regraCliques(desafio).regra === "permitido") motivo = null;
+      if (motivo === "teclado" && desafio.teclado_bloqueado === false) motivo = null;
       if (motivo === "teclado") {
         const { data: a } = await db.from("alunos").select("teclado_liberado").eq("id", aluno.id).single();
         if (a?.teclado_liberado) motivo = null;
@@ -698,7 +811,8 @@ export async function responderVerificacao(
         escolha !== null &&
         Number.isInteger(escolha) &&
         escolha === Number(linha.verificacao_correta);
-      const gravou = await resolverVerificacao(db, desafio, t, linha, acertou, causa);
+      const questao = await carregarQuestao(db, questaoId, desafio.id);
+      const gravou = await resolverVerificacao(db, desafio, t, linha, questao, acertou, causa);
       if (gravou && !acertou) {
         aviso = causa
           ? AVISO_ZERADA[causa]
@@ -711,4 +825,46 @@ export async function responderVerificacao(
   const estado = await estadoAtual(db, aluno, desafioId);
   if (aviso && estado.fase !== "erro") estado.aviso = aviso;
   return estado;
+}
+
+/**
+ * Clique fora das alternativas e dos botões (ou saída da tela), num desafio
+ * sem consulta com tolerância: gasta um aviso. `zerar` = não restava aviso (ou a regra é
+ * proibido) e a questão deve valer zero. A contagem fica na tentativa, então
+ * recarregar a página não devolve os avisos.
+ */
+export async function registrarAvisoTolerado(
+  db: SupabaseClient,
+  aluno: AlunoSessao,
+  desafioId: string,
+  tipo: "clique" | "saida",
+): Promise<{ zerar: boolean; restantes: number | null }> {
+  const desafio = await desafioDoAluno(db, aluno, desafioId);
+  if (!desafio?.saida_zera_questao) return { zerar: false, restantes: null };
+  const { regra, tolerancia }: { regra: string; tolerancia: number } =
+    tipo === "clique" ? regraCliques(desafio) : regraSaidas(desafio);
+  if (regra === "permitido") return { zerar: false, restantes: null };
+  if (regra === "proibido") return { zerar: true, restantes: 0 };
+  const coluna = tipo === "clique" ? "cliques_fora" : "saidas_toleradas";
+  for (let guarda = 0; guarda < 5; guarda++) {
+    const { data } = await db
+      .from("tentativas")
+      .select(`id, ${coluna}`)
+      .eq("desafio_id", desafio.id)
+      .eq("aluno_id", aluno.id)
+      .maybeSingle();
+    const t = data as unknown as Record<string, unknown> | null;
+    if (!t || typeof t[coluna] !== "number") return { zerar: true, restantes: 0 };
+    const usados = t[coluna] as number;
+    if (usados >= tolerancia) return { zerar: true, restantes: 0 };
+    // Trava otimista: dois avisos ao mesmo tempo não gastam um só.
+    const { data: gravada } = await db
+      .from("tentativas")
+      .update({ [coluna]: usados + 1 })
+      .eq("id", t.id as string)
+      .eq(coluna, usados)
+      .select("id");
+    if (gravada?.length) return { zerar: false, restantes: tolerancia - usados - 1 };
+  }
+  return { zerar: true, restantes: 0 };
 }
