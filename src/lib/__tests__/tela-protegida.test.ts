@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  avisoCliqueTolerado,
+  cliquesRestantes,
+  descreverRegraCliques,
   cliqueFora,
   cliqueSemMovimento,
   ehMotivoZerada,
@@ -88,5 +91,25 @@ describe("resposta sem mexer o mouse", () => {
 describe("marca d'água", () => {
   it("leva apelido, turma e hora de Brasília", () => {
     expect(textoMarca("LucasG · 8º A", new Date("2026-10-31T22:50:00Z"))).toBe("LucasG · 8º A · 31/10 19:50");
+  });
+});
+
+describe("regra de cliques fora", () => {
+  it("sem escolha (ou sem o SQL) é proibido: o próximo zera", () => {
+    expect(cliquesRestantes({}, 0)).toBe(0);
+    expect(descreverRegraCliques({})).toBe("clique fora zera");
+  });
+  it("permitido não conta", () => {
+    expect(cliquesRestantes({ regra_cliques: "permitido" }, 5)).toBeNull();
+  });
+  it("tolerância desconta os avisos já usados", () => {
+    const d = { regra_cliques: "tolerancia", tolerancia_cliques: 2 };
+    expect(cliquesRestantes(d, 0)).toBe(2);
+    expect(cliquesRestantes(d, 1)).toBe(1);
+    expect(cliquesRestantes(d, 2)).toBe(0);
+    expect(cliquesRestantes(d, 9)).toBe(0);
+  });
+  it("aviso ao aluno não cita o mouse", () => {
+    for (const n of [0, 1, 3]) expect(avisoCliqueTolerado(n).toLowerCase()).not.toContain("mouse");
   });
 });

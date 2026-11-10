@@ -1,6 +1,8 @@
 "use client";
 import { useMemo, useState, useTransition } from "react";
 import { EscolhaPesquisa } from "@/components/EscolhaPesquisa";
+import { CamposRegras, regrasParaEnvio, type Regras } from "@/components/CamposRegras";
+import { TOLERANCIA_PADRAO } from "@/lib/tela-protegida";
 import { Aviso, Botao, Campo, Cartao, Entrada, Etiqueta, Selecao } from "@/components/ui";
 import { PONTOS_RELAMPAGO } from "@/lib/cadurush";
 import { NOME_DIFICULDADE, NOME_TIPO, TEMPO_MAX_S, TEMPO_MIN_S, type TipoQuestao } from "@/lib/questoes/tipos";
@@ -43,6 +45,11 @@ export function MontarDesafio({
   const [tempoFixo, setTempoFixo] = useState("");
   const [tempoVerificacao, setTempoVerificacao] = useState("");
   const [saidaZera, setSaidaZera] = useState(false);
+  const [regras, setRegras] = useState<Regras>({
+    regraCliques: "proibido",
+    tolerancia: String(TOLERANCIA_PADRAO),
+    verificacoes: "",
+  });
   const [escolhidas, setEscolhidas] = useState<string[]>([]);
   const [filtroCapitulo, setFiltroCapitulo] = useState("");
   const [busca, setBusca] = useState("");
@@ -81,6 +88,7 @@ export function MontarDesafio({
         tempo_por_questao_s: tempoFixo ? Number(tempoFixo) : null,
         tempo_verificacao_s: tempoVerificacao ? Number(tempoVerificacao) : null,
         saida_zera_questao: saidaZera,
+        ...regrasParaEnvio(regras),
         questoes: escolhidas,
       });
       if (r?.erro) setErro(r.erro);
@@ -198,6 +206,12 @@ export function MontarDesafio({
             />
           </Campo>
           <EscolhaPesquisa bloqueada={saidaZera} onChange={setSaidaZera} />
+          <CamposRegras
+            valor={regras}
+            onChange={setRegras}
+            pesquisaBloqueada={saidaZera}
+            totalQuestoes={escolhidas.length}
+          />
           <div className="rounded-lg bg-slate-50 p-3 text-sm">
             <p>
               <strong>{escolhidas.length}</strong> de 5 a 15 questões

@@ -15,6 +15,63 @@ export const AVISO_ZERADA: Record<MotivoZerada, string> = {
   sem_mouse: "A questão anterior valeu zero porque as regras da pesquisa bloqueada não foram seguidas.",
 };
 
+/**
+ * O que acontece quando o aluno clica fora das alternativas e dos botões num
+ * desafio sem consulta. Escolha do professor em cada desafio.
+ * - proibido (padrão): o primeiro clique fora zera a questão.
+ * - tolerancia: os N primeiros cliques fora do desafio só geram aviso; o
+ *   seguinte zera a questão.
+ * - permitido: clique fora não zera nem avisa.
+ */
+export const REGRAS_CLIQUES = ["proibido", "tolerancia", "permitido"] as const;
+export type RegraCliques = (typeof REGRAS_CLIQUES)[number];
+export const ehRegraCliques = (v: unknown): v is RegraCliques =>
+  typeof v === "string" && (REGRAS_CLIQUES as readonly string[]).includes(v);
+
+export const TOLERANCIA_MIN = 1;
+export const TOLERANCIA_MAX = 20;
+export const TOLERANCIA_PADRAO = 2;
+
+export const problemaTolerancia = (n: number) =>
+  !Number.isInteger(n) || n < TOLERANCIA_MIN || n > TOLERANCIA_MAX
+    ? `Cliques tolerados: de ${TOLERANCIA_MIN} a ${TOLERANCIA_MAX}.`
+    : null;
+
+type ComRegraCliques = { regra_cliques?: string | null; tolerancia_cliques?: number | null };
+
+/** Regra de cliques do desafio. Sem o SQL dela (ou sem escolha), proibido. */
+export function regraCliques(d: ComRegraCliques): { regra: RegraCliques; tolerancia: number } {
+  const regra = ehRegraCliques(d.regra_cliques) ? d.regra_cliques : "proibido";
+  const tolerancia = Math.min(TOLERANCIA_MAX, Math.max(TOLERANCIA_MIN, d.tolerancia_cliques ?? TOLERANCIA_PADRAO));
+  return { regra, tolerancia };
+}
+
+/**
+ * Cliques fora que ainda passam só com aviso neste desafio, depois de `usados`.
+ * 0 = o próximo zera a questão; null = cliques fora liberados.
+ */
+export function cliquesRestantes(d: ComRegraCliques, usados: number): number | null {
+  const { regra, tolerancia } = regraCliques(d);
+  if (regra === "permitido") return null;
+  if (regra === "proibido") return 0;
+  return Math.max(0, tolerancia - Math.max(0, usados));
+}
+
+/** Aviso ao aluno depois de um clique fora tolerado. Não cita o mouse. */
+export function avisoCliqueTolerado(restantes: number) {
+  return restantes > 0
+    ? `⚠️ Atenção: clique só nas alternativas e nos botões. Mais ${restantes} ${restantes === 1 ? "clique" : "cliques"} fora e a questão em que você estiver vale zero.`
+    : "⚠️ Último aviso: o próximo clique fora das alternativas e dos botões faz a questão valer zero.";
+}
+
+/** Resumo da regra para o professor. */
+export function descreverRegraCliques(d: ComRegraCliques) {
+  const { regra, tolerancia } = regraCliques(d);
+  if (regra === "permitido") return "cliques fora liberados";
+  if (regra === "proibido") return "clique fora zera";
+  return `${tolerancia} ${tolerancia === 1 ? "clique fora tolerado" : "cliques fora tolerados"} (com aviso)`;
+}
+
 /** O que o aluno pode clicar durante a questão: alternativas, botões, links e alças de arrastar. */
 const CLICAVEIS = 'button, a, input, label, select, textarea, [role="button"]';
 

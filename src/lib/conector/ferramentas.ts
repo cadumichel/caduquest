@@ -33,7 +33,9 @@ import {
   VERIFICACAO_MAX_S,
   VERIFICACAO_MIN_S,
 } from "@/lib/questoes/tempos";
-import { VERIFICACAO_TEMPO_S } from "@/lib/questoes/verificacao";
+import { VERIFICACAO_TEMPO_S, VERIFICACOES_MAX, verificacoesAutomaticas } from "@/lib/questoes/verificacao";
+import { conferirRegras, ERRO_SQL_REGRAS, regrasParaGravar, type DadosRegras } from "@/lib/questoes/regras-desafio";
+import { descreverRegraCliques, regraCliques, TOLERANCIA_MAX, TOLERANCIA_MIN } from "@/lib/tela-protegida";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { guardarImagemDaUrl } from "./imagem";
 import { professorDoConector } from "./professor";
@@ -72,6 +74,32 @@ const tempoVerificacaoArg = z
   .describe(
     `Tempo da verificação de leitura neste desafio, em segundos (${VERIFICACAO_MIN_S} a ${VERIFICACAO_MAX_S}); 0 ou omitido = automático (${VERIFICACAO_TEMPO_S} s).`,
   );
+
+const regraCliquesArg = z
+  .enum(["proibido", "tolerancia", "permitido"])
+  .optional()
+  .describe(
+    "Só com a pesquisa bloqueada: o que acontece quando o aluno clica fora das alternativas e dos botões. proibido (padrão) = o primeiro clique fora zera a questão; tolerancia = os primeiros cliques fora (tolerancia_cliques) só geram aviso ao aluno, depois zeram; permitido = clique fora não zera nem avisa. Só use se o professor pedir.",
+  );
+const toleranciaCliquesArg = z
+  .number()
+  .int()
+  .min(TOLERANCIA_MIN)
+  .max(TOLERANCIA_MAX)
+  .optional()
+  .describe(
+    `Com regra_cliques=tolerancia: quantos cliques fora cada aluno pode dar no desafio só com aviso (${TOLERANCIA_MIN} a ${TOLERANCIA_MAX}).`,
+  );
+
+/** Resumo das regras para a prévia. */
+function resumoRegras(r: Partial<DadosRegras>, total: number, pesquisaBloqueada: boolean) {
+  const n = r.verificacoes ?? null;
+  return {
+    ...(pesquisaBloqueada && { cliques_fora: descreverRegraCliques(r) }),
+    questoes_teste:
+      n === null ? `${verificacoesAutomaticas(total)} (automático, 2 a cada 10)` : n === 0 ? "nenhuma" : String(n),
+  };
+}
 
 const ERRO_SQL_TEMPOS = "Rode antes o SQL 20261106120000_tempos_editaveis.sql no Supabase.";
 
@@ -759,6 +787,17 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           .describe("Tempo único para todas as questões, em segundos. Omita para usar o tempo de cada questão."),
         tempos_questoes: temposQuestoes,
         tempo_verificacao_s: tempoVerificacaoArg,
+        verificacoes: z
+          .number()
+          .int()
+          .min(0)
+          .max(VERIFICACOES_MAX)
+          .optional()
+          .describe(
+            `Quantas questões teste (verificações de leitura: "qual era o tema da questão anterior?") cada aluno recebe, espalhadas e sorteadas; 0 = nenhuma; omitido = automático (2 a cada 10). Só use se o professor pedir.`,
+          ),
+        regra_cliques: regraCliquesArg,
+        tolerancia_cliques: toleranciaCliquesArg,
         saida_zera_questao: z
           .boolean()
           .optional()
@@ -806,6 +845,14 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         if (problema) return falha(problema);
       }
 
+      const conferidas = conferirRegras({
+        regra_cliques: args.regra_cliques,
+        tolerancia_cliques: args.tolerancia_cliques,
+        verificacoes: args.verificacoes,
+      });
+      if ("erro" in conferidas) return falha(conferidas.erro);
+      const { regras } = conferidas;
+
       const relampago = args.tipo === "relampago";
       const pontos = args.pontos_por_acerto ?? (relampago ? PONTOS_RELAMPAGO : 10);
       const previa = {
@@ -820,6 +867,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           ? "bloqueada (sair da tela, apertar tecla ou extensão que mexe na tela zera a questão)"
           : "liberada",
         verificacao_de_leitura: `${verificacao ?? VERIFICACAO_TEMPO_S} s${verificacao === null ? " (automático)" : ""}`,
+        ...resumoRegras(regras, args.questoes.length, Boolean(args.saida_zera_questao)),
         questoes: args.questoes.map((id, i) =>
           linhaComTempo(porId.get(id)!, i, tempos.get(id) ?? null, args.tempo_por_questao_s ?? null),
         ),
@@ -854,10 +902,15 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           // Só envia se pedido: sem o SQL dos tempos a coluna não existe.
           ...(verificacao !== null && { tempo_verificacao_s: verificacao }),
           saida_zera_questao: args.saida_zera_questao ?? false,
+          // Só envia se diferente do padrão: sem o SQL das regras as colunas não existem.
+          ...regrasParaGravar(regras),
         })
         .select("id")
         .single();
-      if (error || !desafio) return falha("Não foi possível criar o desafio.");
+      if (error || !desafio)
+        return falha(
+          Object.keys(regrasParaGravar(regras)).length ? ERRO_SQL_REGRAS : "Não foi possível criar o desafio.",
+        );
       const { error: erroQuestoes } = await db.from("desafio_questoes").insert(
         args.questoes.map((questao_id, posicao) => ({
           desafio_id: desafio.id,
@@ -1004,7 +1057,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
     {
       title: "Editar desafio",
       description:
-        "Altera título, datas, pontos, tempo único, tempo de questões específicas, tempo da verificação de leitura, regra de saída de tela ou as questões de um desafio. Só os campos enviados mudam. Tempos valem na hora, inclusive para quem já está jogando. As questões só podem ser trocadas enquanto nenhum aluno tiver começado o desafio. Em duas etapas: confirmar=false mostra o antes e depois; confirmar=true grava, só depois da aprovação do professor.",
+        "Altera título, datas, pontos, tempo único, tempo de questões específicas, tempo da verificação de leitura, número de questões teste, regra de cliques fora, regra de saída de tela ou as questões de um desafio. O número de questões teste só vale para quem ainda não começou. Só os campos enviados mudam. Tempos valem na hora, inclusive para quem já está jogando. As questões só podem ser trocadas enquanto nenhum aluno tiver começado o desafio. Em duas etapas: confirmar=false mostra o antes e depois; confirmar=true grava, só depois da aprovação do professor.",
       inputSchema: z.object({
         desafio_id: z.string().uuid(),
         titulo: z.string().min(1).optional(),
@@ -1020,6 +1073,17 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           .describe(`Segundos (${TEMPO_MIN_S} a ${TEMPO_MAX_S}); 0 volta a usar o tempo de cada questão.`),
         tempos_questoes: temposQuestoes,
         tempo_verificacao_s: tempoVerificacaoArg,
+        verificacoes: z
+          .number()
+          .int()
+          .min(-1)
+          .max(VERIFICACOES_MAX)
+          .optional()
+          .describe(
+            `Questões teste por aluno (0 a ${VERIFICACOES_MAX}; 0 = nenhuma); -1 volta ao automático (2 a cada 10).`,
+          ),
+        regra_cliques: regraCliquesArg,
+        tolerancia_cliques: toleranciaCliquesArg,
         saida_zera_questao: z
           .boolean()
           .optional()
@@ -1096,6 +1160,26 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         const problema = problemaTempoVerificacao(args.tempo_verificacao_s);
         if (problema) return falha(problema);
       }
+      const regraAtual = regraCliques(atual);
+      const regrasAtuais: DadosRegras = {
+        regra_cliques: regraAtual.regra,
+        tolerancia_cliques: regraAtual.regra === "tolerancia" ? regraAtual.tolerancia : null,
+        verificacoes: (atual.verificacoes as number | null | undefined) ?? null,
+      };
+      const novaRegra = args.regra_cliques ?? (args.tolerancia_cliques ? "tolerancia" : regrasAtuais.regra_cliques);
+      const conferidas = conferirRegras({
+        regra_cliques: novaRegra,
+        tolerancia_cliques: args.tolerancia_cliques ?? regraAtual.tolerancia,
+        verificacoes:
+          args.verificacoes === undefined
+            ? regrasAtuais.verificacoes
+            : args.verificacoes < 0
+              ? null
+              : args.verificacoes,
+      });
+      if ("erro" in conferidas) return falha(conferidas.erro);
+      const novasRegras = conferidas.regras;
+      const mudouRegras = JSON.stringify(novasRegras) !== JSON.stringify(regrasAtuais);
       const verificacaoAtual = (atual.tempo_verificacao_s as number | null | undefined) ?? null;
       const novaVerificacao =
         args.tempo_verificacao_s === undefined ? verificacaoAtual : args.tempo_verificacao_s || null;
@@ -1115,6 +1199,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         qs: QuestaoTempo[],
         tempos: Map<string, number | null>,
         verificacao: number | null,
+        regras: DadosRegras,
       ) => ({
         titulo: d.titulo,
         abre: formatarDataHora(d.abre_em),
@@ -1123,20 +1208,28 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         tempo_por_questao: d.tempo_por_questao_s ? `${d.tempo_por_questao_s} s em todas` : "o de cada questão",
         verificacao_de_leitura: `${verificacao ?? VERIFICACAO_TEMPO_S} s${verificacao === null ? " (automático)" : ""}`,
         sair_da_tela_zera: d.saida_zera_questao,
+        ...resumoRegras(regras, qs.length, d.saida_zera_questao),
         questoes: qs.map((q, i) => linhaComTempo(q, i, tempos.get(q.id) ?? null, d.tempo_por_questao_s)),
       });
       const previa = {
-        antes: resumo(atual, questoesAtuais, temposAtuais, verificacaoAtual),
-        depois: resumo(novo, novasQuestoes, novosTempos, novaVerificacao),
+        antes: resumo(atual, questoesAtuais, temposAtuais, verificacaoAtual, regrasAtuais),
+        depois: resumo(novo, novasQuestoes, novosTempos, novaVerificacao, novasRegras),
       };
       if (!args.confirmar) return resultado({ previa, proximo_passo: "Mostre a prévia e confirme com o professor." });
 
       const mudouVerificacao = novaVerificacao !== verificacaoAtual;
       const { error } = await db
         .from("desafios")
-        .update({ ...novo, ...(mudouVerificacao && { tempo_verificacao_s: novaVerificacao }) })
+        .update({
+          ...novo,
+          ...(mudouVerificacao && { tempo_verificacao_s: novaVerificacao }),
+          ...(mudouRegras && novasRegras),
+        })
         .eq("id", atual.id);
-      if (error) return falha(mudouVerificacao ? ERRO_SQL_TEMPOS : "Não foi possível salvar o desafio.");
+      if (error)
+        return falha(
+          mudouRegras ? ERRO_SQL_REGRAS : mudouVerificacao ? ERRO_SQL_TEMPOS : "Não foi possível salvar o desafio.",
+        );
       const linhaDq = (questao_id: string, posicao: number, tempo: number | null) => ({
         desafio_id: atual.id,
         questao_id,

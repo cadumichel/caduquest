@@ -16,6 +16,7 @@ import {
   eliminarAlternativa,
   estadoAtual,
   responderQuestao,
+  registrarCliqueFora,
   responderVerificacao,
   type EstadoJogo,
   type ResultadoAjuda,
@@ -76,6 +77,12 @@ export async function enviarVerificacao(
     Number.isInteger(escolha) ? (escolha as number) : null,
     ehMotivoZerada(motivo) ? motivo : null,
   );
+}
+
+/** Clique fora tolerado no sem consulta: gasta um aviso; `zerar` = acabaram os avisos. */
+export async function cliqueFora(desafioId: string): Promise<{ zerar: boolean; restantes: number | null }> {
+  const aluno = await exigirAluno();
+  return registrarCliqueFora(criarClienteAdmin(), aluno, String(desafioId));
 }
 
 /** Ajuda da temporada: elimina uma alternativa errada da questão atual. */

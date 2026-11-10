@@ -27,6 +27,7 @@ export function useTelaProtegida({
   fora,
   dialogoProprio,
   zerar,
+  aoClicarFora,
 }: {
   protegida: boolean;
   tecladoBloqueado: boolean;
@@ -37,6 +38,11 @@ export function useTelaProtegida({
   /** Um diálogo do próprio app está aberto (tira o foco sem ser saída). */
   dialogoProprio: RefObject<boolean>;
   zerar: (motivo: MotivoZerada) => void;
+  /**
+   * Regra de cliques do desafio. Sem ela, clique fora zera (proibido). Com
+   * ela, quem chama decide: avisar (tolerância) ou ignorar (permitido).
+   */
+  aoClicarFora?: () => void;
 }) {
   // Troca de aba ou de app, clique em outra janela ou saída da tela cheia.
   useEffect(() => {
@@ -100,12 +106,17 @@ export function useTelaProtegida({
   useEffect(() => {
     if (!protegida) return;
     let movimentos = 0;
+    // Um duplo clique fora conta uma vez só.
+    let ultimoFora = 0;
     const aoMover = (e: PointerEvent) => {
       if (mouseMexeu(e)) movimentos += 1;
     };
     const aoApertar = (e: PointerEvent) => {
       if (enviado.current || !cliqueFora(e, document.documentElement.clientWidth)) return;
-      zerar("clique_fora");
+      if (!aoClicarFora) return zerar("clique_fora");
+      if (e.timeStamp - ultimoFora < INTERVALO_CLIQUE_FORA_MS) return;
+      ultimoFora = e.timeStamp;
+      aoClicarFora();
     };
     const aoClicar = (e: MouseEvent) => {
       if (enviado.current) return;
@@ -122,5 +133,8 @@ export function useTelaProtegida({
       document.removeEventListener("pointerdown", aoApertar, true);
       document.removeEventListener("click", aoClicar, true);
     };
-  }, [protegida, zerar, enviado]);
+  }, [protegida, zerar, enviado, aoClicarFora]);
 }
+
+/** Cliques fora mais próximos que isso contam como um só (duplo clique). */
+const INTERVALO_CLIQUE_FORA_MS = 600;

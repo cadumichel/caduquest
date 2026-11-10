@@ -69,6 +69,12 @@ export type Desafio = {
   tempo_por_questao_s: number | null;
   /** Tempo da verificação de leitura (null = 15 s; ausente sem o SQL dos tempos). */
   tempo_verificacao_s?: number | null;
+  /** Clique fora no sem consulta: proibido (padrão), tolerancia ou permitido (ausente sem o SQL). */
+  regra_cliques?: string | null;
+  /** Quantos cliques fora passam só com aviso, na regra "tolerancia". */
+  tolerancia_cliques?: number | null;
+  /** Quantas verificações de leitura (questões teste) por tentativa; null = automático (2 a cada 10). */
+  verificacoes?: number | null;
   saida_zera_questao: boolean;
   /** O gabarito só aparece quando o professor liberar (ausente sem o SQL dos controles). */
   gabarito_manual?: boolean;
@@ -85,6 +91,8 @@ export type Tentativa = {
   pontos: number;
   /** Questões sorteadas para a verificação de leitura (ausente sem o SQL dela). */
   verificar?: string[];
+  /** Cliques fora já tolerados com aviso neste desafio (ausente sem o SQL). */
+  cliques_fora?: number;
 };
 export type RespostaBanco = {
   id: string;

@@ -17,7 +17,7 @@ import { tamanhoPermutacao, type Conteudo, type Resposta, type Vista } from "@/l
 import type { Desafio, RespostaBanco, Tentativa } from "@/lib/tipos-banco";
 import { situacaoDesafio, urlImagem } from "@/lib/tipos-banco";
 import { arredondarPontos } from "./pontos";
-import { AVISO_ZERADA, type MotivoZerada } from "./tela-protegida";
+import { AVISO_ZERADA, cliquesRestantes, regraCliques, type MotivoZerada } from "./tela-protegida";
 import {
   AVISO_VERIFICACAO,
   montarOpcoesVerificacao,
@@ -37,6 +37,8 @@ export type QuestaoServida = {
   restanteMs: number;
   /** Sair da tela zera a questão (opção do desafio). */
   saidaZera: boolean;
+  /** Cliques fora que ainda passam só com aviso (0 = o próximo zera; null = liberados). */
+  cliquesRestantes: number | null;
   /** O que as eliminações já usadas mudam na tela. */
   ajuda: AjudaVista;
   /** Ainda dá para usar uma eliminação nesta questão. */
@@ -65,6 +67,7 @@ export type VerificacaoServida = {
   tempoLimite: number;
   restanteMs: number;
   saidaZera: boolean;
+  cliquesRestantes: number | null;
 };
 
 export type EstadoJogo =
@@ -337,10 +340,12 @@ async function servirVerificacao(
     tempoLimite: limite,
     restanteMs: Math.max(0, limite * 1000 - (agora.getTime() - servida.getTime())),
     saidaZera: desafio.saida_zera_questao,
+    cliquesRestantes: cliquesRestantes(desafio, tentativa.cliques_fora ?? 0),
   };
 }
 
-async function obterOuCriarTentativa(db: SupabaseClient, desafioId: string, alunoId: string): Promise<Tentativa> {
+async function obterOuCriarTentativa(db: SupabaseClient, desafio: Desafio, alunoId: string): Promise<Tentativa> {
+  const desafioId = desafio.id;
   const { data: existente } = await db
     .from("tentativas")
     .select("*")
@@ -351,7 +356,7 @@ async function obterOuCriarTentativa(db: SupabaseClient, desafioId: string, alun
 
   const { data: questoes } = await db.from("desafio_questoes").select("questao_id").eq("desafio_id", desafioId);
   const ordem = embaralhar((questoes ?? []).map((q) => q.questao_id as string));
-  const verificar = await sortearVerificacoesDaTentativa(db, ordem);
+  const verificar = await sortearVerificacoesDaTentativa(db, ordem, desafio.verificacoes ?? null);
   const inserir = (extra: object) =>
     db
       .from("tentativas")
@@ -374,8 +379,15 @@ async function obterOuCriarTentativa(db: SupabaseClient, desafioId: string, alun
   return nova as Tentativa;
 }
 
-/** Questões da tentativa com verificação de leitura. null = banco sem o SQL dela. */
-async function sortearVerificacoesDaTentativa(db: SupabaseClient, ordem: string[]): Promise<string[] | null> {
+/**
+ * Questões da tentativa com verificação de leitura. null = banco sem o SQL dela.
+ * `quantas` = número escolhido pelo professor (null = automático, 2 a cada 10).
+ */
+async function sortearVerificacoesDaTentativa(
+  db: SupabaseClient,
+  ordem: string[],
+  quantas: number | null,
+): Promise<string[] | null> {
   if (!ordem.length) return [];
   const { data, error } = await db.from("questoes").select("id, tema, relampago").in("id", ordem);
   if (error) return null;
@@ -384,7 +396,7 @@ async function sortearVerificacoesDaTentativa(db: SupabaseClient, ordem: string[
     const q = porId.get(id);
     return Boolean(q && !q.relampago && (q.tema as string | null)?.trim());
   });
-  return sortearVerificacoes(elegiveis).map((i) => ordem[i]);
+  return sortearVerificacoes(elegiveis, Math.random, quantas).map((i) => ordem[i]);
 }
 
 /**
@@ -430,7 +442,7 @@ export async function estadoAtual(
     const situacao = situacaoDesafio(desafio);
     if (situacao === "agendado") return { fase: "erro", mensagem: "Este desafio ainda não abriu." };
     if (situacao === "encerrado") return { fase: "fim" };
-    const tentativa = await obterOuCriarTentativa(db, desafio.id, aluno.id);
+    const tentativa = await obterOuCriarTentativa(db, desafio, aluno.id);
     if (tentativa.indice_atual >= tentativa.ordem.length || tentativa.concluida_em) return { fase: "fim" };
 
     const questaoId = tentativa.ordem[tentativa.indice_atual];
@@ -503,6 +515,7 @@ export async function estadoAtual(
         relampago: Boolean(questao.relampago),
         restanteMs: Math.max(0, tempoLimite * 1000 - decorrido),
         saidaZera: desafio.saida_zera_questao,
+        cliquesRestantes: cliquesRestantes(desafio, tentativa.cliques_fora ?? 0),
         ajuda: ajudaNaVista(conteudo, linha.permutacao, eliminadas),
         podeEliminar: candidatasEliminacao(conteudo, eliminadas).length > 0,
         temDica: Boolean(dica),
@@ -548,6 +561,8 @@ export async function responderQuestao(
       .maybeSingle();
     if (linha && !linha.respondida_em) {
       const questao = await carregarQuestao(db, questaoId, desafio.id);
+      // Cliques fora liberados pelo professor neste desafio: não zera.
+      if (motivo === "clique_fora" && regraCliques(desafio).regra === "permitido") motivo = null;
       // Teclado liberado pelo professor (acessibilidade): tecla não zera.
       if (motivo === "teclado") {
         const { data: a } = await db.from("alunos").select("teclado_liberado").eq("id", aluno.id).single();
@@ -686,6 +701,7 @@ export async function responderVerificacao(
       .maybeSingle();
     const linha = data as RespostaBanco | null;
     if (linha && verificacaoPendente(linha) && linha.verificacao_opcoes?.length && linha.verificacao_servida_em) {
+      if (motivo === "clique_fora" && regraCliques(desafio).regra === "permitido") motivo = null;
       if (motivo === "teclado") {
         const { data: a } = await db.from("alunos").select("teclado_liberado").eq("id", aluno.id).single();
         if (a?.teclado_liberado) motivo = null;
@@ -711,4 +727,43 @@ export async function responderVerificacao(
   const estado = await estadoAtual(db, aluno, desafioId);
   if (aviso && estado.fase !== "erro") estado.aviso = aviso;
   return estado;
+}
+
+/**
+ * Clique fora das alternativas e dos botões, num desafio sem consulta com
+ * tolerância: gasta um aviso. `zerar` = não restava aviso (ou a regra é
+ * proibido) e a questão deve valer zero. A contagem fica na tentativa, então
+ * recarregar a página não devolve os avisos.
+ */
+export async function registrarCliqueFora(
+  db: SupabaseClient,
+  aluno: AlunoSessao,
+  desafioId: string,
+): Promise<{ zerar: boolean; restantes: number | null }> {
+  const desafio = await desafioDoAluno(db, aluno, desafioId);
+  if (!desafio?.saida_zera_questao) return { zerar: false, restantes: null };
+  const { regra, tolerancia } = regraCliques(desafio);
+  if (regra === "permitido") return { zerar: false, restantes: null };
+  if (regra === "proibido") return { zerar: true, restantes: 0 };
+  for (let guarda = 0; guarda < 5; guarda++) {
+    const { data } = await db
+      .from("tentativas")
+      .select("id, cliques_fora")
+      .eq("desafio_id", desafio.id)
+      .eq("aluno_id", aluno.id)
+      .maybeSingle();
+    const t = data as { id: string; cliques_fora?: number } | null;
+    if (!t || t.cliques_fora === undefined) return { zerar: true, restantes: 0 };
+    const usados = t.cliques_fora ?? 0;
+    if (usados >= tolerancia) return { zerar: true, restantes: 0 };
+    // Trava otimista: dois cliques ao mesmo tempo não gastam um aviso só.
+    const { data: gravada } = await db
+      .from("tentativas")
+      .update({ cliques_fora: usados + 1 })
+      .eq("id", t.id)
+      .eq("cliques_fora", usados)
+      .select("id");
+    if (gravada?.length) return { zerar: false, restantes: tolerancia - usados - 1 };
+  }
+  return { zerar: true, restantes: 0 };
 }

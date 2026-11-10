@@ -18,6 +18,9 @@ import { atualizarJanelaDesafio, excluirDesafio } from "../../actions";
 import { ControlesDesafio } from "./ControlesDesafio";
 import { PainelRelampago } from "./PainelRelampago";
 import { TemposDesafio, type QuestaoComTempo } from "./TemposDesafio";
+import { RegrasDesafio } from "./RegrasDesafio";
+import { descreverRegraCliques, regraCliques } from "@/lib/tela-protegida";
+import { verificacoesAutomaticas } from "@/lib/questoes/verificacao";
 import { tempoVerificacao } from "@/lib/questoes/tempos";
 import { formatarPontos } from "@/lib/pontos";
 
@@ -59,6 +62,13 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
   const { linhas, acertoPorQuestao } = await resultadosDoDesafio(supabase, id, desafio.temporadas.turma_id);
   const situacao = situacaoDesafio(desafio);
   const concluiram = linhas.filter((l) => l.situacao === "concluiu").length;
+  const comecaram = linhas.filter((l) => l.situacao !== "não fez").length;
+  const regra = regraCliques(desafio);
+  const verificacoes = desafio.verificacoes ?? null;
+  const textoVerificacoes =
+    verificacoes === 0
+      ? "sem questões teste"
+      : `${verificacoes ?? verificacoesAutomaticas(questoes.length)} ${verificacoes === 1 ? "questão teste" : "questões teste"}${verificacoes === null ? " (automático)" : ""}`;
 
   return (
     <div className="space-y-6">
@@ -192,8 +202,10 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
             {desafio.saida_zera_questao
               ? "Neste desafio, sair da tela, apertar uma tecla ou usar extensão que mexe na tela zera a questão em que o aluno estava."
               : "Pesquisa liberada: as saídas da tela são só registradas e não tiram pontos."}{" "}
-            📖 Em 2 de cada 10 questões (sorteadas, fora as relâmpago), o aluno marca o tema da questão logo depois de
-            responder; errar zera a questão.
+            {desafio.saida_zera_questao && `🖱️ Regra de cliques: ${descreverRegraCliques(desafio)}. `}
+            {verificacoes === 0
+              ? "📖 Sem questões teste neste desafio."
+              : `📖 ${textoVerificacoes}: depois de responder, o aluno marca o tema da questão; errar zera a questão.`}
           </p>
         </Cartao>
 
@@ -218,8 +230,12 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
                 ? `${desafio.tempo_por_questao_s} s em todas as questões`
                 : "Tempo de cada questão"}
               {temposPersonalizados > 0 && ` (${temposPersonalizados} com tempo próprio)`}
-              {" · "}📖 verificação {tempoVerificacao(desafio)} s{" · "}
-              {desafio.saida_zera_questao ? "🚫 pesquisa bloqueada" : "🔎 pesquisa liberada"}
+              {" · "}📖 {textoVerificacoes}
+              {verificacoes !== 0 && ` de ${tempoVerificacao(desafio)} s`}
+              {" · "}
+              {desafio.saida_zera_questao
+                ? `🚫 pesquisa bloqueada (${descreverRegraCliques(desafio)})`
+                : "🔎 pesquisa liberada"}
             </p>
             <FormAcao acao={atualizarJanelaDesafio}>
               <input type="hidden" name="id" value={id} />
@@ -246,6 +262,18 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
           </Cartao>
         </div>
       </div>
+
+      <Cartao>
+        <RegrasDesafio
+          id={id}
+          regraCliques={regra.regra}
+          tolerancia={regra.tolerancia}
+          verificacoes={verificacoes}
+          pesquisaBloqueada={desafio.saida_zera_questao}
+          totalQuestoes={questoes.length}
+          jaComecaram={comecaram}
+        />
+      </Cartao>
 
       <Cartao>
         <TemposDesafio

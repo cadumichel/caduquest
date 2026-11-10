@@ -19,19 +19,57 @@ export const AVISO_VERIFICACAO = "Você errou a verificação de leitura, então
 export const chaveTema = (t: string) =>
   t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
 
+/** Quantas verificações o professor pode pedir num desafio (0 = nenhuma). */
+export const VERIFICACOES_MIN = 0;
+export const VERIFICACOES_MAX = 15;
+
+export const problemaVerificacoes = (n: number) =>
+  !Number.isInteger(n) || n < VERIFICACOES_MIN || n > VERIFICACOES_MAX
+    ? `Questões teste: de ${VERIFICACOES_MIN} a ${VERIFICACOES_MAX}.`
+    : null;
+
+/** Quantas verificações o automático dá num desafio de `total` questões (2 a cada 10). */
+export function verificacoesAutomaticas(total: number) {
+  let n = 0;
+  for (let inicio = 0; inicio < total; inicio += BLOCO_VERIFICACAO) {
+    n += Math.round(
+      ((Math.min(total, inicio + BLOCO_VERIFICACAO) - inicio) * VERIFICACOES_POR_BLOCO) / BLOCO_VERIFICACAO,
+    );
+  }
+  return n;
+}
+
 /**
- * Sorteia as posições com verificação: 2 a cada bloco de 10 (num bloco final
- * menor, a mesma proporção, arredondada). Só entram as posições elegíveis
+ * Sorteia as posições com verificação. Só entram as posições elegíveis
  * (questão com tema e que não é relâmpago).
+ *
+ * `quantas` = número escolhido pelo professor para o desafio: as elegíveis
+ * são divididas em faixas iguais e sai uma de cada faixa, para as
+ * verificações ficarem espalhadas. Sem número (null), o automático: 2 a cada
+ * bloco de 10 (num bloco final menor, a mesma proporção, arredondada).
  */
-export function sortearVerificacoes(elegiveis: readonly boolean[], aleatorio: () => number = Math.random): number[] {
+export function sortearVerificacoes(
+  elegiveis: readonly boolean[],
+  aleatorio: () => number = Math.random,
+  quantas: number | null = null,
+): number[] {
   const escolhidas: number[] = [];
+  if (quantas !== null) {
+    const candidatas = elegiveis.flatMap((ok, i) => (ok ? [i] : []));
+    const k = Math.max(0, Math.min(Math.floor(quantas), candidatas.length));
+    for (let g = 0; g < k; g++) {
+      const de = Math.floor((g * candidatas.length) / k);
+      const ate = Math.floor(((g + 1) * candidatas.length) / k);
+      escolhidas.push(candidatas[de + Math.floor(aleatorio() * (ate - de))]);
+    }
+    return escolhidas.sort((a, b) => a - b);
+  }
   for (let inicio = 0; inicio < elegiveis.length; inicio += BLOCO_VERIFICACAO) {
     const fim = Math.min(elegiveis.length, inicio + BLOCO_VERIFICACAO);
-    const quantas = Math.round(((fim - inicio) * VERIFICACOES_POR_BLOCO) / BLOCO_VERIFICACAO);
+    const quantasNoBloco = Math.round(((fim - inicio) * VERIFICACOES_POR_BLOCO) / BLOCO_VERIFICACAO);
     const candidatas: number[] = [];
     for (let i = inicio; i < fim; i++) if (elegiveis[i]) candidatas.push(i);
-    for (let k = 0; k < quantas && candidatas.length; k++) {
+    for (let k = 0; k < quantasNoBloco && candidatas.length; k++) {
       escolhidas.push(candidatas.splice(Math.floor(aleatorio() * candidatas.length), 1)[0]);
     }
   }

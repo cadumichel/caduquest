@@ -4,6 +4,7 @@ import { exigirAluno } from "@/lib/aluno-sessao";
 import { desafioDoAluno } from "@/lib/jogo";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { situacaoDesafio } from "@/lib/tipos-banco";
+import { regraCliques } from "@/lib/tela-protegida";
 import { Jogo } from "./Jogo";
 
 export const metadata: Metadata = { title: "Desafio" };
@@ -41,6 +42,9 @@ export default async function PaginaDesafio({ params }: PageProps<"/aluno/desafi
       identificacao={`${aluno.apelido} · ${aluno.turmaNome}`}
       relampago={desafio.tipo === "relampago"}
       pontosPorAcerto={desafio.pontos_por_acerto}
+      regraCliques={regraCliques(desafio).regra}
+      toleranciaCliques={regraCliques(desafio).tolerancia}
+      temVerificacao={desafio.verificacoes !== 0}
     />
   );
 }
