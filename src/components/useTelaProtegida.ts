@@ -28,6 +28,7 @@ export function useTelaProtegida({
   dialogoProprio,
   zerar,
   aoClicarFora,
+  aoSair,
 }: {
   protegida: boolean;
   tecladoBloqueado: boolean;
@@ -43,6 +44,8 @@ export function useTelaProtegida({
    * ela, quem chama decide: avisar (tolerância) ou ignorar (permitido).
    */
   aoClicarFora?: () => void;
+  /** Tolerância de saídas do desafio: sem ela, sair zera; com ela, quem chama avisa. */
+  aoSair?: () => void;
 }) {
   // Troca de aba ou de app, clique em outra janela ou saída da tela cheia.
   useEffect(() => {
@@ -50,7 +53,9 @@ export function useTelaProtegida({
       if (fora.current || dialogoProprio.current || enviado.current) return;
       fora.current = true;
       saidas.current += 1;
-      if (protegida) zerar("saida");
+      if (!protegida) return;
+      if (aoSair) aoSair();
+      else zerar("saida");
     };
     const voltou = () => {
       if (document.visibilityState === "visible" && document.hasFocus()) fora.current = false;
@@ -69,7 +74,7 @@ export function useTelaProtegida({
       window.removeEventListener("blur", saiu);
       window.removeEventListener("focus", voltou);
     };
-  }, [protegida, zerar, enviado, saidas, fora, dialogoProprio]);
+  }, [protegida, zerar, enviado, saidas, fora, dialogoProprio, aoSair]);
 
   // Qualquer tecla zera. Atalhos do sistema, como Alt+Tab, nem chegam aqui,
   // mas já tiram o jogador da tela.

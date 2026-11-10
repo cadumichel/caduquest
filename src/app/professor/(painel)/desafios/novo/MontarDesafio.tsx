@@ -1,8 +1,7 @@
 "use client";
 import { useMemo, useState, useTransition } from "react";
 import { EscolhaPesquisa } from "@/components/EscolhaPesquisa";
-import { CamposRegras, regrasParaEnvio, type Regras } from "@/components/CamposRegras";
-import { TOLERANCIA_PADRAO } from "@/lib/tela-protegida";
+import { CamposRegras, regrasParaEnvio, regrasParaForm, type Regras } from "@/components/CamposRegras";
 import { Aviso, Botao, Campo, Cartao, Entrada, Etiqueta, Selecao } from "@/components/ui";
 import { PONTOS_RELAMPAGO } from "@/lib/cadurush";
 import { NOME_DIFICULDADE, NOME_TIPO, TEMPO_MAX_S, TEMPO_MIN_S, type TipoQuestao } from "@/lib/questoes/tipos";
@@ -45,11 +44,7 @@ export function MontarDesafio({
   const [tempoFixo, setTempoFixo] = useState("");
   const [tempoVerificacao, setTempoVerificacao] = useState("");
   const [saidaZera, setSaidaZera] = useState(false);
-  const [regras, setRegras] = useState<Regras>({
-    regraCliques: "proibido",
-    tolerancia: String(TOLERANCIA_PADRAO),
-    verificacoes: "",
-  });
+  const [regras, setRegras] = useState<Regras>(() => regrasParaForm());
   const [escolhidas, setEscolhidas] = useState<string[]>([]);
   const [filtroCapitulo, setFiltroCapitulo] = useState("");
   const [busca, setBusca] = useState("");

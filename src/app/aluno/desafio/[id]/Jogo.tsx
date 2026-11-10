@@ -10,8 +10,14 @@ import { respostaCompleta, respostaInicial } from "@/lib/questoes/apresentacao";
 import { ESCOLHA_UNICA } from "@/lib/questoes/tipos";
 import type { Resposta } from "@/lib/questoes/tipos";
 import { useTelaProtegida } from "@/components/useTelaProtegida";
-import { avisoCliqueTolerado, textoMarca, type MotivoZerada, type RegraCliques } from "@/lib/tela-protegida";
-import { carregarJogo, cliqueFora, eliminar, enviarResposta, enviarVerificacao, pedirDica } from "../../actions";
+import {
+  avisoCliqueTolerado,
+  avisoSaidaTolerada,
+  textoMarca,
+  type MotivoZerada,
+  type RegraCliques,
+} from "@/lib/tela-protegida";
+import { avisoTolerado, carregarJogo, eliminar, enviarResposta, enviarVerificacao, pedirDica } from "../../actions";
 
 type QuestaoEmJogo = Extract<EstadoJogo, { fase: "questao" }>;
 type VerificacaoEmJogo = Extract<EstadoJogo, { fase: "verificacao" }>;
@@ -26,29 +32,55 @@ function sairDaTelaCheia() {
 }
 
 /**
- * Regra de cliques fora do desafio, na questão ou verificação em tela.
- * `restantes` vem do servidor: 0 = o próximo clique fora zera (proibido ou
- * avisos esgotados); null = cliques fora liberados. Na tolerância, cada clique
- * fora mostra um aviso e é contado no servidor.
+ * Tolerância do desafio para cliques fora ou saídas da tela, na questão ou
+ * verificação em tela. `inicial` vem do servidor: 0 = o próximo zera (proibido
+ * ou avisos esgotados); null = liberado. Na tolerância, cada ocorrência mostra
+ * um aviso e é contada no servidor.
  */
-function useCliquesFora(desafioId: string, inicial: number | null, zerar: (motivo: MotivoZerada) => void) {
+function useTolerancia(
+  desafioId: string,
+  tipo: "clique" | "saida",
+  inicial: number | null,
+  zerar: (motivo: MotivoZerada) => void,
+) {
   const restantes = useRef(inicial);
   const [aviso, setAviso] = useState<string | null>(null);
-  const aoClicarFora = useCallback(() => {
+  const motivo: MotivoZerada = tipo === "clique" ? "clique_fora" : "saida";
+  const avisar = useCallback(() => {
     const atual = restantes.current;
     if (atual === null) return;
-    if (atual <= 0) return zerar("clique_fora");
+    if (atual <= 0) return zerar(motivo);
     restantes.current = atual - 1;
-    setAviso(avisoCliqueTolerado(atual - 1));
-    cliqueFora(desafioId)
+    setAviso(tipo === "clique" ? avisoCliqueTolerado(atual - 1) : avisoSaidaTolerada(atual - 1));
+    avisoTolerado(desafioId, tipo)
       .then((r) => {
-        if (r.zerar) zerar("clique_fora");
+        if (r.zerar) zerar(motivo);
         else if (r.restantes !== null) restantes.current = Math.min(restantes.current ?? r.restantes, r.restantes);
       })
       .catch(() => {});
-  }, [desafioId, zerar]);
-  // Proibido: o caminho de sempre (zera no primeiro clique fora).
-  return { aoClicarFora: inicial === 0 ? undefined : aoClicarFora, avisoClique: aviso };
+  }, [desafioId, tipo, motivo, zerar]);
+  // Proibido: o caminho de sempre (zera na primeira vez).
+  return { avisar: inicial === 0 ? undefined : avisar, aviso };
+}
+
+/** Faixa da questão com a pesquisa bloqueada: o que faz a questão valer zero. */
+function textoFaixaBloqueada(itens: (string | null)[]) {
+  const lista = itens.filter((i): i is string => Boolean(i));
+  const juntos = lista.length > 1 ? `${lista.slice(0, -1).join(", ")} ou ${lista.at(-1)}` : lista[0];
+  return `🚫 Pesquisa bloqueada: ${juntos} faz esta questão valer zero.`;
+}
+
+/** Linha das orientações sobre as ajudas, com o teto do desafio se houver. */
+function textoAjudas(eliminacoesMax: number | null, dicasMax: number | null) {
+  if (eliminacoesMax === 0 && dicasMax === 0) return "🛟 Este desafio não tem ajudas (eliminações e dicas).";
+  const base = `🛟 Ajudas da temporada: ${ELIMINACOES_POR_TEMPORADA} eliminações (tiram uma opção errada ou revelam um item certo) e ${DICAS_POR_TEMPORADA} dicas. Use quando quiser; acabou, só na próxima temporada.`;
+  if (eliminacoesMax === null && dicasMax === null) return base;
+  const parte = (n: number | null, um: string, varios: string) =>
+    n === null ? null : n === 0 ? `nenhuma ${um}` : `até ${n} ${n === 1 ? um : varios}`;
+  const limites = [parte(eliminacoesMax, "eliminação", "eliminações"), parte(dicasMax, "dica", "dicas")]
+    .filter(Boolean)
+    .join(" e ");
+  return `${base} Neste desafio: ${limites}.`;
 }
 
 /** Linha das orientações sobre cliques fora, conforme a regra do desafio. */
@@ -73,6 +105,12 @@ export function Jogo({
   regraCliques = "proibido",
   toleranciaCliques = 0,
   temVerificacao = true,
+  toleranciaSaidas = null,
+  eliminacoesMax = null,
+  dicasMax = null,
+  bonusRapidez = false,
+  mostraGabarito = true,
+  temTreino = true,
 }: {
   desafioId: string;
   titulo: string;
@@ -90,6 +128,14 @@ export function Jogo({
   toleranciaCliques?: number;
   /** O desafio tem verificação de leitura (o professor pode pedir 0). */
   temVerificacao?: boolean;
+  /** Saídas da tela toleradas com aviso (null = a primeira zera). */
+  toleranciaSaidas?: number | null;
+  /** Teto de ajudas neste desafio (null = só a cota da temporada; 0 = sem). */
+  eliminacoesMax?: number | null;
+  dicasMax?: number | null;
+  bonusRapidez?: boolean;
+  mostraGabarito?: boolean;
+  temTreino?: boolean;
 }) {
   const [estado, setEstado] = useState<EstadoJogo | null>(null);
   const [codigo, setCodigo] = useState("");
@@ -133,10 +179,12 @@ export function Jogo({
           {saidaZera ? (
             <>
               <li className="font-semibold text-red-700">
-                🚫 Pesquisa bloqueada: não saia desta tela nem troque de aba ou de app. Se sair, a questão vale zero.
+                {toleranciaSaidas
+                  ? `🚫 Pesquisa bloqueada: não saia desta tela nem troque de aba ou de app. Cada saída gera um aviso: você tem ${toleranciaSaidas} ${toleranciaSaidas === 1 ? "aviso" : "avisos"} neste desafio; depois deles, sair faz a questão valer zero.`
+                  : "🚫 Pesquisa bloqueada: não saia desta tela nem troque de aba ou de app. Se sair, a questão vale zero."}
               </li>
               {tecladoLiberado ? (
-                <li>⌨️ O professor liberou o teclado para você.</li>
+                <li>⌨️ O teclado está liberado para você neste desafio.</li>
               ) : (
                 <li className="font-semibold text-red-700">
                   ⌨️ Não use o teclado: apertar qualquer tecla durante uma questão, mesmo sem querer, faz ela valer
@@ -159,13 +207,17 @@ export function Jogo({
               Errou, a questão vale zero.
             </li>
           )}
+          <li>{textoAjudas(eliminacoesMax, dicasMax)}</li>
+          {bonusRapidez && (
+            <li>⚡ Bônus por rapidez: quanto mais rápido você acerta, mais vale a questão (até 50% a mais).</li>
+          )}
           <li>
-            🛟 Ajudas da temporada: {ELIMINACOES_POR_TEMPORADA} eliminações (tiram uma opção errada ou revelam um item
-            certo) e {DICAS_POR_TEMPORADA} dicas. Use quando quiser; acabou, só na próxima temporada.
-          </li>
-          <li>
-            🎯 Só a primeira tentativa vale para o ranking e o XP. Quando o desafio fechar, saem o gabarito e a opção de
-            refazer como treino.
+            🎯 Só a primeira tentativa vale para o ranking e o XP.
+            {mostraGabarito
+              ? temTreino
+                ? " Quando o desafio fechar, saem o gabarito e a opção de refazer como treino."
+                : " Quando o desafio fechar, sai o gabarito."
+              : ""}
           </li>
         </ul>
         {pedirCodigo && (
@@ -344,7 +396,8 @@ function TelaQuestao({
   const fora = useRef(false);
   const dialogoProprio = useRef(false);
   const zerar = useCallback((motivo: MotivoZerada) => confirmar(null, motivo), [confirmar]);
-  const { aoClicarFora, avisoClique } = useCliquesFora(desafioId, questao.cliquesRestantes, zerar);
+  const clique = useTolerancia(desafioId, "clique", questao.cliquesRestantes, zerar);
+  const saida = useTolerancia(desafioId, "saida", questao.saidasRestantes, zerar);
   useTelaProtegida({
     protegida: questao.saidaZera,
     tecladoBloqueado: !tecladoLiberado,
@@ -353,7 +406,8 @@ function TelaQuestao({
     fora,
     dialogoProprio,
     zerar,
-    aoClicarFora,
+    aoClicarFora: clique.avisar,
+    aoSair: saida.avisar,
   });
 
   // Marca d'água com quem está respondendo: uma foto da tela mostra de quem é.
@@ -401,19 +455,30 @@ function TelaQuestao({
       {aviso && <Aviso>{aviso}</Aviso>}
       {questao.saidaZera ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-center text-xs font-semibold text-red-700">
-          🚫 Pesquisa bloqueada: sair desta tela{tecladoLiberado ? "" : ", apertar qualquer tecla"}
-          {cliquesLiberados ? "" : " ou clicar fora das alternativas e dos botões"} faz esta questão valer zero.
+          {textoFaixaBloqueada([
+            questao.saidasRestantes > 0 ? "sair desta tela (depois dos avisos)" : "sair desta tela",
+            tecladoLiberado ? null : "apertar qualquer tecla",
+            cliquesLiberados
+              ? null
+              : questao.cliquesRestantes
+                ? "clicar fora das alternativas e dos botões (depois dos avisos)"
+                : "clicar fora das alternativas e dos botões",
+          ])}
         </p>
       ) : (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-center text-xs font-semibold text-emerald-700">
           🔎 Pesquisa liberada: pode consultar, o tempo continua correndo.
         </p>
       )}
-      {avisoClique && (
-        <p role="alert" className="rounded-lg bg-amber-100 px-3 py-2 text-center text-sm font-semibold text-amber-900">
-          {avisoClique}
+      {[saida.aviso, clique.aviso].filter(Boolean).map((a) => (
+        <p
+          key={a}
+          role="alert"
+          className="rounded-lg bg-amber-100 px-3 py-2 text-center text-sm font-semibold text-amber-900"
+        >
+          {a}
         </p>
-      )}
+      ))}
       <div className="h-2 overflow-hidden rounded-full bg-slate-200">
         <div
           className={`h-full transition-[width] duration-200 ${fracao < 0.25 ? "bg-red-500" : questao.relampago ? "bg-amber-400" : "bg-marca-600"}`}
@@ -548,7 +613,8 @@ function TelaVerificacao({
   }, [verificacao.restanteMs, confirmar]);
 
   const zerar = useCallback((motivo: MotivoZerada) => confirmar(null, motivo), [confirmar]);
-  const { aoClicarFora, avisoClique } = useCliquesFora(desafioId, verificacao.cliquesRestantes, zerar);
+  const clique = useTolerancia(desafioId, "clique", verificacao.cliquesRestantes, zerar);
+  const saida = useTolerancia(desafioId, "saida", verificacao.saidasRestantes, zerar);
   useTelaProtegida({
     protegida: verificacao.saidaZera,
     tecladoBloqueado: !tecladoLiberado,
@@ -557,7 +623,8 @@ function TelaVerificacao({
     fora,
     dialogoProprio,
     zerar,
-    aoClicarFora,
+    aoClicarFora: clique.avisar,
+    aoSair: saida.avisar,
   });
   const [marca] = useState(() => (verificacao.saidaZera && identificacao ? textoMarca(identificacao) : ""));
 
@@ -578,11 +645,15 @@ function TelaVerificacao({
         <span className={`tabular-nums ${segundos <= 5 ? "font-bold text-red-600" : ""}`}>⏱️ {segundos}s</span>
       </div>
       {aviso && <Aviso>{aviso}</Aviso>}
-      {avisoClique && (
-        <p role="alert" className="rounded-lg bg-amber-100 px-3 py-2 text-center text-sm font-semibold text-amber-900">
-          {avisoClique}
+      {[saida.aviso, clique.aviso].filter(Boolean).map((a) => (
+        <p
+          key={a}
+          role="alert"
+          className="rounded-lg bg-amber-100 px-3 py-2 text-center text-sm font-semibold text-amber-900"
+        >
+          {a}
         </p>
-      )}
+      ))}
       <div className="h-2 overflow-hidden rounded-full bg-slate-200">
         <div
           className={`h-full transition-[width] duration-200 ${fracao < 0.3 ? "bg-red-500" : "bg-sky-500"}`}

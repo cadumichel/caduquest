@@ -413,9 +413,20 @@ const schemaDesafio = z.object({
     .nullable()
     .default(null),
   saida_zera_questao: z.boolean(),
+  // Regras do desafio: conferidas à parte em conferirRegras.
   regra_cliques: z.string().default("proibido"),
   tolerancia_cliques: z.number().nullable().default(null),
   verificacoes: z.number().nullable().default(null),
+  regra_saidas: z.string().default("proibido"),
+  tolerancia_saidas: z.number().nullable().default(null),
+  eliminacoes_max: z.number().nullable().default(null),
+  dicas_max: z.number().nullable().default(null),
+  ordem_fixa: z.boolean().default(false),
+  embaralhar_alternativas: z.boolean().default(true),
+  teclado_bloqueado: z.boolean().default(true),
+  gabarito_nunca: z.boolean().default(false),
+  treino_liberado: z.boolean().default(true),
+  bonus_rapidez: z.boolean().default(false),
   questoes: z.array(z.uuid()).min(5, "Escolha de 5 a 15 questões.").max(15, "Escolha de 5 a 15 questões."),
 });
 
@@ -562,10 +573,7 @@ export async function salvarTemposDesafio(id: string, dados: DadosTempos): Promi
  * Os cliques valem na hora; as questões teste são sorteadas quando o aluno
  * começa, então só valem para quem ainda não começou.
  */
-export async function salvarRegrasDesafio(
-  id: string,
-  dados: { regra_cliques: string; tolerancia_cliques: number | null; verificacoes: number | null },
-): Promise<EstadoForm> {
+export async function salvarRegrasDesafio(id: string, dados: Record<string, unknown>): Promise<EstadoForm> {
   const { supabase } = await exigirProfessor();
   const conferidas = conferirRegras(dados);
   if ("erro" in conferidas) return { erro: conferidas.erro };

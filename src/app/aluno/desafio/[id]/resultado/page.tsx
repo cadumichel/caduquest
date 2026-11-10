@@ -9,6 +9,7 @@ import type { Conteudo, Resposta } from "@/lib/questoes/tipos";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import {
   gabaritoAguardaProfessor,
+  treinoLiberado,
   gabaritoLiberado,
   gabaritoLiberadoEm,
   situacaoDesafio,
@@ -32,13 +33,14 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
   const tentativa = data as Tentativa | null;
   const encerrado = situacaoDesafio(desafio) === "encerrado";
   const liberado = gabaritoLiberado(desafio);
+  const podeTreinar = treinoLiberado(desafio);
 
   if (!tentativa) {
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-bold">{desafio.titulo}</h1>
         <Aviso tipo="info">Você não fez este desafio.</Aviso>
-        {liberado && (
+        {podeTreinar && (
           <BotaoLink href={`/aluno/desafio/${id}/treino`}>🏋️ Fazer como treino (não vale ranking)</BotaoLink>
         )}
         <BotaoLink href="/aluno" variante="secundario">
@@ -85,7 +87,9 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
         </Cartao>
       </div>
 
-      {!encerrado ? (
+      {desafio.gabarito_nunca ? (
+        <Aviso tipo="info">O professor escolheu não mostrar o gabarito deste desafio.</Aviso>
+      ) : !encerrado ? (
         <Aviso tipo="info">
           {desafio.gabarito_manual
             ? `O gabarito e as explicações aparecem depois que o desafio fechar (${formatarDataHora(desafio.fecha_em)}), quando o professor liberar.`
@@ -146,7 +150,7 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
           })}
         </section>
       )}
-      {liberado && (
+      {podeTreinar && (
         <div className="space-y-2">
           <BotaoLink href={`/aluno/desafio/${id}/treino`}>🏋️ Refazer como treino</BotaoLink>
           <p className="text-center text-xs text-slate-500">

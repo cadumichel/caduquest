@@ -5,7 +5,7 @@ import {
   sortearVerificacoes,
   verificacoesAutomaticas,
 } from "../questoes/verificacao";
-import { conferirRegras } from "../questoes/regras-desafio";
+import { conferirRegras, REGRAS_PADRAO, regrasParaGravar } from "../questoes/regras-desafio";
 
 describe("sorteio das verificações", () => {
   it("2 a cada 10 questões", () => {
@@ -99,20 +99,32 @@ describe("número de questões teste escolhido pelo professor", () => {
 
 describe("conferirRegras", () => {
   it("padrão: proibido e automático", () => {
-    expect(conferirRegras({})).toEqual({
-      regras: { regra_cliques: "proibido", tolerancia_cliques: null, verificacoes: null },
-    });
+    expect(conferirRegras({})).toEqual({ regras: REGRAS_PADRAO });
+    expect(regrasParaGravar(REGRAS_PADRAO)).toEqual({});
   });
   it("tolerância exige de 1 a 20", () => {
     expect(conferirRegras({ regra_cliques: "tolerancia", tolerancia_cliques: 0 })).toHaveProperty("erro");
-    expect(conferirRegras({ regra_cliques: "tolerancia", tolerancia_cliques: 3 })).toEqual({
+    expect(conferirRegras({ regra_cliques: "tolerancia", tolerancia_cliques: 3 })).toMatchObject({
       regras: { regra_cliques: "tolerancia", tolerancia_cliques: 3, verificacoes: null },
     });
   });
   it("questões teste de 0 a 15", () => {
     expect(conferirRegras({ verificacoes: 16 })).toHaveProperty("erro");
-    expect(conferirRegras({ verificacoes: 0 })).toEqual({
+    expect(conferirRegras({ verificacoes: 0 })).toMatchObject({
       regras: { regra_cliques: "proibido", tolerancia_cliques: null, verificacoes: 0 },
     });
+  });
+  it("regras extras: saídas, ajudas e opções", () => {
+    expect(conferirRegras({ regra_saidas: "tolerancia", tolerancia_saidas: 0 })).toHaveProperty("erro");
+    expect(conferirRegras({ eliminacoes_max: 11 })).toHaveProperty("erro");
+    const r = conferirRegras({ regra_saidas: "tolerancia", tolerancia_saidas: 2, dicas_max: 0, bonus_rapidez: true });
+    expect(r).toMatchObject({ regras: { regra_saidas: "tolerancia", tolerancia_saidas: 2, dicas_max: 0 } });
+    if ("regras" in r)
+      expect(regrasParaGravar(r.regras)).toEqual({
+        regra_saidas: "tolerancia",
+        tolerancia_saidas: 2,
+        dicas_max: 0,
+        bonus_rapidez: true,
+      });
   });
 });

@@ -4,7 +4,7 @@ import { exigirAluno } from "@/lib/aluno-sessao";
 import { desafioDoAluno } from "@/lib/jogo";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { situacaoDesafio } from "@/lib/tipos-banco";
-import { regraCliques } from "@/lib/tela-protegida";
+import { regraCliques, regraSaidas } from "@/lib/tela-protegida";
 import { Jogo } from "./Jogo";
 
 export const metadata: Metadata = { title: "Desafio" };
@@ -38,13 +38,19 @@ export default async function PaginaDesafio({ params }: PageProps<"/aluno/desafi
       jaComecou={Boolean(tentativa)}
       tempoFixo={desafio.tempo_por_questao_s}
       saidaZera={desafio.saida_zera_questao}
-      tecladoLiberado={Boolean(perfil?.teclado_liberado)}
+      tecladoLiberado={Boolean(perfil?.teclado_liberado) || desafio.teclado_bloqueado === false}
       identificacao={`${aluno.apelido} · ${aluno.turmaNome}`}
       relampago={desafio.tipo === "relampago"}
       pontosPorAcerto={desafio.pontos_por_acerto}
       regraCliques={regraCliques(desafio).regra}
       toleranciaCliques={regraCliques(desafio).tolerancia}
       temVerificacao={desafio.verificacoes !== 0}
+      toleranciaSaidas={regraSaidas(desafio).regra === "tolerancia" ? regraSaidas(desafio).tolerancia : null}
+      eliminacoesMax={desafio.eliminacoes_max ?? null}
+      dicasMax={desafio.dicas_max ?? null}
+      bonusRapidez={Boolean(desafio.bonus_rapidez)}
+      mostraGabarito={!desafio.gabarito_nunca}
+      temTreino={desafio.treino_liberado !== false && !desafio.gabarito_nunca}
     />
   );
 }

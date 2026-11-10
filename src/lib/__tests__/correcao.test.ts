@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { montarVista } from "../questoes/apresentacao";
-import { calcularPontos, corrigir, tempoEsgotado } from "../questoes/correcao";
+import { calcularPontos, corrigir, pontosComRapidez, tempoEsgotado } from "../questoes/correcao";
 import { permutacaoAleatoria } from "../questoes/embaralhar";
 import { validarConteudo, type Conteudo } from "../questoes/tipos";
 
@@ -327,5 +327,14 @@ describe("mapa", () => {
 
   it("não publica com pinos por posicionar", () => {
     expect(validarConteudo("mapa", { ...mp.conteudo, posicionar: true }).success).toBe(false);
+  });
+});
+
+describe("bônus por rapidez", () => {
+  it("vale até 50% a mais e cai até zero no fim do tempo", () => {
+    expect(pontosComRapidez(1, 10, 0, 60)).toBe(15);
+    expect(pontosComRapidez(1, 10, 30_000, 60)).toBe(12.5);
+    expect(pontosComRapidez(1, 10, 90_000, 60)).toBe(10);
+    expect(pontosComRapidez(0, 10, 0, 60)).toBe(0);
   });
 });

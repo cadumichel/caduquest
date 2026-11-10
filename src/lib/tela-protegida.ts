@@ -72,6 +72,43 @@ export function descreverRegraCliques(d: ComRegraCliques) {
   return `${tolerancia} ${tolerancia === 1 ? "clique fora tolerado" : "cliques fora tolerados"} (com aviso)`;
 }
 
+/**
+ * Saída da tela (trocar de aba, de app ou de janela, sair da tela cheia) num
+ * desafio sem consulta. proibido (padrão): a primeira saída zera a questão.
+ * tolerancia: as N primeiras saídas do desafio só geram aviso.
+ */
+export const REGRAS_SAIDAS = ["proibido", "tolerancia"] as const;
+export type RegraSaidas = (typeof REGRAS_SAIDAS)[number];
+export const ehRegraSaidas = (v: unknown): v is RegraSaidas =>
+  typeof v === "string" && (REGRAS_SAIDAS as readonly string[]).includes(v);
+
+type ComRegraSaidas = { regra_saidas?: string | null; tolerancia_saidas?: number | null };
+
+export function regraSaidas(d: ComRegraSaidas): { regra: RegraSaidas; tolerancia: number } {
+  const regra = ehRegraSaidas(d.regra_saidas) ? d.regra_saidas : "proibido";
+  const tolerancia = Math.min(TOLERANCIA_MAX, Math.max(TOLERANCIA_MIN, d.tolerancia_saidas ?? TOLERANCIA_PADRAO));
+  return { regra, tolerancia };
+}
+
+/** Saídas que ainda passam só com aviso, depois de `usadas`. 0 = a próxima zera. */
+export function saidasRestantes(d: ComRegraSaidas, usadas: number): number {
+  const { regra, tolerancia } = regraSaidas(d);
+  return regra === "proibido" ? 0 : Math.max(0, tolerancia - Math.max(0, usadas));
+}
+
+export function avisoSaidaTolerada(restantes: number) {
+  return restantes > 0
+    ? `⚠️ Você saiu da tela. Mais ${restantes} ${restantes === 1 ? "saída" : "saídas"} e a questão em que você estiver vale zero.`
+    : "⚠️ Último aviso: se sair da tela de novo, a questão vale zero.";
+}
+
+export function descreverRegraSaidas(d: ComRegraSaidas) {
+  const { regra, tolerancia } = regraSaidas(d);
+  return regra === "proibido"
+    ? "saída da tela zera"
+    : `${tolerancia} ${tolerancia === 1 ? "saída tolerada" : "saídas toleradas"} (com aviso)`;
+}
+
 /** O que o aluno pode clicar durante a questão: alternativas, botões, links e alças de arrastar. */
 const CLICAVEIS = 'button, a, input, label, select, textarea, [role="button"]';
 

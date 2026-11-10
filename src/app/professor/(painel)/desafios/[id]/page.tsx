@@ -19,8 +19,9 @@ import { ControlesDesafio } from "./ControlesDesafio";
 import { PainelRelampago } from "./PainelRelampago";
 import { TemposDesafio, type QuestaoComTempo } from "./TemposDesafio";
 import { RegrasDesafio } from "./RegrasDesafio";
-import { descreverRegraCliques, regraCliques } from "@/lib/tela-protegida";
+import { descreverRegraCliques, descreverRegraSaidas } from "@/lib/tela-protegida";
 import { verificacoesAutomaticas } from "@/lib/questoes/verificacao";
+import { regrasDoDesafio } from "@/lib/questoes/regras-desafio";
 import { tempoVerificacao } from "@/lib/questoes/tempos";
 import { formatarPontos } from "@/lib/pontos";
 
@@ -63,7 +64,6 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
   const situacao = situacaoDesafio(desafio);
   const concluiram = linhas.filter((l) => l.situacao === "concluiu").length;
   const comecaram = linhas.filter((l) => l.situacao !== "não fez").length;
-  const regra = regraCliques(desafio);
   const verificacoes = desafio.verificacoes ?? null;
   const textoVerificacoes =
     verificacoes === 0
@@ -200,9 +200,10 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
           </table>
           <p className="mt-3 text-xs text-slate-500">
             {desafio.saida_zera_questao
-              ? "Neste desafio, sair da tela, apertar uma tecla ou usar extensão que mexe na tela zera a questão em que o aluno estava."
+              ? "Pesquisa bloqueada: extensão que mexe na tela zera a questão em que o aluno estava."
               : "Pesquisa liberada: as saídas da tela são só registradas e não tiram pontos."}{" "}
-            {desafio.saida_zera_questao && `🖱️ Regra de cliques: ${descreverRegraCliques(desafio)}. `}
+            {desafio.saida_zera_questao &&
+              `Regras do sem consulta: ${descreverRegraSaidas(desafio)}; ${descreverRegraCliques(desafio)}${desafio.teclado_bloqueado === false ? "; teclado liberado" : ""}. `}
             {verificacoes === 0
               ? "📖 Sem questões teste neste desafio."
               : `📖 ${textoVerificacoes}: depois de responder, o aluno marca o tema da questão; errar zera a questão.`}
@@ -234,7 +235,7 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
               {verificacoes !== 0 && ` de ${tempoVerificacao(desafio)} s`}
               {" · "}
               {desafio.saida_zera_questao
-                ? `🚫 pesquisa bloqueada (${descreverRegraCliques(desafio)})`
+                ? `🚫 pesquisa bloqueada (${descreverRegraSaidas(desafio)}; ${descreverRegraCliques(desafio)})`
                 : "🔎 pesquisa liberada"}
             </p>
             <FormAcao acao={atualizarJanelaDesafio}>
@@ -266,9 +267,7 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
       <Cartao>
         <RegrasDesafio
           id={id}
-          regraCliques={regra.regra}
-          tolerancia={regra.tolerancia}
-          verificacoes={verificacoes}
+          regras={regrasDoDesafio(desafio)}
           pesquisaBloqueada={desafio.saida_zera_questao}
           totalQuestoes={questoes.length}
           jaComecaram={comecaram}

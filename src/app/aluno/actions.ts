@@ -16,7 +16,7 @@ import {
   eliminarAlternativa,
   estadoAtual,
   responderQuestao,
-  registrarCliqueFora,
+  registrarAvisoTolerado,
   responderVerificacao,
   type EstadoJogo,
   type ResultadoAjuda,
@@ -79,10 +79,13 @@ export async function enviarVerificacao(
   );
 }
 
-/** Clique fora tolerado no sem consulta: gasta um aviso; `zerar` = acabaram os avisos. */
-export async function cliqueFora(desafioId: string): Promise<{ zerar: boolean; restantes: number | null }> {
+/** Clique fora ou saída da tela tolerados no sem consulta: gasta um aviso; `zerar` = acabaram os avisos. */
+export async function avisoTolerado(
+  desafioId: string,
+  tipo: unknown,
+): Promise<{ zerar: boolean; restantes: number | null }> {
   const aluno = await exigirAluno();
-  return registrarCliqueFora(criarClienteAdmin(), aluno, String(desafioId));
+  return registrarAvisoTolerado(criarClienteAdmin(), aluno, String(desafioId), tipo === "saida" ? "saida" : "clique");
 }
 
 /** Ajuda da temporada: elimina uma alternativa errada da questão atual. */

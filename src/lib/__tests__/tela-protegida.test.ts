@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  saidasRestantes,
+  descreverRegraSaidas,
   avisoCliqueTolerado,
   cliquesRestantes,
   descreverRegraCliques,
@@ -111,5 +113,15 @@ describe("regra de cliques fora", () => {
   });
   it("aviso ao aluno não cita o mouse", () => {
     for (const n of [0, 1, 3]) expect(avisoCliqueTolerado(n).toLowerCase()).not.toContain("mouse");
+  });
+});
+
+describe("regra de saídas da tela", () => {
+  it("padrão proibido; tolerância desconta", () => {
+    expect(saidasRestantes({}, 0)).toBe(0);
+    const d = { regra_saidas: "tolerancia", tolerancia_saidas: 3 };
+    expect(saidasRestantes(d, 1)).toBe(2);
+    expect(saidasRestantes(d, 5)).toBe(0);
+    expect(descreverRegraSaidas(d)).toContain("3 saídas toleradas");
   });
 });
