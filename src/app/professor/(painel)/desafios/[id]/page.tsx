@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Abas, abaAtual, Numero } from "@/components/Abas";
 import { EscolhaPesquisa } from "@/components/EscolhaPesquisa";
 import { BotaoConfirmar } from "@/components/BotaoConfirmar";
 import { BotaoEnviar } from "@/components/BotaoEnviar";
@@ -36,8 +37,11 @@ const MARCA: Record<Marca, { simbolo: string; classe: string }> = {
   vazia: { simbolo: "", classe: "" },
 };
 
-export default async function PaginaDesafioProfessor({ params }: PageProps<"/professor/desafios/[id]">) {
+const ABAS = ["resultado", "questoes", "ajustes"] as const;
+
+export default async function PaginaDesafioProfessor({ params, searchParams }: PageProps<"/professor/desafios/[id]">) {
   const { id } = await params;
+  const aba = abaAtual((await searchParams).aba, ABAS);
   const { supabase } = await exigirProfessor();
   const { data } = await supabase
     .from("desafios")
@@ -70,19 +74,29 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
       ? "sem questões teste"
       : `${verificacoes ?? verificacoesAutomaticas(questoes.length)} ${verificacoes === 1 ? "questão teste" : "questões teste"}${verificacoes === null ? " (automático)" : ""}`;
 
+  const feitas = linhas.filter((l) => l.situacao !== "não fez");
+  const mediaAcerto =
+    feitas.length && questoes.length
+      ? Math.round((feitas.reduce((s, l) => s + l.acertos, 0) / (feitas.length * questoes.length)) * 100)
+      : null;
+  const alertasDe = (l: (typeof linhas)[number]) => l.zeradasPorSaida + l.verificacoesErradas;
+  const comAlerta = linhas.filter((l) => alertasDe(l) > 0).length;
+  // Ordem da aba Questões: da que teve menos acerto para a que teve mais (sem dados vão para o fim).
+  const porAcerto = questoes
+    .map((q, i) => ({ q, numero: i + 1, acerto: acertoPorQuestao.get(q.id) ?? null }))
+    .sort((a, b) => (a.acerto ?? 2) - (b.acerto ?? 2));
+  const url = (a: (typeof ABAS)[number]) => `/professor/desafios/${id}?aba=${a}`;
+
   return (
     <div className="space-y-6">
       <div>
-        <Link href={`/professor/temporadas/${desafio.temporadas.id}`} className="text-sm text-marca-700">
+        <Link
+          href={`/professor/turmas/${desafio.temporadas.turma_id}?temporada=${desafio.temporadas.id}`}
+          className="text-sm text-marca-700"
+        >
           ← {desafio.temporadas.nome} · {desafio.temporadas.turmas.nome}
         </Link>
-        <Titulo
-          acao={
-            <BotaoLink href={`/professor/desafios/${id}/csv`} variante="secundario" prefetch={false}>
-              Exportar planilha (CSV)
-            </BotaoLink>
-          }
-        >
+        <Titulo>
           {desafio.tipo === "relampago" && "⚡ "}
           {desafio.titulo}{" "}
           <Etiqueta cor={situacao === "aberto" ? "verde" : situacao === "agendado" ? "azul" : "cinza"}>
@@ -103,114 +117,227 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
         />
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-        <Cartao className="overflow-x-auto">
-          <Subtitulo>
-            Alunos · {concluiram}/{linhas.length} concluíram
-          </Subtitulo>
-          <table className="w-full min-w-[560px] text-sm">
-            <thead className="text-left text-slate-500">
-              <tr>
-                <th className="py-2">Aluno</th>
-                <th className="py-2">Situação</th>
-                <th className="py-2 text-right">Pontos</th>
-                <th className="py-2 text-right">Acertos</th>
-                <th className="py-2 text-right" title="Questões com tempo esgotado">
-                  ⏱️
-                </th>
-                <th
-                  className="py-2 text-right"
-                  title="Vezes que saiu da tela, questões zeradas (saída, tecla, extensão, clique fora) e verificações de leitura erradas"
-                >
-                  Saídas
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {linhas.map((l) => (
-                <tr key={l.alunoId}>
-                  <td className="py-1.5">
-                    <Link href={`/professor/alunos/${l.alunoId}`} className="hover:text-marca-700">
-                      {l.apelido}
-                      {l.nomeReal && <span className="text-slate-500"> · {l.nomeReal}</span>}
-                    </Link>
-                    {l.situacao !== "não fez" && (
-                      <Link
-                        href={`/professor/desafios/${id}/alunos/${l.alunoId}`}
-                        className="ml-2 text-xs whitespace-nowrap text-marca-700"
-                      >
-                        ver respostas
-                      </Link>
-                    )}
-                  </td>
-                  <td className="py-1.5">
-                    <Etiqueta cor={COR_SITUACAO[l.situacao]}>{l.situacao}</Etiqueta>
-                  </td>
-                  <td className="py-1.5 text-right tabular-nums">{formatarPontos(l.pontos)}</td>
-                  <td className="py-1.5 text-right tabular-nums">
-                    {l.acertos}/{questoes.length}
-                  </td>
-                  <td className="py-1.5 text-right tabular-nums">{l.esgotadas || ""}</td>
-                  <td
-                    className={`py-1.5 text-right tabular-nums ${desafio.saida_zera_questao && l.saidasTela > 3 ? "font-semibold text-amber-700" : ""}`}
-                  >
-                    {l.saidasTela || ""}
-                    {l.zeradasPorSaida > 0 && (
-                      <span className="block text-xs font-normal text-red-700">
-                        {l.zeradasPorSaida} zerada{l.zeradasPorSaida > 1 ? "s" : ""}
-                      </span>
-                    )}
-                    {l.zeradasTeclado > 0 && (
-                      <span className="block text-xs font-normal text-red-700">⌨️ {l.zeradasTeclado} por tecla</span>
-                    )}
-                    {l.zeradasTela > 0 && (
-                      <span
-                        className="block text-xs font-normal text-red-700"
-                        title="Algo de fora do app mexeu na tela"
-                      >
-                        🧩 {l.zeradasTela} por extensão
-                      </span>
-                    )}
-                    {l.zeradasClique > 0 && (
-                      <span className="block text-xs font-normal text-red-700">
-                        🖱️ {l.zeradasClique} por clique fora
-                      </span>
-                    )}
-                    {l.zeradasSemMouse > 0 && (
-                      <span
-                        className="block text-xs font-normal text-red-700"
-                        title="Respondeu sem mexer o mouse desde que a questão apareceu"
-                      >
-                        🖱️ {l.zeradasSemMouse} sem mexer o mouse
-                      </span>
-                    )}
-                    {l.verificacoes > 0 && (
-                      <span
-                        className={`block text-xs font-normal ${l.verificacoesErradas ? "text-red-700" : "text-slate-500"}`}
-                        title="Verificações de leitura erradas / feitas. Errar zera a questão."
-                      >
-                        📖 {l.verificacoesErradas}/{l.verificacoes} verif. errada
-                        {l.verificacoesErradas === 1 ? "" : "s"}
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="mt-3 text-xs text-slate-500">
-            {desafio.saida_zera_questao
-              ? "Pesquisa bloqueada: extensão que mexe na tela zera a questão em que o aluno estava."
-              : "Pesquisa liberada: as saídas da tela são só registradas e não tiram pontos."}{" "}
-            {desafio.saida_zera_questao &&
-              `Regras do sem consulta: ${descreverRegraSaidas(desafio)}; ${descreverRegraCliques(desafio)}${desafio.teclado_bloqueado === false ? "; teclado liberado" : ""}. `}
-            {verificacoes === 0
-              ? "📖 Sem questões teste neste desafio."
-              : `📖 ${textoVerificacoes}: depois de responder, o aluno marca o tema da questão; errar zera a questão.`}
-          </p>
-        </Cartao>
+      <Abas
+        atual={aba}
+        abas={[
+          { id: "resultado", rotulo: "Resultado", href: url("resultado") },
+          { id: "questoes", rotulo: `Questões (${questoes.length})`, href: url("questoes") },
+          { id: "ajustes", rotulo: "Ajustes", href: url("ajustes") },
+        ]}
+      />
 
-        <div className="space-y-6">
+      {aba === "resultado" && (
+        <div className="space-y-5">
+          <div className="grid grid-cols-3 gap-3">
+            <Numero valor={`${concluiram}/${linhas.length}`} rotulo="concluíram" />
+            <Numero valor={mediaAcerto === null ? "–" : `${mediaAcerto}%`} rotulo="acerto médio de quem fez" />
+            <Numero valor={String(comAlerta)} rotulo="alunos com alerta" destaque={comAlerta > 0} />
+          </div>
+          <Cartao className="overflow-x-auto">
+            <table className="w-full min-w-[520px] text-sm">
+              <thead className="text-left text-slate-500">
+                <tr>
+                  <th className="py-2">Aluno</th>
+                  <th className="py-2">Situação</th>
+                  <th className="py-2 text-right">Pontos</th>
+                  <th className="py-2 text-right">Acertos</th>
+                  <th
+                    className="py-2 text-right"
+                    title="Questões zeradas pelas regras do desafio e questões teste erradas"
+                  >
+                    Alertas
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {linhas.map((l) => {
+                  const alertas = alertasDe(l);
+                  const temDetalhe = alertas > 0 || l.saidasTela > 0 || l.esgotadas > 0 || l.verificacoes > 0;
+                  return (
+                    <tr key={l.alunoId} className="align-top">
+                      <td className="py-1.5">
+                        <Link href={`/professor/alunos/${l.alunoId}`} className="hover:text-marca-700">
+                          {l.apelido}
+                          {l.nomeReal && <span className="text-slate-500"> · {l.nomeReal}</span>}
+                        </Link>
+                        {l.situacao !== "não fez" && (
+                          <Link
+                            href={`/professor/desafios/${id}/alunos/${l.alunoId}`}
+                            className="ml-2 text-xs whitespace-nowrap text-marca-700"
+                          >
+                            ver respostas
+                          </Link>
+                        )}
+                      </td>
+                      <td className="py-1.5">
+                        <Etiqueta cor={COR_SITUACAO[l.situacao]}>{l.situacao}</Etiqueta>
+                      </td>
+                      <td className="py-1.5 text-right tabular-nums">{formatarPontos(l.pontos)}</td>
+                      <td className="py-1.5 text-right tabular-nums">
+                        {l.acertos}/{questoes.length}
+                      </td>
+                      <td className="py-1.5 text-right">
+                        {temDetalhe && (
+                          <details className="inline-block text-left">
+                            <summary
+                              className={`cursor-pointer list-none rounded-full px-2 py-0.5 text-center text-xs font-semibold tabular-nums ${
+                                alertas ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-500"
+                              }`}
+                            >
+                              {alertas || "0"}
+                            </summary>
+                            <ul className="mt-1 space-y-0.5 text-xs whitespace-nowrap text-slate-600">
+                              {l.zeradasTeclado > 0 && (
+                                <li className="text-red-700">{l.zeradasTeclado} zerada(s) por tecla</li>
+                              )}
+                              {l.zeradasClique > 0 && (
+                                <li className="text-red-700">{l.zeradasClique} zerada(s) por clique fora</li>
+                              )}
+                              {l.zeradasSemMouse > 0 && (
+                                <li className="text-red-700">{l.zeradasSemMouse} zerada(s) sem mexer o mouse</li>
+                              )}
+                              {l.zeradasTela > 0 && (
+                                <li className="text-red-700">{l.zeradasTela} zerada(s) por extensão</li>
+                              )}
+                              {l.zeradasPorSaida -
+                                l.zeradasTeclado -
+                                l.zeradasClique -
+                                l.zeradasSemMouse -
+                                l.zeradasTela >
+                                0 && (
+                                <li className="text-red-700">
+                                  {l.zeradasPorSaida -
+                                    l.zeradasTeclado -
+                                    l.zeradasClique -
+                                    l.zeradasSemMouse -
+                                    l.zeradasTela}{" "}
+                                  zerada(s) por sair da tela
+                                </li>
+                              )}
+                              {l.verificacoes > 0 && (
+                                <li className={l.verificacoesErradas ? "text-red-700" : ""}>
+                                  {l.verificacoesErradas} de {l.verificacoes} questões teste erradas
+                                </li>
+                              )}
+                              {l.saidasTela > 0 && <li>saiu da tela {l.saidasTela}×</li>}
+                              {l.esgotadas > 0 && <li>{l.esgotadas} com tempo esgotado</li>}
+                            </ul>
+                          </details>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <p className="mt-3 text-xs text-slate-500">
+              {desafio.saida_zera_questao
+                ? "Pesquisa bloqueada: extensão que mexe na tela zera a questão em que o aluno estava."
+                : "Pesquisa liberada: as saídas da tela são só registradas e não tiram pontos."}{" "}
+              {desafio.saida_zera_questao &&
+                `Regras do sem consulta: ${descreverRegraSaidas(desafio)}; ${descreverRegraCliques(desafio)}${desafio.teclado_bloqueado === false ? "; teclado liberado" : ""}. `}
+              {verificacoes === 0
+                ? "📖 Sem questões teste neste desafio."
+                : `📖 ${textoVerificacoes}: depois de responder, o aluno marca o tema da questão; errar zera a questão.`}
+            </p>
+          </Cartao>
+        </div>
+      )}
+
+      {aba === "questoes" && (
+        <div className="space-y-5">
+          <Cartao className="overflow-x-auto">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <Subtitulo>Desempenho por questão</Subtitulo>
+              <span className="text-xs text-slate-500">
+                ✓ acertou · ✗ errou · ½ acertou em parte · em branco: não chegou na questão. Clique no aluno para ver as
+                respostas dele.
+              </span>
+            </div>
+            {linhas.every((l) => l.situacao === "não fez") ? (
+              <p className="text-sm text-slate-500">Ninguém fez o desafio ainda.</p>
+            ) : (
+              <table className="text-sm">
+                <thead className="text-slate-500">
+                  <tr>
+                    <th className="sticky left-0 bg-white py-2 pr-3 text-left">Aluno</th>
+                    {questoes.map((q, i) => (
+                      <th key={q.id} className="px-0.5 py-2 text-center font-medium" title={q.enunciado}>
+                        {i + 1}
+                      </th>
+                    ))}
+                    <th className="py-2 pl-3 text-right">Acertos</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {linhas
+                    .filter((l) => l.situacao !== "não fez")
+                    .map((l) => (
+                      <tr key={l.alunoId}>
+                        <td className="sticky left-0 bg-white py-1 pr-3 whitespace-nowrap">
+                          <Link href={`/professor/desafios/${id}/alunos/${l.alunoId}`} className="hover:text-marca-700">
+                            {l.apelido}
+                            {l.nomeReal && <span className="text-slate-500"> · {l.nomeReal}</span>}
+                          </Link>
+                        </td>
+                        {questoes.map((q, i) => {
+                          const r = l.questoes.get(q.id);
+                          const m = MARCA[marcaResultado(r)];
+                          return (
+                            <td key={q.id} className="px-0.5 py-1 text-center">
+                              <span
+                                className={`inline-flex size-7 items-center justify-center rounded-md font-semibold ${m.classe}`}
+                                title={`Questão ${i + 1}: ${rotuloResultado(r)}`}
+                              >
+                                {m.simbolo}
+                              </span>
+                            </td>
+                          );
+                        })}
+                        <td className="py-1 pl-3 text-right tabular-nums">
+                          {l.acertos}/{questoes.length}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            )}
+            <p className="mt-3 text-xs text-slate-500">
+              A numeração é a da montagem do desafio (cada aluno vê em ordem embaralhada). Abaixo, as questões vêm da
+              que teve menos acerto para a que teve mais.
+            </p>
+          </Cartao>
+
+          <section className="space-y-3">
+            {porAcerto.map(({ q, numero, acerto }) => (
+              <Cartao key={q.id} className="space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <Link href={`/professor/questoes/${q.id}`} className="font-medium hover:text-marca-700">
+                    {numero}. {q.enunciado}
+                  </Link>
+                  <div className="flex shrink-0 gap-1">
+                    <Etiqueta cor="azul">{NOME_TIPO[q.tipo]}</Etiqueta>
+                    {acerto !== null && (
+                      <Etiqueta cor={acerto >= 0.7 ? "verde" : acerto >= 0.4 ? "ambar" : "vermelho"}>
+                        {Math.round(acerto * 100)}% de acerto
+                      </Etiqueta>
+                    )}
+                  </div>
+                </div>
+                <details>
+                  <summary className="cursor-pointer text-sm text-marca-700">Ver gabarito</summary>
+                  <div className="mt-2">
+                    <Gabarito conteudo={{ tipo: q.tipo, conteudo: q.conteudo } as Conteudo} />
+                  </div>
+                </details>
+              </Cartao>
+            ))}
+          </section>
+        </div>
+      )}
+
+      {aba === "ajustes" && (
+        <div className="grid gap-6 lg:grid-cols-2">
           <Cartao>
             <ControlesDesafio
               id={id}
@@ -252,123 +379,37 @@ export default async function PaginaDesafioProfessor({ params }: PageProps<"/pro
               <EscolhaPesquisa name="pesquisa" bloqueada={desafio.saida_zera_questao} />
               <BotaoEnviar>Salvar</BotaoEnviar>
             </FormAcao>
-            <div className="mt-6 border-t border-slate-100 pt-4">
-              <BotaoConfirmar
-                acao={excluirDesafio.bind(null, id)}
-                pergunta="Apagar este desafio? As tentativas e os pontos dos alunos nele também serão apagados."
-              >
-                Apagar desafio
-              </BotaoConfirmar>
-            </div>
+          </Cartao>
+          <Cartao className="lg:col-span-2">
+            <RegrasDesafio
+              id={id}
+              regras={regrasDoDesafio(desafio)}
+              pesquisaBloqueada={desafio.saida_zera_questao}
+              totalQuestoes={questoes.length}
+              jaComecaram={comecaram}
+            />
+          </Cartao>
+          <Cartao className="lg:col-span-2">
+            <TemposDesafio
+              id={id}
+              todas={desafio.tempo_por_questao_s}
+              verificacao={desafio.tempo_verificacao_s ?? null}
+              questoes={comTempo}
+            />
+          </Cartao>
+          <Cartao className="flex flex-wrap items-center justify-between gap-3 lg:col-span-2">
+            <BotaoLink href={`/professor/desafios/${id}/csv`} variante="secundario" prefetch={false}>
+              Exportar planilha (CSV)
+            </BotaoLink>
+            <BotaoConfirmar
+              acao={excluirDesafio.bind(null, id)}
+              pergunta="Apagar este desafio? As tentativas e os pontos dos alunos nele também serão apagados."
+            >
+              Apagar desafio
+            </BotaoConfirmar>
           </Cartao>
         </div>
-      </div>
-
-      <Cartao>
-        <RegrasDesafio
-          id={id}
-          regras={regrasDoDesafio(desafio)}
-          pesquisaBloqueada={desafio.saida_zera_questao}
-          totalQuestoes={questoes.length}
-          jaComecaram={comecaram}
-        />
-      </Cartao>
-
-      <Cartao>
-        <TemposDesafio
-          id={id}
-          todas={desafio.tempo_por_questao_s}
-          verificacao={desafio.tempo_verificacao_s ?? null}
-          questoes={comTempo}
-        />
-      </Cartao>
-
-      <Cartao className="overflow-x-auto">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <Subtitulo>Desempenho por questão</Subtitulo>
-          <span className="text-xs text-slate-500">
-            ✓ acertou · ✗ errou · ½ acertou em parte · em branco: não chegou na questão. Clique no aluno para ver as
-            respostas dele.
-          </span>
-        </div>
-        {linhas.every((l) => l.situacao === "não fez") ? (
-          <p className="text-sm text-slate-500">Ninguém fez o desafio ainda.</p>
-        ) : (
-          <table className="text-sm">
-            <thead className="text-slate-500">
-              <tr>
-                <th className="sticky left-0 bg-white py-2 pr-3 text-left">Aluno</th>
-                {questoes.map((q, i) => (
-                  <th key={q.id} className="px-0.5 py-2 text-center font-medium" title={q.enunciado}>
-                    {i + 1}
-                  </th>
-                ))}
-                <th className="py-2 pl-3 text-right">Acertos</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {linhas
-                .filter((l) => l.situacao !== "não fez")
-                .map((l) => (
-                  <tr key={l.alunoId}>
-                    <td className="sticky left-0 bg-white py-1 pr-3 whitespace-nowrap">
-                      <Link href={`/professor/desafios/${id}/alunos/${l.alunoId}`} className="hover:text-marca-700">
-                        {l.apelido}
-                        {l.nomeReal && <span className="text-slate-500"> · {l.nomeReal}</span>}
-                      </Link>
-                    </td>
-                    {questoes.map((q, i) => {
-                      const r = l.questoes.get(q.id);
-                      const m = MARCA[marcaResultado(r)];
-                      return (
-                        <td key={q.id} className="px-0.5 py-1 text-center">
-                          <span
-                            className={`inline-flex size-7 items-center justify-center rounded-md font-semibold ${m.classe}`}
-                            title={`Questão ${i + 1}: ${rotuloResultado(r)}`}
-                          >
-                            {m.simbolo}
-                          </span>
-                        </td>
-                      );
-                    })}
-                    <td className="py-1 pl-3 text-right tabular-nums">
-                      {l.acertos}/{questoes.length}
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        )}
-        <p className="mt-3 text-xs text-slate-500">
-          A numeração segue a lista de questões abaixo (cada aluno vê em ordem embaralhada). A planilha CSV traz o mesmo
-          relatório; o da temporada inteira fica na página da temporada.
-        </p>
-      </Cartao>
-
-      <section className="space-y-3">
-        <Subtitulo>Questões ({questoes.length})</Subtitulo>
-        {questoes.map((q, i) => {
-          const acerto = acertoPorQuestao.get(q.id);
-          return (
-            <Cartao key={q.id} className="space-y-2">
-              <div className="flex items-start justify-between gap-3">
-                <Link href={`/professor/questoes/${q.id}`} className="font-medium hover:text-marca-700">
-                  {i + 1}. {q.enunciado}
-                </Link>
-                <div className="flex shrink-0 gap-1">
-                  <Etiqueta cor="azul">{NOME_TIPO[q.tipo]}</Etiqueta>
-                  {acerto !== undefined && acerto !== null && (
-                    <Etiqueta cor={acerto >= 0.7 ? "verde" : acerto >= 0.4 ? "ambar" : "vermelho"}>
-                      {Math.round(acerto * 100)}% de acerto
-                    </Etiqueta>
-                  )}
-                </div>
-              </div>
-              <Gabarito conteudo={{ tipo: q.tipo, conteudo: q.conteudo } as Conteudo} />
-            </Cartao>
-          );
-        })}
-      </section>
+      )}
     </div>
   );
 }
