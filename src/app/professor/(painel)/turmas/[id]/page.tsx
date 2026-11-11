@@ -1,20 +1,31 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Abas, abaAtual } from "@/components/Abas";
 import { Avatar } from "@/components/Avatar";
 import { BotaoConfirmar } from "@/components/BotaoConfirmar";
 import { BotaoEnviar } from "@/components/BotaoEnviar";
 import { ExcluirComConfirmacao } from "@/components/ExcluirComConfirmacao";
 import { FormAcao } from "@/components/FormAcao";
 import { TabelaRanking } from "@/components/TabelaRanking";
-import { AreaTexto, Botao, Campo, Cartao, Entrada, Etiqueta, Subtitulo, Titulo, Vazio } from "@/components/ui";
+import {
+  AreaTexto,
+  Botao,
+  BotaoLink,
+  Campo,
+  Cartao,
+  Entrada,
+  Etiqueta,
+  Subtitulo,
+  Titulo,
+  Vazio,
+} from "@/components/ui";
 import { formatarData, formatarDataHora, hojeEmBrasilia } from "@/lib/datas";
 import { medalhasDaTurma } from "@/lib/medalhas";
 import { exigirProfessor } from "@/lib/professor";
-import { rankingsDaTurma } from "@/lib/rankings-turma";
-import { temporadaAtual } from "@/lib/temporada-dados";
+import { rankingDaTemporada, temporadaAtual } from "@/lib/temporada-dados";
 import { situacaoDesafio } from "@/lib/tipos-banco";
-import type { Aluno, Temporada } from "@/lib/tipos-banco";
+import type { Aluno, Desafio, Temporada } from "@/lib/tipos-banco";
 import { cartasParaAProxima } from "@/lib/carta-coringa";
 import {
   apagarCarta,
@@ -25,17 +36,30 @@ import {
   aprovarAluno,
   aprovarTodos,
   atualizarAluno,
+  atualizarTemporada,
   criarTemporada,
+  encerrarTemporada,
   excluirTurma,
   novoCodigoTurma,
+  reabrirTemporada,
   redefinirPin,
   removerAluno,
 } from "../../actions";
 
 export const metadata: Metadata = { title: "Turma" };
 
-export default async function PaginaTurma({ params }: PageProps<"/professor/turmas/[id]">) {
+const ABAS = ["temporada", "alunos", "temporadas", "ajustes"] as const;
+const COR_SITUACAO = { agendado: "azul", aberto: "verde", encerrado: "cinza" } as const;
+
+type DesafioLista = Desafio & {
+  desafio_questoes: { count: number }[];
+  tentativas: { concluida_em: string | null }[];
+};
+
+export default async function PaginaTurma({ params, searchParams }: PageProps<"/professor/turmas/[id]">) {
   const { id } = await params;
+  const sp = await searchParams;
+  const aba = abaAtual(sp.aba, ABAS);
   const { supabase } = await exigirProfessor();
   const { data: turma, error } = await supabase
     .from("turmas")
@@ -47,7 +71,7 @@ export default async function PaginaTurma({ params }: PageProps<"/professor/turm
   if (!turma) notFound();
   const escola = turma.escolas as unknown as { nome: string; periodo: string };
 
-  const [{ data: alunosBrutos }, { data: temporadasBrutas }, atual, medalhas] = await Promise.all([
+  const [{ data: alunosBrutos }, { data: temporadasBrutas }, atual, medalhas, cartas] = await Promise.all([
     supabase
       .from("alunos")
       .select(
@@ -58,274 +82,241 @@ export default async function PaginaTurma({ params }: PageProps<"/professor/turm
     supabase.from("temporadas").select("*").eq("turma_id", id).order("inicio", { ascending: false }),
     temporadaAtual(supabase, id),
     medalhasDaTurma(supabase, id),
+    cartasParaAProxima(supabase, id, { todas: true }),
   ]);
   const todos = (alunosBrutos ?? []) as Aluno[];
   const alunos = todos.filter((a) => a.aprovado);
   const pendentes = todos.filter((a) => !a.aprovado);
   const temporadas = (temporadasBrutas ?? []) as Temporada[];
-  const [rankings, cartas] = await Promise.all([
-    rankingsDaTurma(supabase, temporadas, alunos),
-    cartasParaAProxima(supabase, id, { todas: true }),
-  ]);
   const hoje = hojeEmBrasilia();
   const nomes = new Map(alunos.map((a) => [a.id, a.nome_real]));
+  const cartasPendentes = cartas.filter((c) => c.status === "pendente").length;
+
+  // Temporada mostrada na primeira aba: a pedida na URL, senão a atual.
+  const pedida = typeof sp.temporada === "string" ? temporadas.find((t) => t.id === sp.temporada) : undefined;
+  const temporada = pedida ?? temporadas.find((t) => t.id === atual?.id) ?? temporadas[0] ?? null;
+
+  const url = (a: (typeof ABAS)[number], extra = "") => `/professor/turmas/${id}?aba=${a}${extra}`;
 
   return (
-    <div className="space-y-6">
-      <Titulo>
-        Turma {turma.nome}{" "}
-        <span className="text-base font-normal text-slate-500">
-          · {turma.serie ?? ""} {escola.nome}
-        </span>
-      </Titulo>
-
-      <Cartao className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-sm text-slate-500">Código de acesso dos alunos</p>
-          <p className="font-mono text-4xl font-bold tracking-[0.3em] text-marca-700">{turma.codigo}</p>
-          <p className="text-xs text-slate-500">
-            Os alunos entram em /entrar com este código, um apelido, o nome completo (só você vê) e um PIN de 4 números.
-          </p>
-        </div>
-        <BotaoConfirmar
-          acao={novoCodigoTurma.bind(null, id)}
-          pergunta="Gerar um novo código? O antigo deixa de funcionar para novos acessos."
-          variante="secundario"
+    <div className="space-y-5">
+      <div>
+        <Link href="/professor/turmas" className="text-sm text-marca-700">
+          ← Turmas
+        </Link>
+        <Titulo
+          acao={
+            <div className="text-right">
+              <p className="text-xs text-slate-500">Código de acesso</p>
+              <p className="font-mono text-2xl font-bold tracking-[0.2em] text-marca-700">{turma.codigo}</p>
+            </div>
+          }
         >
-          Gerar novo código
-        </BotaoConfirmar>
-      </Cartao>
+          Turma {turma.nome}{" "}
+          <span className="text-base font-normal text-slate-500">
+            · {turma.serie ?? ""} {escola.nome}
+          </span>
+        </Titulo>
+      </div>
 
-      {cartas.length > 0 && (
-        <Cartao className="border-amber-300 bg-amber-50">
-          <Subtitulo>🃏 Cartas coringa para a próxima prova</Subtitulo>
-          <p className="mb-3 text-sm text-slate-600">
-            Temas escolhidos pelos campeões da última temporada (desta turma e das turmas da mesma série). Revise o
-            texto e aprove: só então o tema aparece para os alunos, com o personagem do campeão. Cada tema aprovado vira
-            uma questão da próxima prova; o Claude também vê os aprovados pelo conector.
-          </p>
-          <ul className="space-y-3">
-            {cartas.map((c) => (
-              <li key={c.id} className="space-y-2 rounded-xl bg-white p-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  <Avatar avatar={c.avatar} cor={c.cor} tamanho={36} />
-                  <p className="min-w-0 flex-1 text-xs text-slate-500">
-                    {c.apelido} · {c.turmaNome} · campeão de {c.temporadaNome}
-                  </p>
-                  {c.status === "aprovada" ? (
-                    <Etiqueta cor="verde">Aprovada · visível para os alunos</Etiqueta>
-                  ) : c.status === "recusada" ? (
-                    <Etiqueta cor="vermelho">Recusada</Etiqueta>
-                  ) : (
-                    <Etiqueta cor="ambar">Aguardando sua aprovação</Etiqueta>
-                  )}
-                </div>
-                <form action={aprovarCarta.bind(null, c.id, id)} className="flex flex-wrap gap-2">
-                  <Entrada name="tema" defaultValue={c.tema} maxLength={160} required className="min-w-0 flex-1" />
-                  <Botao variante={c.status === "aprovada" ? "secundario" : "sucesso"}>
-                    {c.status === "aprovada" ? "Salvar edição" : "Aprovar"}
-                  </Botao>
-                </form>
-                <div className="flex flex-wrap gap-2">
-                  {c.status !== "recusada" && (
+      <Abas
+        atual={aba}
+        abas={[
+          { id: "temporada", rotulo: temporada ? temporada.nome : "Temporada", href: url("temporada") },
+          { id: "alunos", rotulo: `Alunos (${alunos.length})`, href: url("alunos"), contagem: pendentes.length },
+          { id: "temporadas", rotulo: "Temporadas", href: url("temporadas"), contagem: cartasPendentes },
+          { id: "ajustes", rotulo: "Ajustes", href: url("ajustes") },
+        ]}
+      />
+
+      {aba === "temporada" && (
+        <AbaTemporada
+          temporada={temporada}
+          ehAtual={temporada?.id === atual?.id}
+          totalAlunos={alunos.length}
+          nomes={nomes}
+          medalhas={medalhas}
+          linkNova={url("temporadas")}
+        />
+      )}
+
+      {aba === "alunos" && (
+        <div className="space-y-5">
+          {pendentes.length > 0 && (
+            <Cartao className="border-amber-300 bg-amber-50">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <Subtitulo>Aguardando aprovação ({pendentes.length})</Subtitulo>
+                {pendentes.length > 1 && (
+                  <form action={aprovarTodos.bind(null, id)}>
+                    <Botao>Aprovar todos</Botao>
+                  </form>
+                )}
+              </div>
+              <ul className="divide-y divide-amber-200">
+                {pendentes.map((a) => (
+                  <li key={a.id} className="flex flex-wrap items-center gap-3 py-2.5">
+                    <Avatar avatar={a.avatar} cor={a.cor} tamanho={36} />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold">
+                        {a.nome_real ?? "Sem nome informado"}{" "}
+                        <span className="font-normal text-slate-600">· {a.apelido}</span>
+                      </p>
+                      <p className="text-xs text-slate-500">Cadastro em {formatarDataHora(a.criado_em)}</p>
+                    </div>
+                    <form action={aprovarAluno.bind(null, a.id)}>
+                      <Botao>Aprovar</Botao>
+                    </form>
                     <BotaoConfirmar
-                      acao={recusarCarta.bind(null, c.id, id)}
-                      pergunta={`Recusar o tema de ${c.apelido}? Ele some da tela dos alunos e o campeão pode escrever outro enquanto o prazo estiver aberto.`}
+                      acao={removerAluno.bind(null, a.id)}
+                      pergunta={`Recusar o cadastro de ${a.apelido}? O cadastro será apagado.`}
                     >
                       Recusar
                     </BotaoConfirmar>
-                  )}
-                  <BotaoConfirmar
-                    acao={apagarCarta.bind(null, c.id, id)}
-                    pergunta={`Apagar o tema escolhido por ${c.apelido}? O aluno poderá escolher outro enquanto o prazo estiver aberto.`}
-                    variante="fantasma"
-                  >
-                    Apagar
-                  </BotaoConfirmar>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Cartao>
-      )}
+                  </li>
+                ))}
+              </ul>
+            </Cartao>
+          )}
 
-      {pendentes.length > 0 && (
-        <Cartao className="border-amber-300 bg-amber-50">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <Subtitulo>Aguardando aprovação ({pendentes.length})</Subtitulo>
-            {pendentes.length > 1 && (
-              <form action={aprovarTodos.bind(null, id)}>
-                <Botao>Aprovar todos</Botao>
-              </form>
-            )}
-          </div>
-          <ul className="divide-y divide-amber-200">
-            {pendentes.map((a) => (
-              <li key={a.id} className="flex flex-wrap items-center gap-3 py-2.5">
-                <Avatar avatar={a.avatar} cor={a.cor} tamanho={36} />
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold">
-                    {a.nome_real ?? "Sem nome informado"}{" "}
-                    <span className="font-normal text-slate-600">· {a.apelido}</span>
-                  </p>
-                  <p className="text-xs text-slate-500">Cadastro em {formatarDataHora(a.criado_em)}</p>
-                </div>
-                <form action={aprovarAluno.bind(null, a.id)}>
-                  <Botao>Aprovar</Botao>
-                </form>
-                <BotaoConfirmar
-                  acao={removerAluno.bind(null, a.id)}
-                  pergunta={`Recusar o cadastro de ${a.apelido}? O cadastro será apagado.`}
-                >
-                  Recusar
-                </BotaoConfirmar>
-              </li>
-            ))}
-          </ul>
-        </Cartao>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
-        <Cartao>
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <Subtitulo>Alunos ({alunos.length})</Subtitulo>
-            <form action={alternarAprovacao.bind(null, id, !turma.exige_aprovacao)} className="flex items-center gap-2">
-              <span className="text-xs text-slate-500">
-                Novos cadastros: {turma.exige_aprovacao ? "precisam da sua aprovação" : "entram direto"}
-              </span>
-              <Botao variante="fantasma" className="px-2 py-1 text-xs">
-                {turma.exige_aprovacao ? "Liberar entrada direta" : "Exigir aprovação"}
-              </Botao>
-            </form>
-          </div>
-          {!alunos.length && <Vazio>Nenhum aluno entrou ainda.</Vazio>}
-          <ul className="divide-y divide-slate-100">
-            {alunos.map((a) => (
-              <li key={a.id} className="flex flex-wrap items-end gap-2 py-3">
-                <div className="flex w-full items-center gap-2 text-xs text-slate-500">
-                  <Avatar avatar={a.avatar} cor={a.cor} medalhas={medalhas.get(a.id) ?? 0} tamanho={28} />
-                  <span>
-                    {a.ultimo_acesso ? `Último acesso ${formatarDataHora(a.ultimo_acesso)}` : "Sem acesso registrado"} ·{" "}
-                    {a.total_acessos} {a.total_acessos === 1 ? "acesso" : "acessos"}
-                  </span>
-                  <Link href={`/professor/alunos/${a.id}`} className="ml-auto font-medium text-marca-700">
-                    Ver perfil →
-                  </Link>
-                </div>
-                <form action={atualizarAluno} className="flex flex-1 flex-wrap items-end gap-2">
-                  <input type="hidden" name="id" value={a.id} />
-                  <Campo rotulo="Apelido">
-                    <Entrada name="apelido" defaultValue={a.apelido} className="w-36" maxLength={20} />
-                  </Campo>
-                  <Campo rotulo="Nome real (só você vê)">
-                    <Entrada name="nome_real" defaultValue={a.nome_real ?? ""} className="w-52" />
-                  </Campo>
-                  <Botao variante="secundario">Salvar</Botao>
-                </form>
-                <div className="flex items-center gap-2">
-                  {a.pin_hash === null && <Etiqueta cor="ambar">PIN redefinido</Etiqueta>}
-                  <form action={alternarTeclado.bind(null, a.id, !a.teclado_liberado)}>
-                    <Botao
-                      variante="fantasma"
-                      title="Acessibilidade: com o teclado liberado, apertar uma tecla não zera a questão nos desafios com pesquisa bloqueada"
-                    >
-                      {a.teclado_liberado ? "⌨️ Teclado liberado · bloquear" : "⌨️ Liberar teclado"}
-                    </Botao>
-                  </form>
-                  <BotaoConfirmar
-                    acao={redefinirPin.bind(null, a.id)}
-                    pergunta={`Redefinir o PIN de ${a.apelido}? No próximo acesso, o PIN digitado passa a valer.`}
-                    variante="fantasma"
-                  >
-                    Redefinir PIN
-                  </BotaoConfirmar>
-                  <BotaoConfirmar
-                    acao={removerAluno.bind(null, a.id)}
-                    pergunta={`Remover ${a.apelido} da turma? Pontos e respostas serão apagados.`}
-                  >
-                    Remover
-                  </BotaoConfirmar>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Cartao>
-
-        <div className="space-y-6">
           <Cartao>
-            <Subtitulo>Rankings</Subtitulo>
-            {!rankings.length && <Vazio>Crie uma temporada para ver o ranking.</Vazio>}
-            <div className="space-y-2">
-              {rankings.map(({ temporada, ranking, desafios }) => (
-                <details
-                  key={temporada.id}
-                  open={temporada.id === atual?.id}
-                  className="group rounded-xl border border-slate-200 p-3"
-                >
-                  <summary className="cursor-pointer font-semibold text-marca-800">
-                    🏆 {temporada.nome}{" "}
-                    {temporada.encerrada_em ? (
-                      <Etiqueta cor="cinza">encerrada</Etiqueta>
-                    ) : (
-                      temporada.id === atual?.id && <Etiqueta cor="verde">atual</Etiqueta>
-                    )}
-                  </summary>
-                  <div className="mt-2">
-                    <TabelaRanking ranking={ranking} nomes={nomes} medalhas={medalhas} />
-                  </div>
-                  {desafios.length > 0 && (
-                    <div className="mt-4 space-y-1.5">
-                      <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Por desafio</p>
-                      {desafios.map(({ desafio, ranking: rd, naoFizeram }) => (
-                        <details key={desafio.id} className="rounded-lg bg-slate-50 px-3 py-2">
-                          <summary className="cursor-pointer text-sm">
-                            <span className="font-medium">
-                              {desafio.tipo === "relampago" && "⚡ "}
-                              {desafio.titulo}
-                            </span>{" "}
-                            <span className="text-slate-500">
-                              · {rd.length} fizeram
-                              {situacaoDesafio(desafio) === "aberto" && " · aberto"}
-                            </span>
-                          </summary>
-                          <div className="mt-2">
-                            {rd.length ? (
-                              <TabelaRanking ranking={rd} nomes={nomes} medalhas={medalhas} />
-                            ) : (
-                              <p className="text-sm text-slate-500">Ninguém fez ainda.</p>
-                            )}
-                            {naoFizeram > 0 && rd.length > 0 && (
-                              <p className="mt-1 text-xs text-slate-500">{naoFizeram} aluno(s) não fizeram.</p>
-                            )}
-                            <Link
-                              href={`/professor/desafios/${desafio.id}`}
-                              className="mt-1 inline-block text-xs text-marca-700"
+            {!alunos.length && <Vazio>Nenhum aluno entrou ainda. Passe o código {turma.codigo} para a turma.</Vazio>}
+            <ul className="divide-y divide-slate-100">
+              {alunos.map((a) => (
+                <li key={a.id} className="relative py-2">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Avatar avatar={a.avatar} cor={a.cor} medalhas={medalhas.get(a.id) ?? 0} tamanho={32} />
+                    <Link href={`/professor/alunos/${a.id}`} className="min-w-0 flex-1 hover:text-marca-700">
+                      <span className="font-semibold">{a.apelido}</span>
+                      {a.nome_real && <span className="text-slate-500"> · {a.nome_real}</span>}
+                    </Link>
+                    {a.pin_hash === null && <Etiqueta cor="ambar">PIN redefinido</Etiqueta>}
+                    {a.teclado_liberado && <Etiqueta cor="azul">teclado liberado</Etiqueta>}
+                    <details className="group">
+                      <summary className="cursor-pointer list-none rounded-lg px-2 py-1 text-sm font-medium text-marca-700 hover:bg-marca-50">
+                        Gerenciar
+                      </summary>
+                      <div className="absolute right-4 left-4 z-10 mt-2 space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-lg sm:left-auto sm:w-[28rem]">
+                        <form action={atualizarAluno} className="flex flex-wrap items-end gap-2">
+                          <input type="hidden" name="id" value={a.id} />
+                          <Campo rotulo="Apelido">
+                            <Entrada name="apelido" defaultValue={a.apelido} className="w-36" maxLength={20} />
+                          </Campo>
+                          <Campo rotulo="Nome real (só você vê)">
+                            <Entrada name="nome_real" defaultValue={a.nome_real ?? ""} className="w-48" />
+                          </Campo>
+                          <Botao variante="secundario">Salvar</Botao>
+                        </form>
+                        <p className="text-xs text-slate-500">
+                          {a.ultimo_acesso
+                            ? `Último acesso ${formatarDataHora(a.ultimo_acesso)}`
+                            : "Sem acesso registrado"}{" "}
+                          · {a.total_acessos} {a.total_acessos === 1 ? "acesso" : "acessos"}
+                        </p>
+                        <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                          <form action={alternarTeclado.bind(null, a.id, !a.teclado_liberado)}>
+                            <Botao
+                              variante="fantasma"
+                              title="Acessibilidade: com o teclado liberado, apertar uma tecla não zera a questão nos desafios sem consulta"
                             >
-                              Ver desempenho por questão →
-                            </Link>
-                          </div>
-                        </details>
-                      ))}
-                    </div>
-                  )}
-                </details>
+                              {a.teclado_liberado ? "Bloquear teclado" : "Liberar teclado"}
+                            </Botao>
+                          </form>
+                          <BotaoConfirmar
+                            acao={redefinirPin.bind(null, a.id)}
+                            pergunta={`Redefinir o PIN de ${a.apelido}? No próximo acesso, o PIN digitado passa a valer.`}
+                            variante="fantasma"
+                          >
+                            Redefinir PIN
+                          </BotaoConfirmar>
+                          <BotaoConfirmar
+                            acao={removerAluno.bind(null, a.id)}
+                            pergunta={`Remover ${a.apelido} da turma? Pontos e respostas serão apagados.`}
+                          >
+                            Remover
+                          </BotaoConfirmar>
+                        </div>
+                      </div>
+                    </details>
+                  </div>
+                </li>
               ))}
-            </div>
+            </ul>
           </Cartao>
+        </div>
+      )}
+
+      {aba === "temporadas" && (
+        <div className="space-y-5">
+          {cartas.length > 0 && (
+            <Cartao className="border-amber-300 bg-amber-50">
+              <Subtitulo>Cartas coringa para a próxima prova</Subtitulo>
+              <p className="mb-3 text-sm text-slate-600">
+                Temas escolhidos pelos campeões da última temporada. Aprovado, o tema aparece para os alunos e vira uma
+                questão da próxima prova.
+              </p>
+              <ul className="space-y-3">
+                {cartas.map((c) => (
+                  <li key={c.id} className="space-y-2 rounded-xl bg-white p-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Avatar avatar={c.avatar} cor={c.cor} tamanho={36} />
+                      <p className="min-w-0 flex-1 text-xs text-slate-500">
+                        {c.apelido} · {c.turmaNome} · campeão de {c.temporadaNome}
+                      </p>
+                      {c.status === "aprovada" ? (
+                        <Etiqueta cor="verde">Aprovada · visível para os alunos</Etiqueta>
+                      ) : c.status === "recusada" ? (
+                        <Etiqueta cor="vermelho">Recusada</Etiqueta>
+                      ) : (
+                        <Etiqueta cor="ambar">Aguardando sua aprovação</Etiqueta>
+                      )}
+                    </div>
+                    <form action={aprovarCarta.bind(null, c.id, id)} className="flex flex-wrap gap-2">
+                      <Entrada name="tema" defaultValue={c.tema} maxLength={160} required className="min-w-0 flex-1" />
+                      <Botao variante={c.status === "aprovada" ? "secundario" : "sucesso"}>
+                        {c.status === "aprovada" ? "Salvar edição" : "Aprovar"}
+                      </Botao>
+                    </form>
+                    <div className="flex flex-wrap gap-2">
+                      {c.status !== "recusada" && (
+                        <BotaoConfirmar
+                          acao={recusarCarta.bind(null, c.id, id)}
+                          pergunta={`Recusar o tema de ${c.apelido}? Ele some da tela dos alunos e o campeão pode escrever outro enquanto o prazo estiver aberto.`}
+                        >
+                          Recusar
+                        </BotaoConfirmar>
+                      )}
+                      <BotaoConfirmar
+                        acao={apagarCarta.bind(null, c.id, id)}
+                        pergunta={`Apagar o tema escolhido por ${c.apelido}? O aluno poderá escolher outro enquanto o prazo estiver aberto.`}
+                        variante="fantasma"
+                      >
+                        Apagar
+                      </BotaoConfirmar>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </Cartao>
+          )}
 
           <Cartao>
             <Subtitulo>Temporadas</Subtitulo>
-            <ul className="mb-4 space-y-1">
+            {!temporadas.length && <Vazio>Nenhuma temporada ainda. Crie a primeira abaixo.</Vazio>}
+            <ul className="mb-4 divide-y divide-slate-100">
               {temporadas.map((t) => (
                 <li key={t.id}>
                   <Link
-                    href={`/professor/temporadas/${t.id}`}
-                    className="flex justify-between rounded-lg px-2 py-1.5 hover:bg-slate-50"
+                    href={url("temporada", `&temporada=${t.id}`)}
+                    className="flex flex-wrap items-center justify-between gap-2 py-2.5 hover:text-marca-700"
                   >
                     <span className="font-medium">{t.nome}</span>
-                    <span className="text-sm text-slate-500">
+                    <span className="flex items-center gap-2 text-sm text-slate-500">
                       {formatarData(t.inicio)} – {formatarData(t.data_prova)}
-                      {t.inicio <= hoje && hoje <= t.data_prova && " · em curso"}
+                      {t.encerrada_em ? (
+                        <Etiqueta>encerrada</Etiqueta>
+                      ) : (
+                        t.id === atual?.id && <Etiqueta cor="verde">atual</Etiqueta>
+                      )}
                     </span>
                   </Link>
                 </li>
@@ -359,14 +350,217 @@ export default async function PaginaTurma({ params }: PageProps<"/professor/turm
             </details>
           </Cartao>
         </div>
+      )}
+
+      {aba === "ajustes" && (
+        <div className="space-y-5">
+          <Cartao className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <Subtitulo>Código de acesso</Subtitulo>
+              <p className="font-mono text-3xl font-bold tracking-[0.3em] text-marca-700">{turma.codigo}</p>
+              <p className="text-xs text-slate-500">
+                Os alunos entram em /entrar com este código, um apelido, o nome completo (só você vê) e um PIN de 4
+                números.
+              </p>
+            </div>
+            <BotaoConfirmar
+              acao={novoCodigoTurma.bind(null, id)}
+              pergunta="Gerar um novo código? O antigo deixa de funcionar para novos acessos."
+              variante="secundario"
+            >
+              Gerar novo código
+            </BotaoConfirmar>
+          </Cartao>
+          <Cartao className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <Subtitulo>Novos cadastros</Subtitulo>
+              <p className="text-sm text-slate-600">
+                {turma.exige_aprovacao ? "Precisam da sua aprovação antes de jogar." : "Entram direto, sem aprovação."}
+              </p>
+            </div>
+            <form action={alternarAprovacao.bind(null, id, !turma.exige_aprovacao)}>
+              <Botao variante="secundario">
+                {turma.exige_aprovacao ? "Liberar entrada direta" : "Exigir aprovação"}
+              </Botao>
+            </form>
+          </Cartao>
+          <ExcluirComConfirmacao acao={excluirTurma.bind(null, id)} nome={turma.nome} rotulo="Excluir turma">
+            <p>
+              Apaga a turma {turma.nome}, {todos.length} aluno(s) e {temporadas.length} temporada(s), com desafios,
+              respostas, pontos e conquistas. As questões do banco continuam.
+            </p>
+          </ExcluirComConfirmacao>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Primeira aba: a temporada atual (ou a escolhida), com desafios, ranking e ajustes recolhidos. */
+async function AbaTemporada({
+  temporada,
+  ehAtual,
+  totalAlunos,
+  nomes,
+  medalhas,
+  linkNova,
+}: {
+  temporada: Temporada | null;
+  ehAtual: boolean;
+  totalAlunos: number;
+  nomes: Map<string, string | null>;
+  medalhas: Map<string, number>;
+  linkNova: string;
+}) {
+  if (!temporada) {
+    return (
+      <Vazio>
+        Nenhuma temporada ainda.{" "}
+        <Link href={linkNova} className="font-semibold text-marca-700">
+          Criar a primeira temporada
+        </Link>
+      </Vazio>
+    );
+  }
+  const { supabase } = await exigirProfessor();
+  const [{ data: desafiosBrutos }, ranking] = await Promise.all([
+    supabase
+      .from("desafios")
+      .select(
+        "id, temporada_id, tipo, titulo, abre_em, fecha_em, pontos_por_acerto, desafio_questoes(count), tentativas(concluida_em)",
+      )
+      .eq("temporada_id", temporada.id)
+      .order("abre_em", { ascending: false }),
+    rankingDaTemporada(supabase, temporada),
+  ]);
+  const desafios = (desafiosBrutos ?? []) as DesafioLista[];
+  const encerrada = !!temporada.encerrada_em;
+  const abertos = desafios.filter((d) => situacaoDesafio(d) === "aberto").length;
+  const agendados = desafios.filter((d) => situacaoDesafio(d) === "agendado").length;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-slate-600">
+          {formatarData(temporada.inicio)} a {formatarData(temporada.data_prova)} (prova)
+          {encerrada ? (
+            <Etiqueta cor="cinza">encerrada</Etiqueta>
+          ) : (
+            ehAtual && (
+              <>
+                {" "}
+                <Etiqueta cor="verde">atual</Etiqueta>
+              </>
+            )
+          )}
+        </p>
+        {!encerrada && (
+          <div className="flex flex-wrap gap-2">
+            <BotaoLink href={`/professor/desafios/novo?temporada=${temporada.id}&tipo=relampago`} variante="secundario">
+              ⚡ Novo CaduRush
+            </BotaoLink>
+            <BotaoLink href={`/professor/desafios/novo?temporada=${temporada.id}`}>+ Novo desafio</BotaoLink>
+          </div>
+        )}
       </div>
 
-      <ExcluirComConfirmacao acao={excluirTurma.bind(null, id)} nome={turma.nome} rotulo="Excluir turma">
-        <p>
-          Apaga a turma {turma.nome}, {todos.length} aluno(s) e {temporadas.length} temporada(s), com desafios,
-          respostas, pontos e conquistas. As questões do banco continuam.
-        </p>
-      </ExcluirComConfirmacao>
+      <div className="grid gap-5 lg:grid-cols-[3fr_2fr]">
+        <Cartao>
+          <Subtitulo>Desafios</Subtitulo>
+          {!desafios.length && <Vazio>Nenhum desafio ainda. Monte o primeiro com questões publicadas do banco.</Vazio>}
+          <ul className="divide-y divide-slate-100">
+            {desafios.map((d) => {
+              const situacao = situacaoDesafio(d);
+              const feitos = d.tentativas.filter((t) => t.concluida_em).length;
+              return (
+                <li key={d.id}>
+                  <Link
+                    href={`/professor/desafios/${d.id}`}
+                    className="flex flex-wrap items-center justify-between gap-2 py-3 hover:text-marca-700"
+                  >
+                    <span>
+                      <span className="font-medium">
+                        {d.tipo === "relampago" && "⚡ "}
+                        {d.titulo}
+                      </span>
+                      <span className="block text-sm text-slate-500">
+                        {d.desafio_questoes[0]?.count ?? 0} questões · {formatarDataHora(d.abre_em)} →{" "}
+                        {formatarDataHora(d.fecha_em)}
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-2 text-sm">
+                      <span className="text-slate-500">
+                        {feitos}/{totalAlunos} concluíram
+                      </span>
+                      <Etiqueta cor={COR_SITUACAO[situacao]}>{situacao}</Etiqueta>
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </Cartao>
+
+        <Cartao>
+          <Subtitulo>Ranking</Subtitulo>
+          <TabelaRanking ranking={ranking} nomes={nomes} medalhas={medalhas} />
+        </Cartao>
+      </div>
+
+      <details className="rounded-2xl border border-slate-200 bg-white p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-marca-700">
+          Dados da temporada, relatório e encerramento
+        </summary>
+        <div className="mt-4 space-y-5">
+          <BotaoLink href={`/professor/temporadas/${temporada.id}/csv`} variante="secundario" prefetch={false}>
+            Relatório de desempenho (CSV)
+          </BotaoLink>
+          <FormAcao acao={atualizarTemporada}>
+            <input type="hidden" name="id" value={temporada.id} />
+            <Campo rotulo="Nome">
+              <Entrada name="nome" defaultValue={temporada.nome} required />
+            </Campo>
+            <Campo rotulo="Narrativa">
+              <AreaTexto name="narrativa" rows={2} defaultValue={temporada.narrativa ?? ""} />
+            </Campo>
+            <div className="grid grid-cols-2 gap-3">
+              <Campo rotulo="Início">
+                <Entrada type="date" name="inicio" defaultValue={temporada.inicio} required />
+              </Campo>
+              <Campo rotulo="Data da prova">
+                <Entrada type="date" name="data_prova" defaultValue={temporada.data_prova} required />
+              </Campo>
+            </div>
+            <Campo rotulo="Capítulos cobertos" dica="Um por linha. Aparecem como a trilha do mapa do aluno.">
+              <AreaTexto name="capitulos" rows={4} defaultValue={temporada.capitulos.join("\n")} />
+            </Campo>
+            <BotaoEnviar>Salvar</BotaoEnviar>
+          </FormAcao>
+          <div className="border-t border-slate-100 pt-4">
+            {encerrada ? (
+              <BotaoConfirmar
+                acao={reabrirTemporada.bind(null, temporada.id)}
+                pergunta="Reabrir a temporada? Os desafios encerrados continuam fechados; mude as datas dos que quiser reabrir."
+                variante="secundario"
+              >
+                Reabrir temporada
+              </BotaoConfirmar>
+            ) : (
+              <>
+                <BotaoConfirmar
+                  acao={encerrarTemporada.bind(null, temporada.id)}
+                  pergunta={`Encerrar a temporada agora, antes da prova?${abertos ? ` ${abertos} desafio(s) aberto(s) fecham agora (quem estiver numa questão termina só ela).` : ""}${agendados ? ` ${agendados} desafio(s) que ainda não abriram serão apagados; as questões continuam no banco.` : ""} O ranking fica congelado.`}
+                >
+                  Encerrar temporada
+                </BotaoConfirmar>
+                <p className="mt-2 text-xs text-slate-500">
+                  Fecha os desafios abertos agora e congela o ranking, sem esperar a data da prova.
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      </details>
     </div>
   );
 }
