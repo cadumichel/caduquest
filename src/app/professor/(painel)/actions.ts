@@ -5,6 +5,8 @@ import { z } from "zod";
 import { gerarCodigoDia, janelaLiberadaAgora } from "@/lib/cadurush";
 import { gerarCodigoTurma } from "@/lib/codigo";
 import { dataHoraLocalParaIso } from "@/lib/datas";
+import { ehMultiplicador, ehPercentual, pontosBase, pontosDoEspecial } from "@/lib/especial";
+import { conferirPadroes } from "@/lib/padroes";
 import { exigirProfessor } from "@/lib/professor";
 import { ehEra } from "@/lib/publico/regras";
 import { problemasRelampago } from "@/lib/questoes/relampago";
@@ -427,6 +429,10 @@ const schemaDesafio = z.object({
   gabarito_nunca: z.boolean().default(false),
   treino_liberado: z.boolean().default(true),
   bonus_rapidez: z.boolean().default(false),
+  // Desafio especial: pontos de base × multiplicador; tempo_percentual 100 = normal.
+  especial: z.boolean().default(false),
+  multiplicador: z.number().nullable().default(null),
+  tempo_percentual: z.number().nullable().default(null),
   questoes: z.array(z.uuid()).min(5, "Escolha de 5 a 15 questões.").max(15, "Escolha de 5 a 15 questões."),
 });
 
@@ -440,6 +446,9 @@ export async function criarDesafio(dados: z.input<typeof schemaDesafio>): Promis
   const conferidas = conferirRegras(r.data);
   if ("erro" in conferidas) return { erro: conferidas.erro };
   const { regras } = conferidas;
+  const { especial, multiplicador, tempo_percentual } = r.data;
+  if (especial && (!ehMultiplicador(multiplicador) || !ehPercentual(tempo_percentual)))
+    return { erro: "Escolha o multiplicador e o tempo do desafio especial." };
   const { data: temporada } = await supabase.from("temporadas").select("*").eq("id", r.data.temporada_id).maybeSingle();
   if ((temporada as { encerrada_em?: string | null } | null)?.encerrada_em) {
     return { erro: "Esta temporada foi encerrada. Reabra a temporada para criar desafios nela." };
@@ -461,18 +470,26 @@ export async function criarDesafio(dados: z.input<typeof schemaDesafio>): Promis
       titulo: r.data.titulo,
       abre_em: abre,
       fecha_em: fecha,
-      pontos_por_acerto: r.data.pontos_por_acerto,
+      pontos_por_acerto: especial
+        ? pontosDoEspecial(r.data.pontos_por_acerto, multiplicador!)
+        : r.data.pontos_por_acerto,
       tempo_por_questao_s: r.data.tempo_por_questao_s,
       // Só envia se escrito: sem o SQL dos tempos a coluna não existe.
       ...(r.data.tempo_verificacao_s !== null && { tempo_verificacao_s: r.data.tempo_verificacao_s }),
       saida_zera_questao: r.data.saida_zera_questao,
       ...regrasParaGravar(regras),
+      // Só envia no especial: sem o SQL do especial as colunas não existem.
+      ...(especial && { especial: true, multiplicador, tempo_percentual }),
     })
     .select("id")
     .single();
   if (error || !desafio)
     return {
-      erro: Object.keys(regrasParaGravar(regras)).length ? ERRO_SQL_REGRAS : "Não foi possível criar o desafio.",
+      erro: especial
+        ? ERRO_SQL_ESPECIAL
+        : Object.keys(regrasParaGravar(regras)).length
+          ? ERRO_SQL_REGRAS
+          : "Não foi possível criar o desafio.",
     };
   const { error: erroQuestoes } = await supabase
     .from("desafio_questoes")
@@ -581,6 +598,57 @@ export async function salvarRegrasDesafio(id: string, dados: Record<string, unkn
   if (error) return { erro: ERRO_SQL_REGRAS };
   revalidatePath(`/professor/desafios/${id}`);
   return { ok: "Regras salvas." };
+}
+
+const ERRO_SQL_ESPECIAL = "Rode antes no Supabase o SQL 20261111120000_especial_configuracoes.sql.";
+
+/**
+ * Liga ou desliga o desafio especial. Os pontos já ganhos ficam como estão,
+ * por isso só vale enquanto ninguém começou.
+ */
+export async function salvarEspecial(
+  id: string,
+  dados: { especial: boolean; multiplicador: number; tempo_percentual: number },
+): Promise<EstadoForm> {
+  const { supabase } = await exigirProfessor();
+  if (dados.especial && (!ehMultiplicador(dados.multiplicador) || !ehPercentual(dados.tempo_percentual)))
+    return { erro: "Escolha o multiplicador e o tempo." };
+  const [{ data: d }, { count: comecaram }] = await Promise.all([
+    supabase.from("desafios").select("*").eq("id", id).maybeSingle(),
+    supabase.from("tentativas").select("*", { count: "exact", head: true }).eq("desafio_id", id),
+  ]);
+  if (!d) return { erro: "Desafio não encontrado." };
+  if (comecaram) return { erro: "Alguém já começou este desafio: os pontos não podem mais mudar." };
+  const base = pontosBase(d);
+  const { error } = await supabase
+    .from("desafios")
+    .update(
+      dados.especial
+        ? {
+            especial: true,
+            multiplicador: dados.multiplicador,
+            tempo_percentual: dados.tempo_percentual,
+            pontos_por_acerto: pontosDoEspecial(base, dados.multiplicador),
+          }
+        : { especial: false, multiplicador: null, tempo_percentual: null, pontos_por_acerto: base },
+    )
+    .eq("id", id);
+  if (error) return { erro: ERRO_SQL_ESPECIAL };
+  revalidatePath(`/professor/desafios/${id}`);
+  return { ok: dados.especial ? "Desafio especial salvo." : "Agora é um desafio comum." };
+}
+
+/** Padrões de todo desafio novo (tela Configurações). */
+export async function salvarConfiguracoes(dados: Record<string, unknown>): Promise<EstadoForm> {
+  const { supabase, professorId } = await exigirProfessor();
+  const r = conferirPadroes(dados);
+  if ("erro" in r) return { erro: r.erro };
+  const { error } = await supabase
+    .from("configuracoes_professor")
+    .upsert({ professor_id: professorId, padroes: r.padroes, atualizado_em: new Date().toISOString() });
+  if (error) return { erro: ERRO_SQL_ESPECIAL };
+  revalidatePath("/professor/configuracoes");
+  return { ok: "Padrões salvos. Valem para os próximos desafios." };
 }
 
 /** Fecha o desafio agora (quem está respondendo termina a questão atual). */

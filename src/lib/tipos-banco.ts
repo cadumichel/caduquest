@@ -94,6 +94,10 @@ export type Desafio = {
   /** Acerto rápido ganha até 50% a mais (padrão false). */
   bonus_rapidez?: boolean;
   saida_zera_questao: boolean;
+  /** Desafio especial: visual dourado, pontos multiplicados, tempo reduzido (ausentes sem o SQL). */
+  especial?: boolean;
+  multiplicador?: number | null;
+  tempo_percentual?: number | null;
   /** O gabarito só aparece quando o professor liberar (ausente sem o SQL dos controles). */
   gabarito_manual?: boolean;
   gabarito_liberado_em?: string | null;

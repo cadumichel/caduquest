@@ -144,7 +144,7 @@ export function calcularConquistas(
   add({ id: "cinco", nome: "5 desafios", descricao: "Conclua 5 desafios.", icone: "📜" }, p.desafiosConcluidos >= 5);
   add({ id: "dez", nome: "10 desafios", descricao: "Conclua 10 desafios.", icone: "🏛️" }, p.desafiosConcluidos >= 10);
   add(
-    { id: "rush", nome: "Relâmpago", descricao: "Participe de um CaduRush em sala.", icone: "⚡" },
+    { id: "rush", nome: "Relâmpago", descricao: "Participe de um desafio especial em sala.", icone: "⚡" },
     p.caduRushConcluidos >= 1,
   );
   add(

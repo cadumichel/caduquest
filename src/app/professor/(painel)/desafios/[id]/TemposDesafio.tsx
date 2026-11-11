@@ -27,11 +27,14 @@ export function TemposDesafio({
   todas: todasInicial,
   verificacao: verificacaoInicial,
   questoes,
+  percentual = null,
 }: {
   id: string;
   todas: number | null;
   verificacao: number | null;
   questoes: QuestaoComTempo[];
+  /** Desafio especial com tempo reduzido: os tempos automáticos já aparecem reduzidos. */
+  percentual?: number | null;
 }) {
   const router = useRouter();
   const [pendente, iniciar] = useTransition();
@@ -95,7 +98,12 @@ export function TemposDesafio({
 
       <ol className="divide-y divide-slate-100 text-sm">
         {questoes.map((q, i) => {
-          const automatico = tempoEfetivo({ daQuestao: q.tempoQuestao, relampago: q.relampago, fixoDoDesafio: fixo });
+          const automatico = tempoEfetivo({
+            daQuestao: q.tempoQuestao,
+            relampago: q.relampago,
+            fixoDoDesafio: fixo,
+            percentual,
+          });
           return (
             <li key={q.id} className="flex items-center gap-3 py-2">
               <span className="min-w-0 flex-1 truncate" title={q.enunciado}>

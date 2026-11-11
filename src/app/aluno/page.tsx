@@ -6,6 +6,7 @@ import { BotaoLink, Cartao, Etiqueta, Vazio } from "@/components/ui";
 import { curiosidadeDoDia, medalhasDaTurmaDoAluno, temporadaAtualDoAluno } from "@/lib/aluno-dados";
 import { exigirAluno } from "@/lib/aluno-sessao";
 import { diasAte, formatarData, formatarDataHora } from "@/lib/datas";
+import { formatarMultiplicador, percentualEmVigor } from "@/lib/especial";
 import { calcularMissao, proximoCaduRush, type Missao } from "@/lib/missao";
 import { cartaDoAluno, cartasParaAProxima, type CartaCoringa } from "@/lib/carta-coringa";
 import { passosDaOfensiva, type PassoOfensiva } from "@/lib/constancia";
@@ -42,7 +43,8 @@ export default async function Inicio() {
     await Promise.all([
       db
         .from("desafios")
-        .select("id, temporada_id, tipo, titulo, abre_em, fecha_em, pontos_por_acerto, desafio_questoes(count)")
+        // "*" traz também as colunas do especial, quando o SQL dele já rodou.
+        .select("*, desafio_questoes(count)")
         .eq("temporada_id", temporada.id)
         .order("abre_em"),
       db
@@ -86,10 +88,9 @@ export default async function Inicio() {
     concluidos,
   );
 
-  // CaduRush aberto vem primeiro: é feito na hora, em sala.
-  const abertos = desafios
-    .filter((d) => situacaoDesafio(d) === "aberto")
-    .sort((a, b) => Number(b.tipo === "relampago") - Number(a.tipo === "relampago"));
+  // Em sala vem primeiro (é feito na hora); depois os especiais.
+  const peso = (d: Desafio) => (d.tipo === "relampago" ? 2 : d.especial ? 1 : 0);
+  const abertos = desafios.filter((d) => situacaoDesafio(d) === "aberto").sort((a, b) => peso(b) - peso(a));
   const outros = desafios.filter((d) => situacaoDesafio(d) !== "aberto").reverse();
 
   return (
@@ -136,17 +137,22 @@ export default async function Inicio() {
           {abertos.map((d) => {
             const t = tentativas.get(d.id);
             const concluido = Boolean(t && (t.concluida_em || t.indice_atual >= t.ordem.length));
-            if (d.tipo === "relampago") {
+            if (d.especial || d.tipo === "relampago") {
+              const emSala = d.tipo === "relampago";
               return (
                 <div
                   key={d.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-3xl bg-gradient-to-br from-amber-400 via-orange-500 to-rose-600 p-5 text-white shadow-lg"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-3xl bg-gradient-to-br from-ouro-claro via-ouro to-ouro-escuro p-5 text-marca-950 shadow-lg ring-2 ring-ouro-claro/60"
                 >
                   <div>
-                    <p className="text-xs font-bold tracking-widest uppercase">⚡ CaduRush · em sala</p>
+                    <p className="text-xs font-bold tracking-widest uppercase">
+                      ★ Desafio especial{emSala && " · em sala"}
+                    </p>
                     <p className="text-lg font-extrabold">{d.titulo}</p>
-                    <p className="text-sm text-white/90">
-                      Peso 3 · {d.pontos_por_acerto} pts por acerto · fecha {formatarDataHora(d.fecha_em)}
+                    <p className="text-sm text-marca-900/90">
+                      {d.especial && d.multiplicador ? `Pontos ${formatarMultiplicador(d.multiplicador)} · ` : ""}
+                      {d.pontos_por_acerto} pts por acerto
+                      {percentualEmVigor(d) ? " · tempo reduzido" : ""} · fecha {formatarDataHora(d.fecha_em)}
                     </p>
                   </div>
                   {concluido ? (
@@ -156,9 +162,9 @@ export default async function Inicio() {
                   ) : (
                     <Link
                       href={`/aluno/desafio/${d.id}`}
-                      className="rounded-xl bg-white px-5 py-2.5 font-bold text-orange-700 shadow hover:bg-orange-50"
+                      className="rounded-xl bg-marca-900 px-5 py-2.5 font-bold text-ouro-claro shadow hover:bg-marca-800"
                     >
-                      {t ? "Continuar" : "Entrar com o código"}
+                      {t ? "Continuar" : emSala ? "Entrar com o código" : "Começar"}
                     </Link>
                   )}
                 </div>
@@ -192,7 +198,8 @@ export default async function Inicio() {
 
       {rush && (
         <p className="rounded-2xl bg-gradient-to-r from-amber-100 to-orange-100 px-4 py-3 text-sm font-semibold text-orange-900">
-          ⚡ Próximo CaduRush: {rush.titulo}, {formatarDataHora(rush.abre_em)}. Fique atento ao código no quadro!
+          ★ Próximo desafio especial em sala: {rush.titulo}, {formatarDataHora(rush.abre_em)}. Fique atento ao código no
+          quadro!
         </p>
       )}
 
@@ -341,7 +348,7 @@ export default async function Inicio() {
               <Cartao key={d.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
                 <div>
                   <p className="font-medium">
-                    {d.tipo === "relampago" && "⚡ "}
+                    {(d.especial || d.tipo === "relampago") && "★ "}
                     {d.titulo}
                   </p>
                   <p className="text-sm text-slate-500">
@@ -392,7 +399,7 @@ const DOMINIO = {
 } as const;
 
 const ESTILO_MISSAO: Record<Missao["tipo"], { fundo: string; icone: string }> = {
-  cadurush: { fundo: "from-amber-400 via-orange-500 to-rose-600", icone: "⚡" },
+  cadurush: { fundo: "from-ouro-claro via-ouro to-ouro-escuro", icone: "★" },
   desafio: { fundo: "from-emerald-500 to-emerald-700", icone: "🎯" },
   revisao: { fundo: "from-marca-500 to-marca-700", icone: "📚" },
   aguardar: { fundo: "from-sky-500 to-marca-700", icone: "✅" },

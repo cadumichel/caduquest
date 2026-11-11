@@ -10,6 +10,7 @@ const LINKS = [
     ativo: (p: string) => /^\/professor\/(turmas|temporadas|desafios|alunos)/.test(p),
   },
   { href: "/professor/questoes", rotulo: "Questões", ativo: (p: string) => /^\/professor\/(questoes|gerar)/.test(p) },
+  { href: "/professor/configuracoes", rotulo: "Configurações", ativo: (p: string) => p === "/professor/configuracoes" },
 ];
 
 export function MenuPainel() {

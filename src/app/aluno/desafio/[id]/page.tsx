@@ -1,3 +1,4 @@
+import { percentualEmVigor, reduzirTempo } from "@/lib/especial";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { exigirAluno } from "@/lib/aluno-sessao";
@@ -36,7 +37,12 @@ export default async function PaginaDesafio({ params }: PageProps<"/aluno/desafi
       titulo={desafio.titulo}
       totalQuestoes={count ?? 0}
       jaComecou={Boolean(tentativa)}
-      tempoFixo={desafio.tempo_por_questao_s}
+      tempoFixo={
+        desafio.tempo_por_questao_s ? reduzirTempo(desafio.tempo_por_questao_s, percentualEmVigor(desafio)) : null
+      }
+      especial={Boolean(desafio.especial)}
+      multiplicador={desafio.multiplicador ?? null}
+      tempoReduzido={percentualEmVigor(desafio) !== null}
       saidaZera={desafio.saida_zera_questao}
       tecladoLiberado={Boolean(perfil?.teclado_liberado) || desafio.teclado_bloqueado === false}
       identificacao={`${aluno.apelido} · ${aluno.turmaNome}`}
