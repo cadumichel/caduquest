@@ -3,7 +3,11 @@ import { useMemo, useState, useTransition } from "react";
 import { EscolhaPesquisa } from "@/components/EscolhaPesquisa";
 import { CamposRegras, regrasParaEnvio, regrasParaForm, type Regras } from "@/components/CamposRegras";
 import { Aviso, Botao, Campo, Cartao, Entrada, Etiqueta, Selecao } from "@/components/ui";
-import { PONTOS_RELAMPAGO } from "@/lib/cadurush";
+import { CamposEspecial } from "@/components/CamposEspecial";
+import { DURACAO_PADRAO_MIN } from "@/lib/cadurush";
+import { isoParaDataHoraLocal } from "@/lib/datas";
+import { formatarMultiplicador, pontosDoEspecial } from "@/lib/especial";
+import type { Padroes } from "@/lib/padroes";
 import { NOME_DIFICULDADE, NOME_TIPO, TEMPO_MAX_S, TEMPO_MIN_S, type TipoQuestao } from "@/lib/questoes/tipos";
 import { VERIFICACAO_MAX_S, VERIFICACAO_MIN_S } from "@/lib/questoes/tempos";
 import { VERIFICACAO_TEMPO_S } from "@/lib/questoes/verificacao";
@@ -21,30 +25,46 @@ type Opcao = {
   usos: number;
 };
 
+/** Fechamento padrão: dias do padrão às 23h59, ou o fim da aula no "só em sala". */
+function fechaPara(abre: string, emSala: boolean, dias: number) {
+  const inicio = new Date(abre);
+  if (Number.isNaN(inicio.getTime())) return abre;
+  if (emSala) return isoParaDataHoraLocal(new Date(inicio.getTime() + DURACAO_PADRAO_MIN * 60_000));
+  // abre está no horário de Brasília (datetime-local): somar dias na data basta.
+  const [ano, mes, dia] = abre.slice(0, 10).split("-").map(Number);
+  const d = new Date(Date.UTC(ano, mes - 1, dia + dias));
+  return `${d.toISOString().slice(0, 10)}T23:59`;
+}
+
 export function MontarDesafio({
   temporadaId,
-  tipo,
+  emSalaInicial,
+  padroes,
   questoes,
   capitulosTemporada,
   abrePadrao,
-  fechaPadrao,
 }: {
   temporadaId: string;
-  tipo: "semanal" | "relampago";
+  emSalaInicial: boolean;
+  padroes: Padroes;
   questoes: Opcao[];
   capitulosTemporada: string[];
   abrePadrao: string;
-  fechaPadrao: string;
 }) {
   const [titulo, setTitulo] = useState("");
   const [abre, setAbre] = useState(abrePadrao);
-  const [fecha, setFecha] = useState(fechaPadrao);
-  const relampago = tipo === "relampago";
-  const [pontos, setPontos] = useState(relampago ? PONTOS_RELAMPAGO : 10);
+  const [emSala, setEmSala] = useState(emSalaInicial);
+  const [especial, setEspecial] = useState(emSalaInicial);
+  const [multiplicador, setMultiplicador] = useState(padroes.especial_multiplicador);
+  const [percentual, setPercentual] = useState(padroes.especial_tempo_percentual);
+  const [fecha, setFecha] = useState(() => fechaPara(abrePadrao, emSalaInicial, padroes.dias_aberto));
+  const [pontos, setPontos] = useState(padroes.pontos_por_acerto);
   const [tempoFixo, setTempoFixo] = useState("");
-  const [tempoVerificacao, setTempoVerificacao] = useState("");
-  const [saidaZera, setSaidaZera] = useState(false);
-  const [regras, setRegras] = useState<Regras>(() => regrasParaForm());
+  const [tempoVerificacao, setTempoVerificacao] = useState(
+    padroes.tempo_verificacao_s === null ? "" : String(padroes.tempo_verificacao_s),
+  );
+  const [saidaZera, setSaidaZera] = useState(padroes.pesquisa_bloqueada || emSalaInicial);
+  const [regras, setRegras] = useState<Regras>(() => regrasParaForm(padroes.regras));
   const [escolhidas, setEscolhidas] = useState<string[]>([]);
   const [filtroCapitulo, setFiltroCapitulo] = useState("");
   const [busca, setBusca] = useState("");
@@ -75,7 +95,10 @@ export function MontarDesafio({
     iniciar(async () => {
       const r = await criarDesafio({
         temporada_id: temporadaId,
-        tipo,
+        tipo: emSala ? "relampago" : "semanal",
+        especial,
+        multiplicador: especial ? multiplicador : null,
+        tempo_percentual: especial ? percentual : null,
         titulo,
         abre_em: abre,
         fecha_em: fecha,
@@ -147,66 +170,123 @@ export function MontarDesafio({
             <Entrada
               value={titulo}
               onChange={(e) => setTitulo(e.target.value)}
-              placeholder={relampago ? "CaduRush – Antigo Regime" : "Semana 1 – Antigo Regime"}
+              placeholder="Semana 1 – Antigo Regime"
             />
           </Campo>
-          {relampago && (
-            <Aviso tipo="info">
-              ⚡ Feito em sala: o app gera um código do dia, que você mostra à turma. Marque o horário da aula; ele
-              fecha sozinho no fim. Também dá para liberar na hora com o botão &quot;Liberar agora&quot;.
-            </Aviso>
-          )}
-          <Campo rotulo={relampago ? "Início da aula (horário de Brasília)" : "Abre em (horário de Brasília)"}>
-            <Entrada type="datetime-local" value={abre} onChange={(e) => setAbre(e.target.value)} />
+          <Campo rotulo={emSala ? "Início da aula (horário de Brasília)" : "Abre em (horário de Brasília)"}>
+            <Entrada
+              type="datetime-local"
+              value={abre}
+              onChange={(e) => {
+                setAbre(e.target.value);
+                setFecha(fechaPara(e.target.value, emSala, padroes.dias_aberto));
+              }}
+            />
           </Campo>
-          <Campo
-            rotulo={relampago ? "Fim da aula" : "Fecha em"}
-            dica={relampago ? "O CaduRush fecha sozinho neste horário." : "Desafio semanal: de 5 a 7 dias."}
-          >
+          <Campo rotulo={emSala ? "Fim da aula" : "Fecha em"}>
             <Entrada type="datetime-local" value={fecha} onChange={(e) => setFecha(e.target.value)} />
           </Campo>
-          <Campo rotulo="Pontos por acerto" dica={relampago ? "Peso 3: o padrão do CaduRush é 30." : undefined}>
-            <Entrada
-              type="number"
-              min={1}
-              max={100}
-              value={pontos}
-              onChange={(e) => setPontos(Number(e.target.value))}
-            />
-          </Campo>
-          <Campo
-            rotulo="Tempo por questão (segundos)"
-            dica={`Deixe em branco para usar o tempo de cada questão. De ${TEMPO_MIN_S} a ${TEMPO_MAX_S} s. As relâmpago nunca passam do tempo delas.`}
+
+          <div
+            className={`space-y-3 rounded-xl border-2 p-3 ${especial ? "border-ouro bg-amber-50/60" : "border-slate-200"}`}
           >
-            <Entrada
-              type="number"
-              min={TEMPO_MIN_S}
-              max={TEMPO_MAX_S}
-              placeholder="Tempo de cada questão"
-              value={tempoFixo}
-              onChange={(e) => setTempoFixo(e.target.value)}
-            />
-          </Campo>
-          <Campo
-            rotulo="📖 Tempo da verificação de leitura (segundos)"
-            dica={`Em branco: ${VERIFICACAO_TEMPO_S} s. De ${VERIFICACAO_MIN_S} a ${VERIFICACAO_MAX_S} s. O tempo de cada questão se ajusta depois, na página do desafio.`}
-          >
-            <Entrada
-              type="number"
-              min={VERIFICACAO_MIN_S}
-              max={VERIFICACAO_MAX_S}
-              placeholder={`${VERIFICACAO_TEMPO_S} (automático)`}
-              value={tempoVerificacao}
-              onChange={(e) => setTempoVerificacao(e.target.value)}
-            />
-          </Campo>
-          <EscolhaPesquisa bloqueada={saidaZera} onChange={setSaidaZera} />
-          <CamposRegras
-            valor={regras}
-            onChange={setRegras}
-            pesquisaBloqueada={saidaZera}
-            totalQuestoes={escolhidas.length}
-          />
+            <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
+              <input type="checkbox" checked={especial} onChange={(e) => setEspecial(e.target.checked)} />★ Desafio
+              especial
+            </label>
+            {especial && (
+              <>
+                <CamposEspecial
+                  multiplicador={multiplicador}
+                  percentual={percentual}
+                  onMultiplicador={setMultiplicador}
+                  onPercentual={setPercentual}
+                />
+                <p className="text-xs text-slate-600">
+                  Cada acerto vale {pontosDoEspecial(pontos, multiplicador)} pontos ({pontos} ×{" "}
+                  {formatarMultiplicador(multiplicador)}).
+                </p>
+              </>
+            )}
+            <label className="flex cursor-pointer items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={emSala}
+                onChange={(e) => {
+                  setEmSala(e.target.checked);
+                  setFecha(fechaPara(abre, e.target.checked, padroes.dias_aberto));
+                  if (e.target.checked) setSaidaZera(true);
+                }}
+              />
+              <span>
+                Só em sala, com código do dia
+                <span className="block text-xs text-slate-500">
+                  Você mostra o código no quadro; sem ele, ninguém começa. Fecha sozinho no fim da aula.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <details className="rounded-xl border border-slate-200 p-3">
+            <summary className="cursor-pointer text-sm">
+              <span className="font-semibold">Regras:</span>{" "}
+              <span className="text-slate-600">
+                {saidaZera ? "sem consulta" : "com consulta"} · {pontos} pts por acerto
+                {tempoFixo ? ` · ${tempoFixo} s por questão` : ""}
+                {regras.verificacoes === "0"
+                  ? " · sem questões teste"
+                  : regras.verificacoes
+                    ? ` · ${regras.verificacoes} questões teste`
+                    : ""}
+              </span>{" "}
+              <span className="text-marca-700">Alterar só neste desafio</span>
+            </summary>
+            <div className="mt-3 space-y-3">
+              <Campo rotulo="Pontos por acerto" dica={especial ? "Antes do multiplicador do especial." : undefined}>
+                <Entrada
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={pontos}
+                  onChange={(e) => setPontos(Number(e.target.value))}
+                />
+              </Campo>
+              <Campo
+                rotulo="Tempo por questão (segundos)"
+                dica={`Em branco: o tempo de cada questão. De ${TEMPO_MIN_S} a ${TEMPO_MAX_S} s. As relâmpago nunca passam do tempo delas.`}
+              >
+                <Entrada
+                  type="number"
+                  min={TEMPO_MIN_S}
+                  max={TEMPO_MAX_S}
+                  placeholder="Tempo de cada questão"
+                  value={tempoFixo}
+                  onChange={(e) => setTempoFixo(e.target.value)}
+                />
+              </Campo>
+              <Campo
+                rotulo="Tempo da questão teste (segundos)"
+                dica={`Em branco: ${VERIFICACAO_TEMPO_S} s. De ${VERIFICACAO_MIN_S} a ${VERIFICACAO_MAX_S} s.`}
+              >
+                <Entrada
+                  type="number"
+                  min={VERIFICACAO_MIN_S}
+                  max={VERIFICACAO_MAX_S}
+                  placeholder={`${VERIFICACAO_TEMPO_S} (automático)`}
+                  value={tempoVerificacao}
+                  onChange={(e) => setTempoVerificacao(e.target.value)}
+                />
+              </Campo>
+              <EscolhaPesquisa bloqueada={saidaZera} onChange={setSaidaZera} />
+              <CamposRegras
+                valor={regras}
+                onChange={setRegras}
+                pesquisaBloqueada={saidaZera}
+                totalQuestoes={escolhidas.length}
+              />
+            </div>
+          </details>
           <div className="rounded-lg bg-slate-50 p-3 text-sm">
             <p>
               <strong>{escolhidas.length}</strong> de 5 a 15 questões
@@ -217,11 +297,8 @@ export function MontarDesafio({
           </div>
           {erro && <Aviso>{erro}</Aviso>}
           <Botao className="w-full" disabled={pendente || escolhidas.length < 5 || !titulo.trim()} onClick={salvar}>
-            {pendente ? "Criando…" : relampago ? "Criar CaduRush" : "Criar desafio"}
+            {pendente ? "Criando…" : especial ? "Criar desafio especial" : "Criar desafio"}
           </Botao>
-          <p className="text-xs text-slate-500">
-            A ordem das questões e das alternativas é embaralhada para cada aluno.
-          </p>
         </Cartao>
       </div>
     </div>

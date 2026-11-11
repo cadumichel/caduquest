@@ -13,6 +13,7 @@ type DesafioHoje = {
   id: string;
   titulo: string;
   tipo?: string;
+  especial?: boolean;
   abre_em: string;
   fecha_em: string;
   temporadas: { turma_id: string; turmas: { nome: string; alunos: { count: number }[] } };
@@ -55,9 +56,7 @@ export default async function Hoje() {
     supabase.from("alunos").select("id, turma_id, turmas(nome)").eq("aprovado", false),
     supabase
       .from("desafios")
-      .select(
-        "id, titulo, tipo, abre_em, fecha_em, temporadas(turma_id, turmas(nome, alunos(count))), tentativas(concluida_em)",
-      )
+      .select("*, temporadas(turma_id, turmas(nome, alunos(count))), tentativas(concluida_em)")
       .gte("fecha_em", agora)
       .order("fecha_em"),
     supabase
@@ -213,7 +212,7 @@ export default async function Hoje() {
               >
                 <p className="text-xs font-semibold text-slate-500">Turma {d.temporadas.turmas.nome}</p>
                 <p className="font-bold text-marca-900">
-                  {d.tipo === "relampago" && "⚡ "}
+                  {d.especial && "★ "}
                   {d.titulo}
                 </p>
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
@@ -238,7 +237,7 @@ export default async function Hoje() {
           {agendados.map((d) => (
             <li key={d.id} className="flex flex-wrap justify-between gap-2 py-2">
               <Link href={`/professor/desafios/${d.id}`} className="font-medium hover:text-marca-700">
-                {d.tipo === "relampago" && "⚡ "}
+                {d.especial && "★ "}
                 {d.titulo} <span className="text-slate-500">· {d.temporadas.turmas.nome}</span>
               </Link>
               <Etiqueta cor="azul">abre {formatarDataHora(d.abre_em)}</Etiqueta>

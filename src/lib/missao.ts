@@ -50,10 +50,10 @@ export function calcularMissao({
   if (rush) {
     return {
       tipo: "cadurush",
-      titulo: "O CaduRush está aberto!",
+      titulo: "O desafio especial em sala está aberto!",
       texto: `${rush.titulo}: peça o código do dia ao professor (${prazo(rush.fecha_em, agora)}).`,
       href: `/aluno/desafio/${rush.id}`,
-      botao: iniciados.has(rush.id) ? "Continuar o CaduRush" : "Entrar no CaduRush",
+      botao: iniciados.has(rush.id) ? "Continuar" : "Entrar com o código",
     };
   }
 

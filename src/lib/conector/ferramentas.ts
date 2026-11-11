@@ -1,7 +1,9 @@
 import "server-only";
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { gerarCodigoDia, PONTOS_RELAMPAGO } from "@/lib/cadurush";
+import { gerarCodigoDia } from "@/lib/cadurush";
+import { descreverEspecial, percentualEmVigor, pontosDoEspecial } from "@/lib/especial";
+import { padroesDoProfessor } from "@/lib/padroes";
 import { dataHoraLocalParaIso, formatarData, formatarDataHora } from "@/lib/datas";
 import { cartasDaTurma } from "@/lib/carta-coringa";
 import { HABILIDADES } from "@/lib/habilidades";
@@ -38,7 +40,6 @@ import {
   AJUDAS_MAX_DESAFIO,
   conferirRegras,
   ERRO_SQL_REGRAS,
-  REGRAS_PADRAO,
   regrasDoDesafio,
   regrasParaGravar,
   type DadosRegras,
@@ -241,8 +242,14 @@ function conferirTempos(
   return { tempos };
 }
 
-const linhaComTempo = (q: QuestaoTempo, i: number, noDesafio: number | null, fixo: number | null) =>
-  `${i + 1}. ${q.enunciado} (⏱️ ${tempoEfetivo({ daQuestao: q.tempo_limite_s, relampago: Boolean(q.relampago), noDesafio, fixoDoDesafio: fixo })} s${noDesafio != null ? ", escrito para este desafio" : ""})`;
+const linhaComTempo = (
+  q: QuestaoTempo,
+  i: number,
+  noDesafio: number | null,
+  fixo: number | null,
+  percentual: number | null = null,
+) =>
+  `${i + 1}. ${q.enunciado} (⏱️ ${tempoEfetivo({ daQuestao: q.tempo_limite_s, relampago: Boolean(q.relampago), noDesafio, fixoDoDesafio: fixo, percentual })} s${noDesafio != null ? ", escrito para este desafio" : ""})`;
 
 const dataHora = z
   .string()
@@ -874,15 +881,24 @@ export function registrarFerramentas(server: McpServer, origem: string) {
   server.registerTool(
     "criar_desafio",
     {
-      title: "Criar desafio (semanal ou CaduRush)",
+      title: "Criar desafio",
       description:
-        "Cria um desafio para uma temporada, com 5 a 15 questões publicadas, na ordem dada. tipo='relampago' cria um CaduRush (feito em sala, peso 3, liberado com um código do dia que o app gera; abre_em/fecha_em = horário da aula). Em duas etapas: chame primeiro com confirmar=false para validar e mostrar a prévia ao professor; só chame com confirmar=true depois que ele aprovar, porque o desafio fica visível aos alunos na abertura.",
+        "Cria um desafio para uma temporada, com 5 a 15 questões publicadas, na ordem dada. Regras, pontos e tempos omitidos seguem os padrões que o professor salvou em Configurações. especial=true marca um desafio especial (visual dourado, pontos multiplicados e tempo menor, com os padrões do professor se omitidos). tipo='relampago' = só em sala: liberado com um código do dia que o app gera; abre_em/fecha_em = horário da aula (o antigo CaduRush). Em duas etapas: chame primeiro com confirmar=false para validar e mostrar a prévia ao professor; só chame com confirmar=true depois que ele aprovar, porque o desafio fica visível aos alunos na abertura.",
       inputSchema: z.object({
         temporada_id: z.string().uuid(),
         tipo: z
           .enum(["semanal", "relampago"])
           .optional()
-          .describe("semanal (em casa, padrão) ou relampago (CaduRush, em sala)."),
+          .describe("semanal (padrão) ou relampago (só em sala, com código do dia; também marca como especial)."),
+        especial: z.boolean().optional().describe("Desafio especial. Só use se o professor pedir."),
+        multiplicador: z
+          .union([z.literal(1.5), z.literal(2), z.literal(3)])
+          .optional()
+          .describe("Multiplicador de pontos do especial; omitido = padrão do professor."),
+        tempo_percentual: z
+          .union([z.literal(100), z.literal(75), z.literal(50)])
+          .optional()
+          .describe("Tempo de cada questão no especial (75 = 75% do tempo); omitido = padrão do professor."),
         titulo: z.string().min(1),
         abre_em: dataHora,
         fecha_em: dataHora,
@@ -893,7 +909,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           .min(1)
           .max(100)
           .optional()
-          .describe("Padrão 10 no semanal e 30 no CaduRush."),
+          .describe("Pontos de base por acerto (no especial, antes do multiplicador). Omitido = padrão do professor."),
         tempo_por_questao_s: z
           .number()
           .int()
@@ -962,27 +978,47 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         if (problema) return falha(problema);
       }
 
-      const conferidas = mesclarRegras(REGRAS_PADRAO, args);
+      const padroes = await padroesDoProfessor(db, professorId);
+      const conferidas = mesclarRegras(padroes.regras, args);
       if ("erro" in conferidas) return falha(conferidas.erro);
       const { regras } = conferidas;
 
       const relampago = args.tipo === "relampago";
-      const pontos = args.pontos_por_acerto ?? (relampago ? PONTOS_RELAMPAGO : 10);
+      const especial = Boolean(args.especial) || relampago;
+      const multiplicador = args.multiplicador ?? padroes.especial_multiplicador;
+      const percentual = args.tempo_percentual ?? padroes.especial_tempo_percentual;
+      const base = args.pontos_por_acerto ?? padroes.pontos_por_acerto;
+      const pontos = especial ? pontosDoEspecial(base, multiplicador) : base;
+      const bloqueada = args.saida_zera_questao ?? (relampago || padroes.pesquisa_bloqueada);
+      const verificacaoPadrao = padroes.tempo_verificacao_s;
       const previa = {
         temporada: temporada.nome,
-        tipo: relampago ? "CaduRush (em sala, com código do dia)" : "semanal",
+        tipo: [
+          especial
+            ? `especial (${descreverEspecial({ especial, multiplicador, tempo_percentual: percentual })})`
+            : "comum",
+          relampago ? "só em sala, com código do dia" : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
         titulo: args.titulo,
         abre: formatarDataHora(abre),
         fecha: formatarDataHora(fecha),
         pontos_por_acerto: pontos,
         tempo_por_questao: args.tempo_por_questao_s ? `${args.tempo_por_questao_s} s em todas` : "o de cada questão",
-        pesquisa: args.saida_zera_questao
+        pesquisa: bloqueada
           ? "bloqueada (sair da tela, apertar tecla ou extensão que mexe na tela zera a questão)"
           : "liberada",
-        verificacao_de_leitura: `${verificacao ?? VERIFICACAO_TEMPO_S} s${verificacao === null ? " (automático)" : ""}`,
-        ...resumoRegras(regras, args.questoes.length, Boolean(args.saida_zera_questao)),
+        verificacao_de_leitura: `${verificacao ?? verificacaoPadrao ?? VERIFICACAO_TEMPO_S} s${verificacao === null && verificacaoPadrao === null ? " (automático)" : ""}`,
+        ...resumoRegras(regras, args.questoes.length, bloqueada),
         questoes: args.questoes.map((id, i) =>
-          linhaComTempo(porId.get(id)!, i, tempos.get(id) ?? null, args.tempo_por_questao_s ?? null),
+          linhaComTempo(
+            porId.get(id)!,
+            i,
+            tempos.get(id) ?? null,
+            args.tempo_por_questao_s ?? null,
+            especial && percentual < 100 ? percentual : null,
+          ),
         ),
       };
       // Verificação de leitura: só questões com tema (e fora as relâmpago) podem recebê-la.
@@ -1013,16 +1049,22 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           pontos_por_acerto: pontos,
           tempo_por_questao_s: args.tempo_por_questao_s ?? null,
           // Só envia se pedido: sem o SQL dos tempos a coluna não existe.
-          ...(verificacao !== null && { tempo_verificacao_s: verificacao }),
-          saida_zera_questao: args.saida_zera_questao ?? false,
+          ...((verificacao ?? verificacaoPadrao) !== null && { tempo_verificacao_s: verificacao ?? verificacaoPadrao }),
+          saida_zera_questao: bloqueada,
           // Só envia se diferente do padrão: sem o SQL das regras as colunas não existem.
           ...regrasParaGravar(regras),
+          // Só envia no especial: sem o SQL do especial as colunas não existem.
+          ...(especial && { especial: true, multiplicador, tempo_percentual: percentual }),
         })
         .select("id")
         .single();
       if (error || !desafio)
         return falha(
-          Object.keys(regrasParaGravar(regras)).length ? ERRO_SQL_REGRAS : "Não foi possível criar o desafio.",
+          especial
+            ? "Rode antes no Supabase o SQL 20261111120000_especial_configuracoes.sql."
+            : Object.keys(regrasParaGravar(regras)).length
+              ? ERRO_SQL_REGRAS
+              : "Não foi possível criar o desafio.",
         );
       const { error: erroQuestoes } = await db.from("desafio_questoes").insert(
         args.questoes.map((questao_id, posicao) => ({
@@ -1308,7 +1350,9 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         verificacao_de_leitura: `${verificacao ?? VERIFICACAO_TEMPO_S} s${verificacao === null ? " (automático)" : ""}`,
         sair_da_tela_zera: d.saida_zera_questao,
         ...resumoRegras(regras, qs.length, d.saida_zera_questao),
-        questoes: qs.map((q, i) => linhaComTempo(q, i, tempos.get(q.id) ?? null, d.tempo_por_questao_s)),
+        questoes: qs.map((q, i) =>
+          linhaComTempo(q, i, tempos.get(q.id) ?? null, d.tempo_por_questao_s, percentualEmVigor(atual)),
+        ),
       });
       const previa = {
         antes: resumo(atual, questoesAtuais, temposAtuais, verificacaoAtual, regrasAtuais),

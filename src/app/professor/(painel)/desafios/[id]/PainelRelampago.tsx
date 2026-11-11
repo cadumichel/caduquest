@@ -45,7 +45,7 @@ export function PainelRelampago({
     <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-amber-400 via-orange-500 to-rose-600 p-6 text-white shadow-lg">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-bold tracking-widest uppercase">⚡ CaduRush · em sala</p>
+          <p className="text-sm font-bold tracking-widest uppercase">★ Especial · em sala</p>
           <p className="mt-1 text-sm text-white/90">
             {situacao === "agendado" && `Abre ${formatarDataHora(abreEm)} e fecha ${formatarDataHora(fechaEm)}.`}
             {situacao === "aberto" && `Aberto até ${formatarDataHora(fechaEm)} · ${concluiram}/${total} terminaram`}
@@ -67,8 +67,8 @@ export function PainelRelampago({
             onClick={() => {
               const pergunta =
                 situacao === "encerrado"
-                  ? "Reabrir o CaduRush agora? Quem já terminou não joga de novo."
-                  : "Liberar o CaduRush agora para a turma?";
+                  ? "Reabrir o desafio agora? Quem já terminou não joga de novo."
+                  : "Liberar o desafio agora para a turma?";
               if (confirm(pergunta)) rodar(liberarRelampagoAgora);
             }}
           >
@@ -79,7 +79,7 @@ export function PainelRelampago({
           <Botao
             disabled={pendente}
             variante="secundario"
-            onClick={() => confirm("Encerrar o CaduRush agora?") && rodar(encerrarRelampagoAgora)}
+            onClick={() => confirm("Encerrar o desafio agora?") && rodar(encerrarRelampagoAgora)}
           >
             Encerrar agora
           </Botao>
@@ -113,7 +113,7 @@ export function PainelRelampago({
           onClick={() => setProjetor(false)}
           className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-gradient-to-br from-amber-400 via-orange-500 to-rose-600 text-white"
         >
-          <span className="text-4xl font-black tracking-widest uppercase">⚡ CaduRush</span>
+          <span className="text-4xl font-black tracking-widest uppercase">★ Especial</span>
           <span className="text-2xl">Entre no CaduQuest e digite o código:</span>
           <span className="font-mono text-[22vw] leading-none font-black tracking-[0.15em]">{codigo}</span>
           <span className="text-sm text-white/80">Toque para fechar</span>

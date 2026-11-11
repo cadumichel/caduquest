@@ -38,6 +38,7 @@ import {
   sortearVerificacoes,
 } from "./questoes/verificacao";
 import { tempoEfetivo, tempoVerificacao } from "./questoes/tempos";
+import { percentualEmVigor } from "./especial";
 
 export type QuestaoServida = {
   id: string;
@@ -215,6 +216,7 @@ const tempoDaQuestao = (desafio: Desafio, q: QuestaoBanco) =>
     relampago: q.relampago,
     noDesafio: q.tempo_no_desafio,
     fixoDoDesafio: desafio.tempo_por_questao_s,
+    percentual: percentualEmVigor(desafio),
   });
 
 async function recalcularTentativa(db: SupabaseClient, tentativa: Tentativa, novoIndice: number) {

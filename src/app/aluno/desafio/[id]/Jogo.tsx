@@ -1,4 +1,5 @@
 "use client";
+import { formatarMultiplicador } from "@/lib/especial";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { FaixaRelampago } from "@/components/FaixaRelampago";
@@ -97,6 +98,9 @@ export function Jogo({
   totalQuestoes,
   jaComecou,
   tempoFixo,
+  especial = false,
+  multiplicador = null,
+  tempoReduzido = false,
   saidaZera,
   tecladoLiberado = false,
   identificacao = "",
@@ -117,6 +121,9 @@ export function Jogo({
   totalQuestoes: number;
   jaComecou: boolean;
   tempoFixo: number | null;
+  especial?: boolean;
+  multiplicador?: number | null;
+  tempoReduzido?: boolean;
   saidaZera: boolean;
   tecladoLiberado?: boolean;
   /** Apelido e turma, para a marca d'água da pesquisa bloqueada. */
@@ -161,11 +168,14 @@ export function Jogo({
     const pedirCodigo = relampago && !jaComecou;
     return (
       <div className="space-y-5">
-        {relampago ? (
-          <div className="rounded-3xl bg-gradient-to-br from-amber-400 via-orange-500 to-rose-600 p-5 text-white shadow-lg">
-            <p className="text-xs font-bold tracking-widest uppercase">⚡ CaduRush · em sala</p>
+        {especial || relampago ? (
+          <div className="rounded-3xl bg-gradient-to-br from-ouro-claro via-ouro to-ouro-escuro p-5 text-marca-950 shadow-lg ring-2 ring-ouro-claro/60">
+            <p className="text-xs font-bold tracking-widest uppercase">★ Desafio especial{relampago && " · em sala"}</p>
             <h1 className="mt-1 text-2xl font-extrabold">{titulo}</h1>
-            <p className="mt-1 text-sm text-white/90">Peso 3: cada acerto vale {pontosPorAcerto} pontos.</p>
+            <p className="mt-1 text-sm text-marca-900/90">
+              {multiplicador ? `Pontos ${formatarMultiplicador(multiplicador)}: ` : ""}cada acerto vale{" "}
+              {pontosPorAcerto} pontos.{tempoReduzido && " O tempo de cada questão é menor que o normal."}
+            </p>
           </div>
         ) : (
           <h1 className="text-2xl font-bold">{titulo}</h1>

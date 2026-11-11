@@ -17,6 +17,9 @@ import { marcaResultado, rotuloResultado, type Marca } from "@/lib/relatorio";
 import { gabaritoLiberado, gabaritoLiberadoEm, situacaoDesafio, type Desafio, type Questao } from "@/lib/tipos-banco";
 import { atualizarJanelaDesafio, excluirDesafio } from "../../actions";
 import { ControlesDesafio } from "./ControlesDesafio";
+import { EspecialDesafio } from "./EspecialDesafio";
+import { descreverEspecial, percentualEmVigor, pontosBase } from "@/lib/especial";
+import { padroesDoProfessor } from "@/lib/padroes";
 import { PainelRelampago } from "./PainelRelampago";
 import { TemposDesafio, type QuestaoComTempo } from "./TemposDesafio";
 import { RegrasDesafio } from "./RegrasDesafio";
@@ -68,6 +71,7 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
   const situacao = situacaoDesafio(desafio);
   const concluiram = linhas.filter((l) => l.situacao === "concluiu").length;
   const comecaram = linhas.filter((l) => l.situacao !== "não fez").length;
+  const padroes = await padroesDoProfessor(supabase);
   const verificacoes = desafio.verificacoes ?? null;
   const textoVerificacoes =
     verificacoes === 0
@@ -97,12 +101,18 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
           ← {desafio.temporadas.nome} · {desafio.temporadas.turmas.nome}
         </Link>
         <Titulo>
-          {desafio.tipo === "relampago" && "⚡ "}
+          {desafio.especial && <span className="text-ouro-escuro">★ </span>}
           {desafio.titulo}{" "}
           <Etiqueta cor={situacao === "aberto" ? "verde" : situacao === "agendado" ? "azul" : "cinza"}>
             {situacao}
           </Etiqueta>
         </Titulo>
+        {desafio.especial && (
+          <p className="-mt-3 text-sm font-semibold text-amber-800">
+            Desafio especial · {descreverEspecial(desafio)}
+            {desafio.tipo === "relampago" && " · só em sala, com código do dia"}
+          </p>
+        )}
       </div>
 
       {desafio.tipo === "relampago" && desafio.codigo_dia && (
@@ -338,6 +348,18 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
 
       {aba === "ajustes" && (
         <div className="grid gap-6 lg:grid-cols-2">
+          <Cartao className="border-amber-200 lg:col-span-2">
+            <EspecialDesafio
+              id={id}
+              especial={Boolean(desafio.especial)}
+              multiplicador={desafio.multiplicador ?? null}
+              percentual={desafio.tempo_percentual ?? null}
+              pontosBase={pontosBase(desafio)}
+              jaComecaram={comecaram}
+              padraoMultiplicador={padroes.especial_multiplicador}
+              padraoPercentual={padroes.especial_tempo_percentual}
+            />
+          </Cartao>
           <Cartao>
             <ControlesDesafio
               id={id}
@@ -392,6 +414,7 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
           <Cartao className="lg:col-span-2">
             <TemposDesafio
               id={id}
+              percentual={percentualEmVigor(desafio)}
               todas={desafio.tempo_por_questao_s}
               verificacao={desafio.tempo_verificacao_s ?? null}
               questoes={comTempo}

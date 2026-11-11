@@ -426,9 +426,7 @@ async function AbaTemporada({
   const [{ data: desafiosBrutos }, ranking] = await Promise.all([
     supabase
       .from("desafios")
-      .select(
-        "id, temporada_id, tipo, titulo, abre_em, fecha_em, pontos_por_acerto, desafio_questoes(count), tentativas(concluida_em)",
-      )
+      .select("*, desafio_questoes(count), tentativas(concluida_em)")
       .eq("temporada_id", temporada.id)
       .order("abre_em", { ascending: false }),
     rankingDaTemporada(supabase, temporada),
@@ -456,9 +454,6 @@ async function AbaTemporada({
         </p>
         {!encerrada && (
           <div className="flex flex-wrap gap-2">
-            <BotaoLink href={`/professor/desafios/novo?temporada=${temporada.id}&tipo=relampago`} variante="secundario">
-              ⚡ Novo CaduRush
-            </BotaoLink>
             <BotaoLink href={`/professor/desafios/novo?temporada=${temporada.id}`}>+ Novo desafio</BotaoLink>
           </div>
         )}
@@ -480,7 +475,7 @@ async function AbaTemporada({
                   >
                     <span>
                       <span className="font-medium">
-                        {d.tipo === "relampago" && "⚡ "}
+                        {d.especial && <span className="text-ouro-escuro">★ </span>}
                         {d.titulo}
                       </span>
                       <span className="block text-sm text-slate-500">

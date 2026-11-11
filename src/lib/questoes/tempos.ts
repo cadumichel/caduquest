@@ -3,6 +3,7 @@
  * Campo vazio = automático: vale o tempo da própria questão (o padrão do tipo
  * ou o que o professor escreveu nela) e 15 s na verificação.
  */
+import { reduzirTempo } from "../especial";
 import { RELAMPAGO_MAX_S, RELAMPAGO_MIN_S } from "./relampago";
 import { TEMPO_MAX_S, TEMPO_MIN_S } from "./tipos";
 import { VERIFICACAO_TEMPO_S } from "./verificacao";
@@ -19,16 +20,19 @@ export type TemposQuestao = {
   noDesafio?: number | null;
   /** Tempo único do desafio para todas (null = o de cada questão). */
   fixoDoDesafio?: number | null;
+  /** Desafio especial com tempo reduzido (ex.: 75 = 75% do tempo). Não mexe no tempo escrito para a questão. */
+  percentual?: number | null;
 };
 
 /**
  * Ordem: o tempo escrito para a questão no desafio vence; depois o tempo único
  * do desafio (a relâmpago nunca ganha mais que o seu próprio); depois o da questão.
+ * No desafio especial, os tempos automáticos são reduzidos pelo percentual.
  */
-export function tempoEfetivo({ daQuestao, relampago, noDesafio, fixoDoDesafio }: TemposQuestao): number {
+export function tempoEfetivo({ daQuestao, relampago, noDesafio, fixoDoDesafio, percentual }: TemposQuestao): number {
   if (noDesafio != null) return noDesafio;
-  if (fixoDoDesafio == null) return daQuestao;
-  return relampago ? Math.min(fixoDoDesafio, daQuestao) : fixoDoDesafio;
+  const base = fixoDoDesafio == null ? daQuestao : relampago ? Math.min(fixoDoDesafio, daQuestao) : fixoDoDesafio;
+  return reduzirTempo(base, percentual);
 }
 
 export const tempoVerificacao = (desafio: { tempo_verificacao_s?: number | null }) =>

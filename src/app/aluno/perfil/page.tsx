@@ -135,7 +135,7 @@ export default async function Perfil() {
             valor={progresso.questoesRespondidas ? `${Math.round(progresso.acertoGeral * 100)}%` : "–"}
           />
           <Dado rotulo="Desafios concluídos" valor={String(progresso.desafiosConcluidos)} />
-          <Dado rotulo="CaduRush jogados" valor={`⚡ ${progresso.caduRushConcluidos}`} />
+          <Dado rotulo="Especiais em sala" valor={`★ ${progresso.caduRushConcluidos}`} />
           <Dado
             rotulo="Melhor desafio"
             valor={melhor ? `${Math.round(melhor.acerto * 100)}% · ${melhor.titulo}` : "–"}

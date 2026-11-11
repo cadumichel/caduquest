@@ -113,7 +113,7 @@ export default async function PerfilDoAluno({ params }: PageProps<"/professor/al
               valor={progresso.questoesRespondidas ? `${Math.round(progresso.acertoGeral * 100)}%` : "–"}
             />
             <Dado rotulo="Desafios concluídos" valor={String(progresso.desafiosConcluidos)} />
-            <Dado rotulo="CaduRush jogados" valor={`⚡ ${progresso.caduRushConcluidos}`} />
+            <Dado rotulo="Especiais em sala" valor={`★ ${progresso.caduRushConcluidos}`} />
             <Dado rotulo="Habilidade mais forte" valor={forte ? forte.nome : "–"} />
             <Dado rotulo="Erros revisados" valor={`📚 ${progresso.revisoesAcertadas}`} />
             <Dado rotulo="Erros ainda por revisar" valor={String(erros.length)} />
