@@ -1,6 +1,6 @@
 # CaduQuest
 
-Revisão gamificada de História: cada turma disputa uma **temporada** (bimestre ou trimestre) que termina na prova, com desafios semanais, ranking e geração de questões com o Claude.
+Revisão gamificada de História: cada turma disputa uma **temporada** (bimestre ou trimestre) que vale pontos até o encerramento (pode ser antes da prova, deixando dias só de estudo), com desafios semanais, ranking e geração de questões com o Claude.
 
 Esta é a **fase 1 (núcleo)** do [escopo do MVP](https://claude.ai/artifact/VsBDAHEGnnpTXbas2KbCFf).
 

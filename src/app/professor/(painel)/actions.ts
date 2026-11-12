@@ -8,9 +8,18 @@ import { dataHoraLocalParaIso } from "@/lib/datas";
 import { ehMultiplicador, ehPercentual, pontosBase, pontosDoEspecial } from "@/lib/especial";
 import { conferirPadroes } from "@/lib/padroes";
 import { exigirProfessor } from "@/lib/professor";
+import {
+  ajustarDesafiosAoEncerramento,
+  colunasEncerramento,
+  conferirDatasTemporada,
+  conferirJanelaNaTemporada,
+  encerramentoOuNulo,
+  ERRO_SQL_ENCERRAMENTO,
+} from "@/lib/temporada-encerramento";
 import { ehEra } from "@/lib/publico/regras";
 import { problemasRelampago } from "@/lib/questoes/relampago";
 import { TEMPO_MAX_S, TEMPO_MIN_S, TIPOS, validarConteudo, type Conteudo } from "@/lib/questoes/tipos";
+import { ultimoDiaComPontos, type Temporada } from "@/lib/tipos-banco";
 import { conferirRegras, ERRO_SQL_REGRAS, regrasParaGravar } from "@/lib/questoes/regras-desafio";
 import {
   problemaTempoQuestao,
@@ -125,6 +134,8 @@ export async function removerAluno(alunoId: string) {
   const { supabase } = await exigirProfessor();
   const { data } = await supabase.from("alunos").delete().eq("id", alunoId).select("turma_id").single();
   if (data) revalidatePath(`/professor/turmas/${data.turma_id}`);
+  // Pedidos de entrada aparecem também no Início, em Turmas e no menu.
+  revalidatePath("/professor", "layout");
 }
 
 /** Carta coringa: o professor pode apagar um tema impróprio ou fora do conteúdo. */
@@ -164,12 +175,14 @@ export async function aprovarAluno(alunoId: string) {
     .select("turma_id")
     .single();
   if (data) revalidatePath(`/professor/turmas/${data.turma_id}`);
+  revalidatePath("/professor", "layout");
 }
 
 export async function aprovarTodos(turmaId: string) {
   const { supabase } = await exigirProfessor();
   await supabase.from("alunos").update({ aprovado: true }).eq("turma_id", turmaId).eq("aprovado", false);
   revalidatePath(`/professor/turmas/${turmaId}`);
+  revalidatePath("/professor", "layout");
 }
 
 export async function alternarAprovacao(turmaId: string, exige: boolean) {
@@ -185,13 +198,17 @@ const schemaTemporada = z.object({
   narrativa: z.string().trim(),
   inicio: z.iso.date("Informe a data de início."),
   data_prova: z.iso.date("Informe a data da prova."),
+  // Vazio = encerra no dia da prova.
+  encerramento: z.union([z.literal(""), z.iso.date("Data de encerramento inválida.")]).default(""),
   capitulos: z.string(),
 });
 
 function lerTemporada(form: FormData) {
   const r = schemaTemporada.safeParse(Object.fromEntries(form));
   if (!r.success) return { erro: r.error.issues[0].message } as const;
-  if (r.data.data_prova < r.data.inicio) return { erro: "A prova deve ser depois do início." } as const;
+  const encerramento = encerramentoOuNulo(r.data.encerramento, r.data.data_prova);
+  const erroDatas = conferirDatasTemporada({ ...r.data, encerramento });
+  if (erroDatas) return { erro: erroDatas } as const;
   return {
     dados: {
       nome: r.data.nome,
@@ -203,6 +220,11 @@ function lerTemporada(form: FormData) {
         .map((c) => c.trim())
         .filter(Boolean),
     },
+    encerramento,
+    // Caixa marcada por padrão: no encerramento sai o gabarito guardado.
+    gabaritoNoEncerramento: form.get("gabarito_no_encerramento") === "on",
+    // "desafio" (padrão): cada gabarito sai quando o desafio fecha; "encerramento": tudo de uma vez.
+    gabaritoSoNoEncerramento: form.get("quando_gabarito") === "encerramento",
   } as const;
 }
 
@@ -210,12 +232,14 @@ export async function criarTemporada(_: EstadoForm, form: FormData): Promise<Est
   const { supabase } = await exigirProfessor();
   const lido = lerTemporada(form);
   if ("erro" in lido) return { erro: lido.erro };
+  const extras = colunasEncerramento(lido);
   const { data, error } = await supabase
     .from("temporadas")
-    .insert({ ...lido.dados, turma_id: texto(form, "turma_id") })
+    .insert({ ...lido.dados, ...extras, turma_id: texto(form, "turma_id") })
     .select("id")
     .single();
-  if (error || !data) return { erro: "Não foi possível criar a temporada." };
+  if (error || !data)
+    return { erro: Object.keys(extras).length ? ERRO_SQL_ENCERRAMENTO : "Não foi possível criar a temporada." };
   redirect(`/professor/temporadas/${data.id}`);
 }
 
@@ -224,10 +248,29 @@ export async function atualizarTemporada(_: EstadoForm, form: FormData): Promise
   const lido = lerTemporada(form);
   if ("erro" in lido) return { erro: lido.erro };
   const id = texto(form, "id");
-  const { error } = await supabase.from("temporadas").update(lido.dados).eq("id", id);
-  if (error) return { erro: "Não foi possível salvar." };
+  const { data: atual } = await supabase.from("temporadas").select("*").eq("id", id).maybeSingle();
+  if (!atual) return { erro: "Temporada não encontrada." };
+  const extras = colunasEncerramento(lido, atual);
+  const novas = { data_prova: lido.dados.data_prova, encerramento: lido.encerramento };
+  // Só confere os desafios quando o fim da pontuação muda.
+  const mudouFim = ultimoDiaComPontos(novas) !== ultimoDiaComPontos(atual as Temporada);
+  if (mudouFim) {
+    const conferido = await ajustarDesafiosAoEncerramento(supabase, id, novas, false);
+    if ("erro" in conferido) return { erro: conferido.erro };
+  }
+  const { error } = await supabase
+    .from("temporadas")
+    .update({ ...lido.dados, ...extras })
+    .eq("id", id);
+  if (error) return { erro: Object.keys(extras).length ? ERRO_SQL_ENCERRAMENTO : "Não foi possível salvar." };
+  const ajustado = mudouFim ? await ajustarDesafiosAoEncerramento(supabase, id, novas, true) : { encurtados: 0 };
+  if ("erro" in ajustado) return { erro: ajustado.erro };
   revalidatePath(`/professor/temporadas/${id}`);
-  return { ok: "Temporada salva." };
+  return {
+    ok: ajustado.encurtados
+      ? `Temporada salva. ${ajustado.encurtados} desafio(s) passaram a fechar no encerramento.`
+      : "Temporada salva.",
+  };
 }
 
 // Questões -------------------------------------------------------------------
@@ -465,6 +508,9 @@ export async function criarDesafio(dados: z.input<typeof schemaDesafio>): Promis
     if ((temporada as { encerrada_em?: string | null }).encerrada_em) {
       return { erro: "Esta temporada foi encerrada. Reabra a temporada para criar desafios nela." };
     }
+    // O desafio precisa fechar até o encerramento da temporada (de cada turma).
+    const erroJanela = conferirJanelaNaTemporada(fecha, temporada as Temporada, true);
+    if (erroJanela) return { erro: erroJanela };
     const { data: desafio, error } = await supabase
       .from("desafios")
       .insert({
@@ -522,6 +568,13 @@ export async function atualizarJanelaDesafio(_: EstadoForm, form: FormData): Pro
   const abre = dataHoraLocalParaIso(texto(form, "abre_em"));
   const fecha = dataHoraLocalParaIso(texto(form, "fecha_em"));
   if (fecha <= abre) return { erro: "O fechamento deve ser depois da abertura." };
+  const { data: doDesafio } = await supabase.from("desafios").select("temporadas(*)").eq("id", id).maybeSingle();
+  const erroJanela = conferirJanelaNaTemporada(
+    fecha,
+    (doDesafio?.temporadas as unknown as Temporada | null) ?? null,
+    false,
+  );
+  if (erroJanela) return { erro: erroJanela };
   const { error } = await supabase
     .from("desafios")
     .update({

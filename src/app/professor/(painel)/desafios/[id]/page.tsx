@@ -4,17 +4,25 @@ import { notFound } from "next/navigation";
 import { Abas, abaAtual, Numero } from "@/components/Abas";
 import { Gabarito } from "@/components/Gabarito";
 import { Aviso, Cartao, Etiqueta, Subtitulo, Titulo } from "@/components/ui";
-import { formatarDataHora, isoParaDataHoraLocal } from "@/lib/datas";
+import { formatarData, formatarDataHora, isoParaDataHoraLocal } from "@/lib/datas";
 import { exigirProfessor } from "@/lib/professor";
 import type { Conteudo } from "@/lib/questoes/tipos";
 import { NOME_TIPO } from "@/lib/questoes/tipos";
 import { resultadosDoDesafio } from "@/lib/resultados-desafio";
 import { marcaResultado, rotuloResultado, type Marca } from "@/lib/relatorio";
-import { gabaritoLiberado, gabaritoLiberadoEm, situacaoDesafio, type Desafio, type Questao } from "@/lib/tipos-banco";
-import { AjustesDesafio, type QuestaoComTempo } from "./AjustesDesafio";
+import {
+  gabaritoLiberado,
+  gabaritoLiberadoEm,
+  situacaoDesafio,
+  type Desafio,
+  type Questao,
+  type TemporadaEncerramento,
+  ultimoDiaComPontos,
+} from "@/lib/tipos-banco";
 import { descreverEspecial, percentualEmVigor, pontosBase } from "@/lib/especial";
 import { padroesDoProfessor } from "@/lib/padroes";
 import { PainelRelampago } from "./PainelRelampago";
+import { AjustesDesafio, type QuestaoComTempo } from "./AjustesDesafio";
 import { descreverRegraCliques, descreverRegraSaidas } from "@/lib/tela-protegida";
 import { verificacoesAutomaticas } from "@/lib/questoes/verificacao";
 import { regrasDoDesafio } from "@/lib/questoes/regras-desafio";
@@ -40,16 +48,18 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
   const aba = abaAtual(sp.aba, ABAS);
   const copias = Number(sp.copias) || 0;
   const falhas = Number(sp.falhas) || 0;
+  // Questão escolhida na tabela (?q=3): a lista abaixo abre o gabarito dela.
+  const questaoAberta = typeof sp.q === "string" ? Number(sp.q) : null;
   const { supabase } = await exigirProfessor();
   const { data } = await supabase
     .from("desafios")
     // "*" em desafio_questoes traz o tempo de cada questão, quando o SQL dos tempos já rodou.
-    .select("*, temporadas(id, nome, turma_id, turmas(nome)), desafio_questoes(*, questoes(*))")
+    .select("*, temporadas(*, turmas(nome)), desafio_questoes(*, questoes(*))")
     .eq("id", id)
     .maybeSingle();
   if (!data) notFound();
   const desafio = data as Desafio & {
-    temporadas: { id: string; nome: string; turma_id: string; turmas: { nome: string } };
+    temporadas: TemporadaEncerramento & { id: string; nome: string; turma_id: string; turmas: { nome: string } };
     desafio_questoes: { posicao: number; tempo_limite_s?: number | null; questoes: Questao }[];
   };
   const ordenadas = [...desafio.desafio_questoes].sort((a, b) => a.posicao - b.posicao);
@@ -80,12 +90,12 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
       : null;
   const alertasDe = (l: (typeof linhas)[number]) => l.zeradasPorSaida + l.verificacoesErradas;
   const comAlerta = linhas.filter((l) => alertasDe(l) > 0).length;
-  // Ordem da aba Questões: da que teve menos acerto para a que teve mais (sem dados vão para o fim).
-  const porAcerto = questoes
-    .map((q, i) => ({ q, numero: i + 1, acerto: acertoPorQuestao.get(q.id) ?? null }))
-    .sort((a, b) => (a.acerto ?? 2) - (b.acerto ?? 2));
+  // Aba Questões: em ordem numérica (a da montagem), igual à tabela.
+  const listaQuestoes = questoes.map((q, i) => ({ q, numero: i + 1, acerto: acertoPorQuestao.get(q.id) ?? null }));
   const regras = regrasDoDesafio(desafio);
+  const diaEncerramento = formatarData(ultimoDiaComPontos(desafio.temporadas));
   const url = (a: (typeof ABAS)[number]) => `/professor/desafios/${id}?aba=${a}`;
+  const linkQuestao = (numero: number) => `${url("questoes")}&q=${numero}#questao-${numero}`;
 
   return (
     <div className="space-y-6">
@@ -115,7 +125,7 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
         <Aviso tipo={falhas ? "erro" : "ok"}>
           {copias > 0 && `Criado também em ${copias} ${copias === 1 ? "outra turma" : "outras turmas"}. `}
           {falhas > 0 &&
-            `Não deu para criar em ${falhas} ${falhas === 1 ? "turma" : "turmas"} (temporada encerrada ou sem acesso).`}
+            `Não deu para criar em ${falhas} ${falhas === 1 ? "turma" : "turmas"} (temporada encerrada, prazo depois do encerramento ou sem acesso).`}
         </Aviso>
       )}
 
@@ -264,8 +274,8 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <Subtitulo>Desempenho por questão</Subtitulo>
               <span className="text-xs text-slate-500">
-                ✓ acertou · ✗ errou · ½ acertou em parte · em branco: não chegou na questão. Clique no aluno para ver as
-                respostas dele.
+                ✓ acertou · ✗ errou · ½ acertou em parte · em branco: não chegou na questão. Clique no número para ver a
+                questão e no aluno para ver as respostas dele.
               </span>
             </div>
             {linhas.every((l) => l.situacao === "não fez") ? (
@@ -276,8 +286,16 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
                   <tr>
                     <th className="sticky left-0 bg-white py-2 pr-3 text-left">Aluno</th>
                     {questoes.map((q, i) => (
-                      <th key={q.id} className="px-0.5 py-2 text-center font-medium" title={q.enunciado}>
-                        {i + 1}
+                      <th key={q.id} className="px-0.5 py-2 text-center font-medium">
+                        <Link
+                          href={linkQuestao(i + 1)}
+                          title={`${i + 1}. ${q.enunciado}`}
+                          className={`inline-flex size-7 items-center justify-center rounded-md underline decoration-dotted underline-offset-4 hover:bg-marca-50 hover:text-marca-700 ${
+                            questaoAberta === i + 1 ? "bg-marca-100 text-marca-800" : "text-marca-700"
+                          }`}
+                        >
+                          {i + 1}
+                        </Link>
                       </th>
                     ))}
                     <th className="py-2 pl-3 text-right">Acertos</th>
@@ -299,12 +317,13 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
                           const m = MARCA[marcaResultado(r)];
                           return (
                             <td key={q.id} className="px-0.5 py-1 text-center">
-                              <span
-                                className={`inline-flex size-7 items-center justify-center rounded-md font-semibold ${m.classe}`}
-                                title={`Questão ${i + 1}: ${rotuloResultado(r)}`}
+                              <Link
+                                href={linkQuestao(i + 1)}
+                                className={`inline-flex size-7 items-center justify-center rounded-md font-semibold hover:ring-2 hover:ring-marca-300 ${m.classe}`}
+                                title={`Questão ${i + 1}: ${rotuloResultado(r)}. Clique para ver a questão.`}
                               >
                                 {m.simbolo}
-                              </span>
+                              </Link>
                             </td>
                           );
                         })}
@@ -317,14 +336,18 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
               </table>
             )}
             <p className="mt-3 text-xs text-slate-500">
-              A numeração é a da montagem do desafio (cada aluno vê em ordem embaralhada). Abaixo, as questões vêm da
-              que teve menos acerto para a que teve mais.
+              A numeração é a da montagem do desafio (cada aluno vê em ordem embaralhada). Abaixo, as questões na mesma
+              ordem, com o gabarito.
             </p>
           </Cartao>
 
           <section className="space-y-3">
-            {porAcerto.map(({ q, numero, acerto }) => (
-              <Cartao key={q.id} className="space-y-2">
+            {listaQuestoes.map(({ q, numero, acerto }) => (
+              <Cartao
+                key={q.id}
+                id={`questao-${numero}`}
+                className={`scroll-mt-4 space-y-2 ${questaoAberta === numero ? "ring-2 ring-marca-400" : ""}`}
+              >
                 <div className="flex items-start justify-between gap-3">
                   <Link href={`/professor/questoes/${q.id}`} className="font-medium hover:text-marca-700">
                     {numero}. {q.enunciado}
@@ -338,7 +361,7 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
                     )}
                   </div>
                 </div>
-                <details>
+                <details open={questaoAberta === numero}>
                   <summary className="cursor-pointer text-sm text-marca-700">Ver gabarito</summary>
                   <div className="mt-2">
                     <Gabarito conteudo={{ tipo: q.tipo, conteudo: q.conteudo } as Conteudo} />
@@ -385,6 +408,8 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
             visivelEm: gabaritoLiberadoEm(desafio).toISOString(),
             visivel: gabaritoLiberado(desafio),
             nunca: regras.gabarito_nunca,
+            soNoEncerramento: desafio.temporadas.gabarito_so_no_encerramento ? diaEncerramento : null,
+            encerramento: desafio.temporadas.gabarito_no_encerramento === false ? null : diaEncerramento,
           }}
           resumos={{
             janela: `${formatarDataHora(desafio.abre_em)} até ${formatarDataHora(desafio.fecha_em)}`,
@@ -404,7 +429,9 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
                   ? desafio.gabarito_liberado_em
                     ? "gabarito liberado"
                     : "gabarito só quando você liberar"
-                  : `gabarito em ${formatarDataHora(gabaritoLiberadoEm(desafio))}`,
+                  : desafio.temporadas.gabarito_so_no_encerramento
+                    ? `gabarito no encerramento da temporada (${diaEncerramento})`
+                    : `gabarito em ${formatarDataHora(gabaritoLiberadoEm(desafio))}`,
               regras.treino_liberado && !regras.gabarito_nunca ? "treino depois" : "sem treino",
               regras.bonus_rapidez ? "bônus por rapidez" : null,
             ]

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Titulo } from "@/components/ui";
 import { hojeEmBrasilia, isoParaDataHoraLocal } from "@/lib/datas";
 import { padroesDoProfessor } from "@/lib/padroes";
+import { type TemporadaEncerramento, ultimoDiaComPontos } from "@/lib/tipos-banco";
 import { exigirProfessor } from "@/lib/professor";
 import type { Conteudo, TipoQuestao } from "@/lib/questoes/tipos";
 import { MontarDesafio } from "./MontarDesafio";
@@ -40,7 +41,7 @@ export default async function NovoDesafio({ searchParams }: PageProps<"/professo
   const hoje = hojeEmBrasilia();
   const { data: outrasBrutas } = await supabase
     .from("turmas")
-    .select("id, nome, serie, escola_id, escolas(nome), temporadas(id, nome, inicio, data_prova, encerrada_em)")
+    .select("id, nome, serie, escola_id, escolas(nome), temporadas(*)")
     .neq("id", temporada.turma_id)
     .order("nome");
   const mesmaSerie = (t: { serie: string | null; escola_id: string }) =>
@@ -54,13 +55,13 @@ export default async function NovoDesafio({ searchParams }: PageProps<"/professo
       serie: string | null;
       escola_id: string;
       escolas: { nome: string };
-      temporadas: { id: string; nome: string; inicio: string; data_prova: string; encerrada_em: string | null }[];
+      temporadas: (TemporadaEncerramento & { id: string; nome: string; inicio: string })[];
     }[]
   )
     .filter(mesmaSerie)
     .flatMap((t) => {
       const abertas = t.temporadas
-        .filter((tp) => !tp.encerrada_em && tp.data_prova >= hoje)
+        .filter((tp) => !tp.encerrada_em && ultimoDiaComPontos(tp) >= hoje)
         .sort((a, b) => a.inicio.localeCompare(b.inicio));
       const atual = abertas.find((tp) => tp.inicio <= hoje) ?? abertas[0];
       return atual

@@ -57,7 +57,17 @@ type Props = {
     padraoMultiplicador: number;
     padraoPercentual: number;
   };
-  gabarito: { manual: boolean; liberadoEm: string | null; visivelEm: string; visivel: boolean; nunca: boolean };
+  gabarito: {
+    manual: boolean;
+    liberadoEm: string | null;
+    visivelEm: string;
+    visivel: boolean;
+    nunca: boolean;
+    /** A temporada segura todos os gabaritos até o encerramento (dd/mm/aaaa), se for o caso. */
+    soNoEncerramento: string | null;
+    /** Dia em que o gabarito guardado sai sozinho (encerramento da temporada), se a temporada libera. */
+    encerramento: string | null;
+  };
   /** Valores atuais em frases curtas, para o título de cada seção. */
   resumos: { janela: string; consulta: string; tempo: string; questoes: string; depois: string; especial: string };
 };
@@ -190,6 +200,19 @@ export function AjustesDesafio(p: Props) {
     });
 
   const fixo = numero(tempos.todas);
+  const g = p.gabarito;
+  const statusGabarito = g.visivel
+    ? { cor: "verde" as const, texto: "Gabarito visível para os alunos" }
+    : g.manual && !g.liberadoEm
+      ? {
+          cor: "ambar" as const,
+          texto: g.encerramento
+            ? `Gabarito guardado até você liberar ou até o encerramento da temporada (${g.encerramento})`
+            : "Gabarito guardado até você liberar",
+        }
+      : g.soNoEncerramento
+        ? { cor: "ambar" as const, texto: `Gabarito sai no encerramento da temporada (${g.soNoEncerramento})` }
+        : { cor: "cinza" as const, texto: `Gabarito aparece em ${formatarDataHora(g.visivelEm)}` };
 
   return (
     <div className="space-y-3 pb-24">
@@ -314,6 +337,7 @@ export function AjustesDesafio(p: Props) {
       </Secao>
 
       <Secao titulo="Gabarito, treino e pontos" resumo={p.resumos.depois} mudou={mudou.gabarito || mudou.pontos}>
+        <Etiqueta cor={statusGabarito.cor}>{statusGabarito.texto}</Etiqueta>
         {!p.gabarito.nunca && (
           <fieldset className="space-y-2 text-sm">
             <legend className="mb-1 font-medium text-slate-700">Quando o aluno vê o gabarito</legend>

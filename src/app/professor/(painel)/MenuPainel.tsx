@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const LINKS = [
-  { href: "/professor", rotulo: "Hoje", ativo: (p: string) => p === "/professor" },
+  { href: "/professor", rotulo: "Início", ativo: (p: string) => p === "/professor" },
   {
     href: "/professor/turmas",
     rotulo: "Turmas",
@@ -13,7 +13,8 @@ const LINKS = [
   { href: "/professor/configuracoes", rotulo: "Configurações", ativo: (p: string) => p === "/professor/configuracoes" },
 ];
 
-export function MenuPainel() {
+/** `pedidos`: alunos esperando aprovação, mostrados como contador em Turmas. */
+export function MenuPainel({ pedidos = 0 }: { pedidos?: number }) {
   const caminho = usePathname();
   return (
     <nav className="flex flex-1 flex-wrap gap-1 text-sm font-semibold">
@@ -27,6 +28,14 @@ export function MenuPainel() {
             className={`rounded-lg px-3 py-1.5 ${ativo ? "bg-white/15 text-ouro-claro" : "text-marca-100 hover:text-ouro-claro"}`}
           >
             {l.rotulo}
+            {l.rotulo === "Turmas" && pedidos > 0 && (
+              <span
+                className="ml-1.5 rounded-full bg-amber-400 px-1.5 py-0.5 text-xs text-marca-950"
+                title={`${pedidos} ${pedidos === 1 ? "pedido de entrada" : "pedidos de entrada"} esperando aprovação`}
+              >
+                {pedidos}
+              </span>
+            )}
           </Link>
         );
       })}

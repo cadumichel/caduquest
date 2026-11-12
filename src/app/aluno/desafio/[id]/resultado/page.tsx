@@ -3,11 +3,12 @@ import { notFound } from "next/navigation";
 import { Gabarito } from "@/components/Gabarito";
 import { Aviso, BotaoLink, Cartao, Etiqueta } from "@/components/ui";
 import { exigirAluno } from "@/lib/aluno-sessao";
-import { formatarDataHora } from "@/lib/datas";
+import { formatarData, formatarDataHora } from "@/lib/datas";
 import { desafioDoAluno } from "@/lib/jogo";
 import type { Conteudo, Resposta } from "@/lib/questoes/tipos";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import {
+  gabaritoAguardaEncerramento,
   gabaritoAguardaProfessor,
   treinoLiberado,
   gabaritoLiberado,
@@ -17,6 +18,7 @@ import {
   type Questao,
   type RespostaBanco,
   type Tentativa,
+  ultimoDiaComPontos,
 } from "@/lib/tipos-banco";
 import { formatarPontos } from "@/lib/pontos";
 
@@ -34,6 +36,11 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
   const encerrado = situacaoDesafio(desafio) === "encerrado";
   const liberado = gabaritoLiberado(desafio);
   const podeTreinar = treinoLiberado(desafio);
+  // O gabarito guardado pelo professor sai sozinho no encerramento da temporada.
+  const noEncerramento =
+    desafio.temporadas.gabarito_no_encerramento !== false
+      ? ` ou no encerramento da temporada (${formatarData(ultimoDiaComPontos(desafio.temporadas))})`
+      : "";
 
   if (!tentativa) {
     return (
@@ -92,12 +99,19 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
       ) : !encerrado ? (
         <Aviso tipo="info">
           {desafio.gabarito_manual
-            ? `O gabarito e as explicações aparecem depois que o desafio fechar (${formatarDataHora(desafio.fecha_em)}), quando o professor liberar.`
-            : `O gabarito e as explicações aparecem quando o desafio fechar, em ${formatarDataHora(desafio.fecha_em)}.`}{" "}
+            ? `O gabarito e as explicações aparecem depois que o desafio fechar (${formatarDataHora(desafio.fecha_em)}), quando o professor liberar${noEncerramento}.`
+            : desafio.temporadas.gabarito_so_no_encerramento
+              ? `O gabarito e as explicações aparecem no encerramento da temporada (${formatarData(ultimoDiaComPontos(desafio.temporadas))}).`
+              : `O gabarito e as explicações aparecem quando o desafio fechar, em ${formatarDataHora(desafio.fecha_em)}.`}{" "}
           Assim ninguém passa as respostas enquanto ele está aberto.
         </Aviso>
+      ) : gabaritoAguardaEncerramento(desafio) ? (
+        <Aviso tipo="info">
+          Nesta temporada o gabarito de todos os desafios aparece junto, no encerramento (
+          {formatarData(ultimoDiaComPontos(desafio.temporadas))}).
+        </Aviso>
       ) : gabaritoAguardaProfessor(desafio) ? (
-        <Aviso tipo="info">O desafio fechou. O gabarito aparece quando o professor liberar.</Aviso>
+        <Aviso tipo="info">O desafio fechou. O gabarito aparece quando o professor liberar{noEncerramento}.</Aviso>
       ) : !liberado ? (
         <Aviso tipo="info">
           O desafio acabou de fechar. O gabarito aparece em {formatarDataHora(gabaritoLiberadoEm(desafio))}, depois que

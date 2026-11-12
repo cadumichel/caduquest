@@ -19,7 +19,7 @@ import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { situacaoDaTemporada } from "@/lib/temporada-dados";
 import { MetaTurma } from "@/components/MetaTurma";
 import { escolherFundo, FUNDOS_TEMPORADA, imagemDoFundo } from "@/lib/fundos-temporada";
-import { situacaoDesafio, type Desafio, type Tentativa } from "@/lib/tipos-banco";
+import { faseDaTemporada, situacaoDesafio, treinoLiberado, type Desafio, type Tentativa } from "@/lib/tipos-banco";
 import { formatarPontos } from "@/lib/pontos";
 
 export const metadata: Metadata = { title: "Início" };
@@ -72,6 +72,8 @@ export default async function Inicio() {
   const tentativas = new Map(((tentativasBrutas ?? []) as Tentativa[]).map((t) => [t.desafio_id, t]));
   const { top, eu, total } = rankingParaAluno(situacao.ranking, aluno.id);
   const faltam = diasAte(temporada.data_prova);
+  // Pontuação encerrada e prova por vir: os alunos estudam com treino e revisão.
+  const estudo = faseDaTemporada(temporada) === "estudo";
   const concluidos = new Set(
     [...tentativas.values()].filter((t) => t.concluida_em || t.indice_atual >= t.ordem.length).map((t) => t.desafio_id),
   );
@@ -81,6 +83,7 @@ export default async function Inicio() {
     iniciados: new Set(tentativas.keys()),
     errosParaRevisar: erros.length,
     diasAteProva: faltam,
+    estudo,
   });
   const rush = proximoCaduRush(desafios);
   const passos = passosDaOfensiva(
@@ -111,6 +114,11 @@ export default async function Inicio() {
           </p>
           <h1 className="mt-1 text-2xl font-extrabold drop-shadow">{temporada.nome}</h1>
           {temporada.narrativa && <p className="mt-2 text-sm text-marca-100">{temporada.narrativa}</p>}
+          {estudo && (
+            <p className="mt-3 inline-block rounded-full bg-ouro/90 px-3 py-1 text-xs font-bold text-marca-950">
+              Pontuação encerrada · período de estudo até a prova
+            </p>
+          )}
           <div className="mt-5 grid grid-cols-3 gap-3 text-center">
             <div className="rounded-2xl bg-white/10 p-3 ring-1 ring-white/15 backdrop-blur-sm">
               <p className="text-2xl font-bold">{formatarPontos(eu?.pontos)}</p>
@@ -339,8 +347,10 @@ export default async function Inicio() {
       )}
 
       {outros.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-lg font-extrabold text-marca-900">Outros desafios</h2>
+        <section id="desafios-anteriores" className="scroll-mt-4 space-y-3">
+          <h2 className="text-lg font-extrabold text-marca-900">
+            {estudo ? "Desafios para treinar até a prova" : "Outros desafios"}
+          </h2>
           {outros.map((d) => {
             const situacao = situacaoDesafio(d);
             const t = tentativas.get(d.id);
@@ -362,6 +372,10 @@ export default async function Inicio() {
                 ) : t ? (
                   <BotaoLink href={`/aluno/desafio/${d.id}/resultado`} variante="secundario">
                     {formatarPontos(t.pontos)} pts · ver gabarito
+                  </BotaoLink>
+                ) : treinoLiberado({ ...d, temporadas: temporada }) ? (
+                  <BotaoLink href={`/aluno/desafio/${d.id}/treino`} variante="secundario">
+                    Não feito · treinar
                   </BotaoLink>
                 ) : (
                   <Etiqueta>Não feito</Etiqueta>
@@ -403,6 +417,7 @@ const ESTILO_MISSAO: Record<Missao["tipo"], { fundo: string; icone: string }> = 
   desafio: { fundo: "from-emerald-500 to-emerald-700", icone: "🎯" },
   revisao: { fundo: "from-marca-500 to-marca-700", icone: "📚" },
   aguardar: { fundo: "from-sky-500 to-marca-700", icone: "✅" },
+  estudo: { fundo: "from-amber-500 to-marca-700", icone: "📖" },
   prova: { fundo: "from-sky-500 to-marca-700", icone: "🏁" },
   encerrada: { fundo: "from-slate-500 to-slate-700", icone: "🏛️" },
 };

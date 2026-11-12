@@ -20,7 +20,7 @@ import {
 } from "@/lib/questoes/ajudas";
 import { embaralhar, permutacaoAleatoria } from "@/lib/questoes/embaralhar";
 import { tamanhoPermutacao, type Conteudo, type Resposta, type Vista } from "@/lib/questoes/tipos";
-import type { Desafio, RespostaBanco, Tentativa } from "@/lib/tipos-banco";
+import type { Desafio, RespostaBanco, Temporada, Tentativa } from "@/lib/tipos-banco";
 import { situacaoDesafio, urlImagem } from "@/lib/tipos-banco";
 import { arredondarPontos } from "./pontos";
 import {
@@ -116,12 +116,12 @@ type QuestaoBanco = {
 export async function desafioDoAluno(db: SupabaseClient, aluno: AlunoSessao, desafioId: string) {
   const { data } = await db
     .from("desafios")
-    // "*" traz também as colunas do gabarito manual, quando o SQL delas já rodou.
-    .select("*, temporadas!inner(turma_id)")
+    // "*" traz também as colunas do gabarito manual e do encerramento, quando o SQL delas já rodou.
+    .select("*, temporadas!inner(*)")
     .eq("id", desafioId)
     .eq("temporadas.turma_id", aluno.turmaId)
     .maybeSingle();
-  return (data as (Desafio & { temporadas: unknown }) | null) ?? null;
+  return (data as (Desafio & { temporadas: Temporada }) | null) ?? null;
 }
 
 async function carregarQuestao(db: SupabaseClient, id: string, desafioId: string): Promise<QuestaoBanco> {
