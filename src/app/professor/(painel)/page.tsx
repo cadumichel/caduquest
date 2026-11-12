@@ -30,7 +30,7 @@ type DesafioInicio = {
   especial?: boolean;
   abre_em: string;
   fecha_em: string;
-  temporadas: { turma_id: string };
+  temporada_id: string;
   tentativas: { concluida_em: string | null }[];
 };
 
@@ -67,20 +67,12 @@ export default async function Inicio() {
     { data: turmasBrutas },
     { count: rascunhos },
     { data: pedidosBrutos },
-    { data: desafiosBrutos, error: erroDesafios },
     { data: temporadasBrutas },
   ] = await Promise.all([
     supabase.from("escolas").select("id, nome").order("nome"),
     supabase.from("turmas").select("id, escola_id, nome, serie, alunos(count)").order("nome"),
     supabase.from("questoes").select("*", { count: "exact", head: true }).eq("status", "rascunho"),
     supabase.from("alunos").select(COLUNAS_PEDIDO).eq("aprovado", false).order("criado_em"),
-    supabase
-      .from("desafios")
-      // "*" e não a lista de colunas: se uma coluna nova (ex.: especial) ainda não existir
-      // no banco, a consulta inteira falharia e toda turma apareceria "sem desafio".
-      .select("*, temporadas(turma_id), tentativas(concluida_em)")
-      .gte("fecha_em", agora)
-      .order("fecha_em"),
     supabase
       .from("temporadas")
       // "*" traz também o encerramento, quando o SQL dele já rodou. Temporada encerrada
@@ -90,6 +82,20 @@ export default async function Inicio() {
       .gte("data_prova", hoje)
       .order("data_prova"),
   ]);
+  // Desafios ainda abertos ou agendados das temporadas em andamento, buscados como na
+  // página da turma (por temporada_id, sem juntar a temporada na mesma consulta).
+  const temporadas = (temporadasBrutas ?? []) as TemporadaInicio[];
+  const { data: desafiosBrutos, error: erroDesafios } = temporadas.length
+    ? await supabase
+        .from("desafios")
+        .select("*, tentativas(concluida_em)")
+        .in(
+          "temporada_id",
+          temporadas.map((t) => t.id),
+        )
+        .gte("fecha_em", agora)
+        .order("fecha_em")
+    : { data: [], error: null };
   // Sem o SQL da carta coringa ou dos controles do gabarito, estas consultas falham e nada aparece.
   const [{ data: cartasPendentes }, { data: gabaritosBrutos }] = await Promise.all([
     supabase.from("cartas_coringa").select("id, alunos(apelido, turma_id, turmas(nome))").eq("status", "pendente"),
@@ -130,13 +136,14 @@ export default async function Inicio() {
   for (const p of pedidos) pedidosPorTurma.set(p.turma_id, (pedidosPorTurma.get(p.turma_id) ?? 0) + 1);
 
   if (erroDesafios) console.error("Início: falha ao buscar desafios abertos", erroDesafios);
+  const turmaDaTemporada = new Map(temporadas.map((t) => [t.id, t.turma_id]));
   const desafiosPorTurma = new Map<string, DesafioInicio[]>();
   for (const d of (desafiosBrutos ?? []) as unknown as DesafioInicio[]) {
-    const t = d.temporadas.turma_id;
-    desafiosPorTurma.set(t, [...(desafiosPorTurma.get(t) ?? []), d]);
+    const t = turmaDaTemporada.get(d.temporada_id);
+    if (t) desafiosPorTurma.set(t, [...(desafiosPorTurma.get(t) ?? []), d]);
   }
   const temporadaPorTurma = new Map<string, TemporadaInicio>();
-  for (const t of (temporadasBrutas ?? []) as TemporadaInicio[]) {
+  for (const t of temporadas) {
     if (!temporadaPorTurma.has(t.turma_id)) temporadaPorTurma.set(t.turma_id, t);
   }
   const turmasPorEscola = new Map<string, TurmaInicio[]>();
