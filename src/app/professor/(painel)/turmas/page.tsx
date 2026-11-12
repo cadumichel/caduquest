@@ -7,6 +7,7 @@ import { Campo, Cartao, Entrada, Etiqueta, Selecao, Titulo, Vazio } from "@/comp
 import { exigirProfessor } from "@/lib/professor";
 import { situacaoDesafio, type Escola, type Turma } from "@/lib/tipos-banco";
 import { criarEscola, criarTurma, excluirEscola } from "../actions";
+import { COLUNAS_PEDIDO, PedidosEntrada, type PedidoEntrada } from "../PedidosEntrada";
 
 export const metadata: Metadata = { title: "Turmas" };
 
@@ -17,13 +18,17 @@ type TurmaLista = Turma & {
 
 export default async function ListaTurmas() {
   const { supabase } = await exigirProfessor();
-  const [{ data: escolas }, { data: turmas }] = await Promise.all([
+  const [{ data: escolas }, { data: turmas }, { data: pedidosBrutos }] = await Promise.all([
     supabase.from("escolas").select("id, nome, periodo").order("nome"),
     supabase
       .from("turmas")
       .select("id, escola_id, nome, serie, codigo, alunos(count), temporadas(desafios(abre_em, fecha_em))")
       .order("nome"),
+    supabase.from("alunos").select(COLUNAS_PEDIDO).eq("aprovado", false).order("criado_em"),
   ]);
+  const pedidos = (pedidosBrutos ?? []) as unknown as PedidoEntrada[];
+  const pedidosPorTurma = new Map<string, number>();
+  for (const p of pedidos) pedidosPorTurma.set(p.turma_id, (pedidosPorTurma.get(p.turma_id) ?? 0) + 1);
 
   const porEscola = new Map<string, TurmaLista[]>();
   for (const t of (turmas ?? []) as unknown as TurmaLista[]) {
@@ -33,6 +38,7 @@ export default async function ListaTurmas() {
   return (
     <div className="space-y-6">
       <Titulo>Turmas</Titulo>
+      <PedidosEntrada pedidos={pedidos} />
       {!escolas?.length && <Vazio>Comece criando uma escola (por exemplo, Cônsul ou Uniavan) no fim da página.</Vazio>}
 
       {((escolas ?? []) as Escola[]).map((e) => {
@@ -45,6 +51,7 @@ export default async function ListaTurmas() {
               {lista.map((t) => {
                 const desafios = t.temporadas.flatMap((tp) => tp.desafios);
                 const abertos = desafios.filter((d) => situacaoDesafio(d) === "aberto").length;
+                const nPedidos = pedidosPorTurma.get(t.id) ?? 0;
                 return (
                   <Link
                     key={t.id}
@@ -55,7 +62,12 @@ export default async function ListaTurmas() {
                       {t.nome} {t.serie && <span className="text-sm font-normal text-slate-500">· {t.serie}</span>}
                     </p>
                     <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
-                      {t.alunos[0]?.count ?? 0} alunos
+                      {(t.alunos[0]?.count ?? 0) - nPedidos} alunos
+                      {nPedidos > 0 && (
+                        <Etiqueta cor="ambar">
+                          {nPedidos} {nPedidos === 1 ? "pedido de entrada" : "pedidos de entrada"}
+                        </Etiqueta>
+                      )}
                       {abertos > 0 ? (
                         <Etiqueta cor="verde">
                           {abertos} desafio{abertos > 1 ? "s" : ""} aberto{abertos > 1 ? "s" : ""}
