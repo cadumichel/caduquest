@@ -4,7 +4,14 @@ import type { ReactNode } from "react";
 import { BotaoLink, Cartao, Etiqueta, Titulo, Vazio } from "@/components/ui";
 import { formatarData, formatarDataHora, hojeEmBrasilia } from "@/lib/datas";
 import { exigirProfessor } from "@/lib/professor";
-import { situacaoDesafio } from "@/lib/tipos-banco";
+import {
+  faseDaTemporada,
+  gabaritoAguardaProfessor,
+  situacaoDesafio,
+  ultimoDiaComPontos,
+  type Desafio,
+  type TemporadaEncerramento,
+} from "@/lib/tipos-banco";
 import { COLUNAS_PEDIDO, PedidosEntrada, type PedidoEntrada } from "./PedidosEntrada";
 
 export const metadata: Metadata = { title: "Início" };
@@ -27,7 +34,14 @@ type DesafioInicio = {
   tentativas: { concluida_em: string | null }[];
 };
 
-type TemporadaInicio = { id: string; nome: string; turma_id: string; data_prova: string };
+type TemporadaInicio = {
+  id: string;
+  nome: string;
+  turma_id: string;
+  data_prova: string;
+  encerramento?: string | null;
+  encerrada_em?: string | null;
+};
 
 /** Linha de "Também precisa de você": texto à esquerda, ação à direita. */
 function Pendencia({ children, acao }: { children: ReactNode; acao: ReactNode }) {
@@ -67,24 +81,32 @@ export default async function Inicio() {
       .order("fecha_em"),
     supabase
       .from("temporadas")
-      .select("id, nome, turma_id, data_prova")
-      .is("encerrada_em", null)
+      // "*" traz também o encerramento, quando o SQL dele já rodou. Temporada encerrada
+      // antes da prova continua aqui: os alunos estudam até a prova.
+      .select("*")
       .lte("inicio", hoje)
       .gte("data_prova", hoje)
       .order("data_prova"),
   ]);
   // Sem o SQL da carta coringa ou dos controles do gabarito, estas consultas falham e nada aparece.
-  const [{ data: cartasPendentes }, { data: gabaritosGuardados }] = await Promise.all([
+  const [{ data: cartasPendentes }, { data: gabaritosBrutos }] = await Promise.all([
     supabase.from("cartas_coringa").select("id, alunos(apelido, turma_id, turmas(nome))").eq("status", "pendente"),
     supabase
       .from("desafios")
-      .select("id, titulo, temporadas(turmas(nome))")
+      .select("*, temporadas(*, turmas(nome))")
       .eq("gabarito_manual", true)
       .is("gabarito_liberado_em", null)
       .lt("fecha_em", agora)
       .order("fecha_em", { ascending: false })
       .limit(10),
   ]);
+
+  // O que a temporada já liberou sozinha no encerramento não é mais pendência.
+  const gabaritosGuardados = (
+    (gabaritosBrutos ?? []) as unknown as (Desafio & {
+      temporadas: TemporadaEncerramento & { turmas: { nome: string } };
+    })[]
+  ).filter((d) => gabaritoAguardaProfessor(d));
 
   if (!escolas?.length) {
     return (
@@ -276,13 +298,22 @@ function BoxTurma({
             Próximo: <span className="font-medium text-slate-700">{proximo.titulo}</span> abre{" "}
             {formatarDataHora(proximo.abre_em)}
           </p>
+        ) : temporada && faseDaTemporada(temporada) === "estudo" ? (
+          <Etiqueta cor="ambar">período de estudo</Etiqueta>
         ) : temporada ? (
           <Etiqueta cor="vermelho">sem desafio aberto ou agendado</Etiqueta>
         ) : (
           <p className="text-xs text-slate-500">Sem temporada em andamento</p>
         ))}
 
-      {temporada && <p className="mt-auto text-xs text-slate-500">Prova em {formatarData(temporada.data_prova)}</p>}
+      {temporada && (
+        <p className="mt-auto text-xs text-slate-500">
+          {faseDaTemporada(temporada) === "pontos" && ultimoDiaComPontos(temporada) !== temporada.data_prova
+            ? `Encerramento em ${formatarData(ultimoDiaComPontos(temporada))} · `
+            : ""}
+          Prova em {formatarData(temporada.data_prova)}
+        </p>
+      )}
     </Link>
   );
 }

@@ -52,6 +52,15 @@ import {
   TOLERANCIA_PADRAO,
 } from "@/lib/tela-protegida";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
+import {
+  ajustarDesafiosAoEncerramento,
+  colunasEncerramento,
+  conferirDatasTemporada,
+  conferirJanelaNaTemporada,
+  encerramentoOuNulo,
+  ERRO_SQL_ENCERRAMENTO,
+} from "@/lib/temporada-encerramento";
+import { ultimoDiaComPontos, type Temporada } from "@/lib/tipos-banco";
 import { guardarImagemDaUrl } from "./imagem";
 import { professorDoConector } from "./professor";
 
@@ -528,7 +537,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
       const { data: escolas } = await db
         .from("escolas")
         .select(
-          "nome, periodo, turmas(id, nome, serie, codigo, temporadas(id, nome, inicio, data_prova, capitulos, desafios(id, tipo, codigo_dia, titulo, abre_em, fecha_em)))",
+          "nome, periodo, turmas(id, nome, serie, codigo, temporadas(*, desafios(id, tipo, codigo_dia, titulo, abre_em, fecha_em)))",
         )
         .eq("professor_id", professorId)
         .order("nome");
@@ -950,11 +959,14 @@ export function registrarFerramentas(server: McpServer, origem: string) {
 
       const { data: temporada } = await db
         .from("temporadas")
-        .select("id, nome, turmas(nome)")
+        // "*" traz também o encerramento, quando o SQL dele já rodou.
+        .select("*, turmas(nome)")
         .eq("id", args.temporada_id)
         .eq("professor_id", professorId)
         .maybeSingle();
       if (!temporada) return falha("Temporada não encontrada. Use listar_turmas para obter o id.");
+      const erroJanela = conferirJanelaNaTemporada(fecha, temporada as Temporada, true);
+      if (erroJanela) return falha(erroJanela);
 
       const { data: encontradas } = await db
         .from("questoes")
@@ -1090,12 +1102,29 @@ export function registrarFerramentas(server: McpServer, origem: string) {
     {
       title: "Criar temporada",
       description:
-        "Cria uma temporada (o período de revisão de uma turma, que termina na prova). Em duas etapas: chame primeiro com confirmar=false e mostre a prévia ao professor; só chame com confirmar=true depois que ele aprovar. Pegue o turma_id em listar_turmas.",
+        "Cria uma temporada (o período de revisão de uma turma). Os desafios valem pontos até o encerramento; se ele vier antes da prova, os dias entre os dois são de estudo (treino e revisão de erros, sem pontos). Em duas etapas: chame primeiro com confirmar=false e mostre a prévia ao professor; só chame com confirmar=true depois que ele aprovar. Pegue o turma_id em listar_turmas.",
       inputSchema: z.object({
         turma_id: z.string().uuid(),
         nome: z.string().min(1).max(120).describe('Ex.: "1º trimestre: Brasil Colônia".'),
         inicio: data,
-        data_prova: data.describe("Dia da prova, que encerra a temporada (AAAA-MM-DD)."),
+        data_prova: data.describe("Dia da prova (AAAA-MM-DD)."),
+        encerramento: data
+          .optional()
+          .describe(
+            "Último dia que vale pontos (AAAA-MM-DD), entre o início e a prova. Omitido = o dia da prova. Os desafios precisam fechar até ele.",
+          ),
+        gabarito_no_encerramento: z
+          .boolean()
+          .optional()
+          .describe(
+            "true (padrão) = no encerramento sai o gabarito dos desafios guardados para liberação manual. Os marcados 'nunca mostrar' continuam escondidos.",
+          ),
+        gabarito_so_no_encerramento: z
+          .boolean()
+          .optional()
+          .describe(
+            "false (padrão) = cada desafio mostra o gabarito quando fecha. true = nenhum gabarito durante a temporada; todos saem juntos no encerramento.",
+          ),
         capitulos: z
           .array(z.string().min(1).max(200))
           .max(30)
@@ -1107,7 +1136,11 @@ export function registrarFerramentas(server: McpServer, origem: string) {
     async (args) => {
       const professorId = await professorDoConector();
       const db = criarClienteAdmin();
-      if (args.data_prova < args.inicio) return falha("A data da prova deve ser depois do início.");
+      const encerramento = encerramentoOuNulo(args.encerramento, args.data_prova);
+      const erroDatas = conferirDatasTemporada({ inicio: args.inicio, data_prova: args.data_prova, encerramento });
+      if (erroDatas) return falha(erroDatas);
+      const gabaritoNoEncerramento = args.gabarito_no_encerramento ?? true;
+      const gabaritoSoNoEncerramento = args.gabarito_so_no_encerramento ?? false;
       const { data: turma } = await db
         .from("turmas")
         .select("id, nome, escolas!inner(nome, professor_id), temporadas(nome, inicio, data_prova)")
@@ -1125,7 +1158,11 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         turma: `${turma.nome} · ${escola.nome}`,
         nome: args.nome.trim(),
         inicio: formatarData(args.inicio),
+        encerramento: formatarData(encerramento ?? args.data_prova),
         prova: formatarData(args.data_prova),
+        gabarito: gabaritoSoNoEncerramento
+          ? "só no encerramento (todos juntos)"
+          : `quando cada desafio fecha; no encerramento ${gabaritoNoEncerramento ? "libera" : "não libera"} o guardado`,
         capitulos,
         narrativa: args.narrativa?.trim() || null,
         ...(sobrepostas.length && {
@@ -1142,12 +1179,18 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           nome: previa.nome,
           inicio: args.inicio,
           data_prova: args.data_prova,
+          ...colunasEncerramento({ encerramento, gabaritoNoEncerramento, gabaritoSoNoEncerramento }),
           capitulos,
           narrativa: previa.narrativa,
         })
         .select("id")
         .single();
-      if (error || !temporada) return falha("Não foi possível criar a temporada.");
+      if (error || !temporada)
+        return falha(
+          encerramento || !gabaritoNoEncerramento || gabaritoSoNoEncerramento
+            ? ERRO_SQL_ENCERRAMENTO
+            : "Não foi possível criar a temporada.",
+        );
       return resultado({
         criada: previa,
         temporada_id: temporada.id,
@@ -1167,6 +1210,17 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         nome: z.string().min(1).max(120).optional(),
         inicio: data.optional(),
         data_prova: data.optional(),
+        encerramento: z
+          .union([data, z.literal("")])
+          .optional()
+          .describe(
+            'Último dia que vale pontos; "" = o dia da prova. Desafios que fechariam depois passam a fechar nele.',
+          ),
+        gabarito_no_encerramento: z.boolean().optional(),
+        gabarito_so_no_encerramento: z
+          .boolean()
+          .optional()
+          .describe("true = gabaritos só no encerramento; false = quando cada desafio fecha."),
         capitulos: z.array(z.string().min(1).max(200)).max(30).optional(),
         narrativa: z.string().max(2000).optional().describe('Envie "" para apagar.'),
         confirmar: z.boolean(),
@@ -1177,7 +1231,8 @@ export function registrarFerramentas(server: McpServer, origem: string) {
       const db = criarClienteAdmin();
       const { data: atual } = await db
         .from("temporadas")
-        .select("id, nome, inicio, data_prova, capitulos, narrativa")
+        // "*" traz também o encerramento, quando o SQL dele já rodou.
+        .select("*")
         .eq("id", args.temporada_id)
         .eq("professor_id", professorId)
         .maybeSingle();
@@ -1189,20 +1244,59 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         data_prova: args.data_prova ?? atual.data_prova,
         capitulos: args.capitulos ? [...new Set(args.capitulos.map((c) => c.trim()).filter(Boolean))] : atual.capitulos,
         narrativa: args.narrativa === undefined ? atual.narrativa : args.narrativa.trim() || null,
+        encerramento: null as string | null,
+        gabarito_no_encerramento: args.gabarito_no_encerramento ?? atual.gabarito_no_encerramento !== false,
+        gabarito_so_no_encerramento: args.gabarito_so_no_encerramento ?? !!atual.gabarito_so_no_encerramento,
       };
-      if (novo.data_prova < novo.inicio) return falha("A data da prova deve ser depois do início.");
+      novo.encerramento = encerramentoOuNulo(
+        args.encerramento === undefined ? atual.encerramento : args.encerramento,
+        novo.data_prova,
+      );
+      const erroDatas = conferirDatasTemporada(novo);
+      if (erroDatas) return falha(erroDatas);
+      // Só confere os desafios quando o fim da pontuação muda.
+      const mudouFim = ultimoDiaComPontos(novo) !== ultimoDiaComPontos(atual as Temporada);
+      const conferido = mudouFim ? await ajustarDesafiosAoEncerramento(db, atual.id, novo, false) : { encurtados: 0 };
+      if ("erro" in conferido) return falha(conferido.erro);
       const resumo = (t: typeof novo) => ({
         nome: t.nome,
         inicio: formatarData(t.inicio),
+        encerramento: formatarData(t.encerramento || t.data_prova),
         prova: formatarData(t.data_prova),
+        gabarito: t.gabarito_so_no_encerramento
+          ? "só no encerramento (todos juntos)"
+          : `quando cada desafio fecha; no encerramento ${t.gabarito_no_encerramento !== false ? "libera" : "não libera"} o guardado`,
         capitulos: t.capitulos,
         narrativa: t.narrativa,
       });
-      const previa = { antes: resumo(atual), depois: resumo(novo) };
+      const previa = {
+        antes: resumo(atual),
+        depois: resumo(novo),
+        ...(conferido.encurtados && {
+          aviso: `${conferido.encurtados} desafio(s) fechariam depois do encerramento e passam a fechar nele.`,
+        }),
+      };
       if (!args.confirmar) return resultado({ previa, proximo_passo: "Mostre a prévia e confirme com o professor." });
 
-      const { error } = await db.from("temporadas").update(novo).eq("id", atual.id);
-      if (error) return falha("Não foi possível salvar a temporada.");
+      const { encerramento, gabarito_no_encerramento, gabarito_so_no_encerramento, ...basicos } = novo;
+      const extras = colunasEncerramento(
+        {
+          encerramento,
+          gabaritoNoEncerramento: gabarito_no_encerramento,
+          gabaritoSoNoEncerramento: gabarito_so_no_encerramento,
+        },
+        atual,
+      );
+      const { error } = await db
+        .from("temporadas")
+        .update({ ...basicos, ...extras })
+        .eq("id", atual.id);
+      if (error)
+        return falha(Object.keys(extras).length ? ERRO_SQL_ENCERRAMENTO : "Não foi possível salvar a temporada.");
+      if (mudouFim) {
+        const ajustado = await ajustarDesafiosAoEncerramento(db, atual.id, novo, true);
+        if ("erro" in ajustado) return falha(ajustado.erro);
+      }
       return resultado({ salvo: previa.depois, ver_em: `${origem}/professor/temporadas/${atual.id}` });
     },
   );
@@ -1259,7 +1353,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
       const { data: atual } = await db
         .from("desafios")
         // "*" traz os tempos de cada questão e da verificação, quando o SQL deles já rodou.
-        .select("*, desafio_questoes(*, questoes(id, enunciado, relampago, tempo_limite_s))")
+        .select("*, temporadas(*), desafio_questoes(*, questoes(id, enunciado, relampago, tempo_limite_s))")
         .eq("id", args.desafio_id)
         .eq("professor_id", professorId)
         .maybeSingle();
@@ -1335,6 +1429,10 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         saida_zera_questao: args.saida_zera_questao ?? atual.saida_zera_questao,
       };
       if (new Date(novo.fecha_em) <= new Date(novo.abre_em)) return falha("O fechamento deve ser depois da abertura.");
+      if (args.fecha_em) {
+        const erroJanela = conferirJanelaNaTemporada(novo.fecha_em, atual.temporadas as Temporada | null, false);
+        if (erroJanela) return falha(erroJanela);
+      }
       const resumo = (
         d: typeof novo,
         qs: QuestaoTempo[],

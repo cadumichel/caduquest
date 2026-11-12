@@ -16,7 +16,7 @@ export const QUESTOES_POR_RODADA = 5;
 export async function errosParaRevisar(db: SupabaseClient, alunoId: string, turmaId: string): Promise<string[]> {
   const { data: tentativas } = await db
     .from("tentativas")
-    .select("id, desafios!inner(*, temporadas!inner(turma_id))")
+    .select("id, desafios!inner(*, temporadas!inner(*))")
     .eq("aluno_id", alunoId)
     .eq("desafios.temporadas.turma_id", turmaId)
     .lt("desafios.fecha_em", new Date(Date.now() - JANELA_APOS_FECHAR_S * 1000).toISOString());

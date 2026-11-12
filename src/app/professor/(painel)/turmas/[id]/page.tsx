@@ -24,7 +24,7 @@ import { formatarData, formatarDataHora, hojeEmBrasilia } from "@/lib/datas";
 import { medalhasDaTurma } from "@/lib/medalhas";
 import { exigirProfessor } from "@/lib/professor";
 import { rankingDaTemporada, temporadaAtual } from "@/lib/temporada-dados";
-import { situacaoDesafio } from "@/lib/tipos-banco";
+import { faseDaTemporada as fase, situacaoDesafio, ultimoDiaComPontos } from "@/lib/tipos-banco";
 import { PedidosEntrada } from "../../PedidosEntrada";
 import type { Aluno, Desafio, Temporada } from "@/lib/tipos-banco";
 import { cartasParaAProxima } from "@/lib/carta-coringa";
@@ -277,7 +277,9 @@ export default async function PaginaTurma({ params, searchParams }: PageProps<"/
                     <span className="font-medium">{t.nome}</span>
                     <span className="flex items-center gap-2 text-sm text-slate-500">
                       {formatarData(t.inicio)} – {formatarData(t.data_prova)}
-                      {t.encerrada_em ? (
+                      {fase(t) === "estudo" ? (
+                        <Etiqueta cor="ambar">período de estudo</Etiqueta>
+                      ) : fase(t) === "encerrada" ? (
                         <Etiqueta>encerrada</Etiqueta>
                       ) : (
                         t.id === atual?.id && <Etiqueta cor="verde">atual</Etiqueta>
@@ -299,14 +301,7 @@ export default async function PaginaTurma({ params, searchParams }: PageProps<"/
                 <Campo rotulo="Narrativa (opcional)">
                   <AreaTexto name="narrativa" rows={2} />
                 </Campo>
-                <div className="grid grid-cols-2 gap-3">
-                  <Campo rotulo="Início">
-                    <Entrada type="date" name="inicio" defaultValue={hoje} required />
-                  </Campo>
-                  <Campo rotulo="Data da prova">
-                    <Entrada type="date" name="data_prova" required />
-                  </Campo>
-                </div>
+                <CamposDatasTemporada inicio={hoje} />
                 <Campo rotulo="Capítulos cobertos" dica="Um por linha, na ordem da apostila.">
                   <AreaTexto name="capitulos" rows={3} />
                 </Campo>
@@ -398,6 +393,8 @@ async function AbaTemporada({
   ]);
   const desafios = (desafiosBrutos ?? []) as DesafioLista[];
   const encerrada = !!temporada.encerrada_em;
+  const faseAtual = fase(temporada);
+  const temEncerramento = ultimoDiaComPontos(temporada) !== temporada.data_prova;
   const abertos = desafios.filter((d) => situacaoDesafio(d) === "aberto").length;
   const agendados = desafios.filter((d) => situacaoDesafio(d) === "agendado").length;
 
@@ -405,8 +402,12 @@ async function AbaTemporada({
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-slate-600">
-          {formatarData(temporada.inicio)} a {formatarData(temporada.data_prova)} (prova)
-          {encerrada ? (
+          {formatarData(temporada.inicio)} a {formatarData(ultimoDiaComPontos(temporada))}
+          {temEncerramento || encerrada ? " (pontos)" : " (prova)"}
+          {(temEncerramento || encerrada) && <> · prova {formatarData(temporada.data_prova)}</>}{" "}
+          {faseAtual === "estudo" ? (
+            <Etiqueta cor="ambar">período de estudo</Etiqueta>
+          ) : faseAtual === "encerrada" ? (
             <Etiqueta cor="cinza">encerrada</Etiqueta>
           ) : (
             ehAtual && (
@@ -417,7 +418,7 @@ async function AbaTemporada({
             )
           )}
         </p>
-        {!encerrada && (
+        {faseAtual === "pontos" && (
           <div className="flex flex-wrap gap-2">
             <BotaoLink href={`/professor/desafios/novo?temporada=${temporada.id}`}>+ Novo desafio</BotaoLink>
           </div>
@@ -483,21 +484,25 @@ async function AbaTemporada({
             <Campo rotulo="Narrativa">
               <AreaTexto name="narrativa" rows={2} defaultValue={temporada.narrativa ?? ""} />
             </Campo>
-            <div className="grid grid-cols-2 gap-3">
-              <Campo rotulo="Início">
-                <Entrada type="date" name="inicio" defaultValue={temporada.inicio} required />
-              </Campo>
-              <Campo rotulo="Data da prova">
-                <Entrada type="date" name="data_prova" defaultValue={temporada.data_prova} required />
-              </Campo>
-            </div>
+            <CamposDatasTemporada
+              inicio={temporada.inicio}
+              dataProva={temporada.data_prova}
+              encerramento={temporada.encerramento ?? ""}
+              gabaritoNoEncerramento={temporada.gabarito_no_encerramento !== false}
+              gabaritoSoNoEncerramento={!!temporada.gabarito_so_no_encerramento}
+            />
             <Campo rotulo="Capítulos cobertos" dica="Um por linha. Aparecem como a trilha do mapa do aluno.">
               <AreaTexto name="capitulos" rows={4} defaultValue={temporada.capitulos.join("\n")} />
             </Campo>
             <BotaoEnviar>Salvar</BotaoEnviar>
           </FormAcao>
           <div className="border-t border-slate-100 pt-4">
-            {encerrada ? (
+            {faseAtual !== "pontos" && !encerrada ? (
+              <p className="text-sm text-slate-600">
+                A pontuação desta temporada terminou em {formatarData(ultimoDiaComPontos(temporada))}. Para reabrir,
+                mude a data de encerramento acima.
+              </p>
+            ) : encerrada ? (
               <BotaoConfirmar
                 acao={reabrirTemporada.bind(null, temporada.id)}
                 pergunta="Reabrir a temporada? Os desafios encerrados continuam fechados; mude as datas dos que quiser reabrir."
@@ -509,18 +514,102 @@ async function AbaTemporada({
               <>
                 <BotaoConfirmar
                   acao={encerrarTemporada.bind(null, temporada.id)}
-                  pergunta={`Encerrar a temporada agora, antes da prova?${abertos ? ` ${abertos} desafio(s) aberto(s) fecham agora (quem estiver numa questão termina só ela).` : ""}${agendados ? ` ${agendados} desafio(s) que ainda não abriram serão apagados; as questões continuam no banco.` : ""} O ranking fica congelado.`}
+                  pergunta={`Encerrar a temporada agora?${abertos ? ` ${abertos} desafio(s) aberto(s) fecham agora (quem estiver numa questão termina só ela).` : ""}${agendados ? ` ${agendados} desafio(s) que ainda não abriram serão apagados; as questões continuam no banco.` : ""} O ranking fica congelado.`}
                 >
                   Encerrar temporada
                 </BotaoConfirmar>
                 <p className="mt-2 text-xs text-slate-500">
-                  Fecha os desafios abertos agora e congela o ranking, sem esperar a data da prova.
+                  Fecha os desafios abertos agora e congela o ranking, sem esperar o encerramento. Até a prova os alunos
+                  seguem estudando com o treino e a revisão de erros.
                 </p>
               </>
             )}
           </div>
         </div>
       </details>
+    </div>
+  );
+}
+
+/**
+ * Datas da temporada: início, encerramento (último dia que vale pontos) e prova.
+ * Entre o encerramento e a prova os alunos estudam com treino e revisão de erros.
+ */
+function CamposDatasTemporada({
+  inicio,
+  dataProva = "",
+  encerramento = "",
+  gabaritoNoEncerramento = true,
+  gabaritoSoNoEncerramento = false,
+}: {
+  inicio: string;
+  dataProva?: string;
+  encerramento?: string;
+  gabaritoNoEncerramento?: boolean;
+  gabaritoSoNoEncerramento?: boolean;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Campo rotulo="Início">
+          <Entrada type="date" name="inicio" defaultValue={inicio} required />
+        </Campo>
+        <Campo rotulo="Encerramento" dica="Último dia que vale pontos. Vazio = dia da prova.">
+          <Entrada type="date" name="encerramento" defaultValue={encerramento} />
+        </Campo>
+        <Campo rotulo="Data da prova">
+          <Entrada type="date" name="data_prova" defaultValue={dataProva} required />
+        </Campo>
+      </div>
+      <fieldset className="space-y-2 text-sm">
+        <legend className="mb-1 font-medium text-slate-700">Quando o aluno vê o gabarito</legend>
+        <label className="flex cursor-pointer items-start gap-2">
+          <input
+            type="radio"
+            name="quando_gabarito"
+            value="desafio"
+            defaultChecked={!gabaritoSoNoEncerramento}
+            className="mt-1"
+          />
+          <span>
+            Quando cada desafio fecha
+            <span className="block text-xs text-slate-500">
+              O aluno confere os erros a cada semana e já pode treinar e revisar.
+            </span>
+          </span>
+        </label>
+        <label className="flex cursor-pointer items-start gap-2">
+          <input
+            type="radio"
+            name="quando_gabarito"
+            value="encerramento"
+            defaultChecked={gabaritoSoNoEncerramento}
+            className="mt-1"
+          />
+          <span>
+            Só no encerramento da temporada
+            <span className="block text-xs text-slate-500">
+              Nenhum gabarito aparece antes; no encerramento todos saem juntos, com treino e revisão de erros até a
+              prova.
+            </span>
+          </span>
+        </label>
+      </fieldset>
+      <label className="flex cursor-pointer items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          name="gabarito_no_encerramento"
+          defaultChecked={gabaritoNoEncerramento}
+          className="mt-1"
+        />
+        <span>
+          No encerramento, liberar também o gabarito que guardei
+          <span className="block text-xs text-slate-500">
+            Vale para os desafios em que você escolheu liberar o gabarito na mão. Os marcados &quot;nunca mostrar&quot;
+            continuam escondidos.
+          </span>
+        </span>
+      </label>
     </div>
   );
 }

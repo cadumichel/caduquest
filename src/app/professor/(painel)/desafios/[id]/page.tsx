@@ -8,13 +8,21 @@ import { BotaoEnviar } from "@/components/BotaoEnviar";
 import { FormAcao } from "@/components/FormAcao";
 import { Gabarito } from "@/components/Gabarito";
 import { BotaoLink, Campo, Cartao, Entrada, Etiqueta, Subtitulo, Titulo } from "@/components/ui";
-import { isoParaDataHoraLocal } from "@/lib/datas";
+import { formatarData, isoParaDataHoraLocal } from "@/lib/datas";
 import { exigirProfessor } from "@/lib/professor";
 import type { Conteudo } from "@/lib/questoes/tipos";
 import { NOME_TIPO } from "@/lib/questoes/tipos";
 import { resultadosDoDesafio } from "@/lib/resultados-desafio";
 import { marcaResultado, rotuloResultado, type Marca } from "@/lib/relatorio";
-import { gabaritoLiberado, gabaritoLiberadoEm, situacaoDesafio, type Desafio, type Questao } from "@/lib/tipos-banco";
+import {
+  gabaritoLiberado,
+  gabaritoLiberadoEm,
+  situacaoDesafio,
+  type Desafio,
+  type Questao,
+  type TemporadaEncerramento,
+  ultimoDiaComPontos,
+} from "@/lib/tipos-banco";
 import { atualizarJanelaDesafio, excluirDesafio } from "../../actions";
 import { ControlesDesafio } from "./ControlesDesafio";
 import { EspecialDesafio } from "./EspecialDesafio";
@@ -52,12 +60,12 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
   const { data } = await supabase
     .from("desafios")
     // "*" em desafio_questoes traz o tempo de cada questão, quando o SQL dos tempos já rodou.
-    .select("*, temporadas(id, nome, turma_id, turmas(nome)), desafio_questoes(*, questoes(*))")
+    .select("*, temporadas(*, turmas(nome)), desafio_questoes(*, questoes(*))")
     .eq("id", id)
     .maybeSingle();
   if (!data) notFound();
   const desafio = data as Desafio & {
-    temporadas: { id: string; nome: string; turma_id: string; turmas: { nome: string } };
+    temporadas: TemporadaEncerramento & { id: string; nome: string; turma_id: string; turmas: { nome: string } };
     desafio_questoes: { posicao: number; tempo_limite_s?: number | null; questoes: Questao }[];
   };
   const ordenadas = [...desafio.desafio_questoes].sort((a, b) => a.posicao - b.posicao);
@@ -385,6 +393,16 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
               liberadoEm={desafio.gabarito_liberado_em ?? null}
               visivelEm={gabaritoLiberadoEm(desafio).toISOString()}
               visivel={gabaritoLiberado(desafio)}
+              soNoEncerramento={
+                desafio.temporadas.gabarito_so_no_encerramento
+                  ? formatarData(ultimoDiaComPontos(desafio.temporadas))
+                  : null
+              }
+              encerramento={
+                desafio.temporadas.gabarito_no_encerramento === false
+                  ? null
+                  : formatarData(ultimoDiaComPontos(desafio.temporadas))
+              }
             />
           </Cartao>
           <Cartao>
