@@ -8,6 +8,7 @@ import { rankingParaAluno } from "@/lib/ranking";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { situacaoDaTemporada } from "@/lib/temporada-dados";
 import { MetaTurma } from "@/components/MetaTurma";
+import { ComoGanharBonus } from "@/components/ComoGanharBonus";
 import type { Divisao } from "@/lib/ligas";
 import { formatarPontos } from "@/lib/pontos";
 
@@ -52,6 +53,8 @@ export default async function Ranking() {
 
       <MetaTurma meta={meta} />
 
+      <ComoGanharBonus />
+
       <h2 className="text-lg font-extrabold text-marca-900">Ranking geral da temporada</h2>
       <Cartao className="p-0">
         <ol className="divide-y divide-slate-100">
@@ -80,8 +83,8 @@ export default async function Ranking() {
         </Cartao>
       )}
       <p className="text-center text-xs text-slate-500">
-        {total} alunos na turma. Os pontos incluem o bônus da ofensiva (🔥) e o da meta da turma (🤝). Desempate pela
-        maior taxa de acerto. Só o top 10 aparece para todos. 🏅 = desafios vencidos.
+        {total} alunos na turma. Aqui os pontos somam a temporada inteira, com o bônus da ofensiva (🔥) e o da meta da
+        turma (🤝). Desempate pela maior taxa de acerto. Só o top 10 aparece para todos. 🏅 = desafios vencidos.
       </p>
     </div>
   );
@@ -134,7 +137,8 @@ function LigaDaSemana({
         <p className="text-xs opacity-80">
           {liga.divisao === "Turma"
             ? "Quando mais alunos pontuarem, a turma se divide em Ouro, Prata e Bronze."
-            : "Você disputa com quem tem pontuação parecida. Só valem os pontos desta semana!"}
+            : "Você disputa com quem tem pontuação parecida."}{" "}
+          Só contam os pontos das questões desta semana, sem os bônus de ofensiva e meta da turma.
         </p>
       </div>
       <ol className="divide-y divide-slate-100">
