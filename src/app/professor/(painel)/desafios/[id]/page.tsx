@@ -2,13 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Abas, abaAtual, Numero } from "@/components/Abas";
-import { EscolhaPesquisa } from "@/components/EscolhaPesquisa";
-import { BotaoConfirmar } from "@/components/BotaoConfirmar";
-import { BotaoEnviar } from "@/components/BotaoEnviar";
-import { FormAcao } from "@/components/FormAcao";
 import { Gabarito } from "@/components/Gabarito";
-import { BotaoLink, Campo, Cartao, Entrada, Etiqueta, Subtitulo, Titulo } from "@/components/ui";
-import { formatarData, isoParaDataHoraLocal } from "@/lib/datas";
+import { Aviso, Cartao, Etiqueta, Subtitulo, Titulo } from "@/components/ui";
+import { formatarData, formatarDataHora, isoParaDataHoraLocal } from "@/lib/datas";
 import { exigirProfessor } from "@/lib/professor";
 import type { Conteudo } from "@/lib/questoes/tipos";
 import { NOME_TIPO } from "@/lib/questoes/tipos";
@@ -23,14 +19,10 @@ import {
   type TemporadaEncerramento,
   ultimoDiaComPontos,
 } from "@/lib/tipos-banco";
-import { atualizarJanelaDesafio, excluirDesafio } from "../../actions";
-import { ControlesDesafio } from "./ControlesDesafio";
-import { EspecialDesafio } from "./EspecialDesafio";
 import { descreverEspecial, percentualEmVigor, pontosBase } from "@/lib/especial";
 import { padroesDoProfessor } from "@/lib/padroes";
 import { PainelRelampago } from "./PainelRelampago";
-import { TemposDesafio, type QuestaoComTempo } from "./TemposDesafio";
-import { RegrasDesafio } from "./RegrasDesafio";
+import { AjustesDesafio, type QuestaoComTempo } from "./AjustesDesafio";
 import { descreverRegraCliques, descreverRegraSaidas } from "@/lib/tela-protegida";
 import { verificacoesAutomaticas } from "@/lib/questoes/verificacao";
 import { regrasDoDesafio } from "@/lib/questoes/regras-desafio";
@@ -54,6 +46,8 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
   const { id } = await params;
   const sp = await searchParams;
   const aba = abaAtual(sp.aba, ABAS);
+  const copias = Number(sp.copias) || 0;
+  const falhas = Number(sp.falhas) || 0;
   // Questão escolhida na tabela (?q=3): a lista abaixo abre o gabarito dela.
   const questaoAberta = typeof sp.q === "string" ? Number(sp.q) : null;
   const { supabase } = await exigirProfessor();
@@ -98,6 +92,8 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
   const comAlerta = linhas.filter((l) => alertasDe(l) > 0).length;
   // Aba Questões: em ordem numérica (a da montagem), igual à tabela.
   const listaQuestoes = questoes.map((q, i) => ({ q, numero: i + 1, acerto: acertoPorQuestao.get(q.id) ?? null }));
+  const regras = regrasDoDesafio(desafio);
+  const diaEncerramento = formatarData(ultimoDiaComPontos(desafio.temporadas));
   const url = (a: (typeof ABAS)[number]) => `/professor/desafios/${id}?aba=${a}`;
   const linkQuestao = (numero: number) => `${url("questoes")}&q=${numero}#questao-${numero}`;
 
@@ -124,6 +120,14 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
           </p>
         )}
       </div>
+
+      {(copias > 0 || falhas > 0) && (
+        <Aviso tipo={falhas ? "erro" : "ok"}>
+          {copias > 0 && `Criado também em ${copias} ${copias === 1 ? "outra turma" : "outras turmas"}. `}
+          {falhas > 0 &&
+            `Não deu para criar em ${falhas} ${falhas === 1 ? "turma" : "turmas"} (temporada encerrada, prazo depois do encerramento ou sem acesso).`}
+        </Aviso>
+      )}
 
       {desafio.tipo === "relampago" && desafio.codigo_dia && (
         <PainelRelampago
@@ -370,101 +374,72 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
       )}
 
       {aba === "ajustes" && (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Cartao className="border-amber-200 lg:col-span-2">
-            <EspecialDesafio
-              id={id}
-              especial={Boolean(desafio.especial)}
-              multiplicador={desafio.multiplicador ?? null}
-              percentual={desafio.tempo_percentual ?? null}
-              pontosBase={pontosBase(desafio)}
-              jaComecaram={comecaram}
-              padraoMultiplicador={padroes.especial_multiplicador}
-              padraoPercentual={padroes.especial_tempo_percentual}
-            />
-          </Cartao>
-          <Cartao>
-            <ControlesDesafio
-              id={id}
-              relampago={desafio.tipo === "relampago"}
-              situacao={situacao}
-              fechaEm={desafio.fecha_em}
-              manual={!!desafio.gabarito_manual}
-              liberadoEm={desafio.gabarito_liberado_em ?? null}
-              visivelEm={gabaritoLiberadoEm(desafio).toISOString()}
-              visivel={gabaritoLiberado(desafio)}
-              soNoEncerramento={
-                desafio.temporadas.gabarito_so_no_encerramento
-                  ? formatarData(ultimoDiaComPontos(desafio.temporadas))
-                  : null
-              }
-              encerramento={
-                desafio.temporadas.gabarito_no_encerramento === false
-                  ? null
-                  : formatarData(ultimoDiaComPontos(desafio.temporadas))
-              }
-            />
-          </Cartao>
-          <Cartao>
-            <Subtitulo>Janela do desafio</Subtitulo>
-            <p className="mb-3 text-sm text-slate-600">
-              ⏱️{" "}
-              {desafio.tempo_por_questao_s
-                ? `${desafio.tempo_por_questao_s} s em todas as questões`
-                : "Tempo de cada questão"}
-              {temposPersonalizados > 0 && ` (${temposPersonalizados} com tempo próprio)`}
-              {" · "}📖 {textoVerificacoes}
-              {verificacoes !== 0 && ` de ${tempoVerificacao(desafio)} s`}
-              {" · "}
-              {desafio.saida_zera_questao
-                ? `🚫 pesquisa bloqueada (${descreverRegraSaidas(desafio)}; ${descreverRegraCliques(desafio)})`
-                : "🔎 pesquisa liberada"}
-            </p>
-            <FormAcao acao={atualizarJanelaDesafio}>
-              <input type="hidden" name="id" value={id} />
-              <Campo rotulo="Título">
-                <Entrada name="titulo" defaultValue={desafio.titulo} />
-              </Campo>
-              <Campo rotulo="Abre em">
-                <Entrada type="datetime-local" name="abre_em" defaultValue={isoParaDataHoraLocal(desafio.abre_em)} />
-              </Campo>
-              <Campo rotulo="Fecha em">
-                <Entrada type="datetime-local" name="fecha_em" defaultValue={isoParaDataHoraLocal(desafio.fecha_em)} />
-              </Campo>
-              <EscolhaPesquisa name="pesquisa" bloqueada={desafio.saida_zera_questao} />
-              <BotaoEnviar>Salvar</BotaoEnviar>
-            </FormAcao>
-          </Cartao>
-          <Cartao className="lg:col-span-2">
-            <RegrasDesafio
-              id={id}
-              regras={regrasDoDesafio(desafio)}
-              pesquisaBloqueada={desafio.saida_zera_questao}
-              totalQuestoes={questoes.length}
-              jaComecaram={comecaram}
-            />
-          </Cartao>
-          <Cartao className="lg:col-span-2">
-            <TemposDesafio
-              id={id}
-              percentual={percentualEmVigor(desafio)}
-              todas={desafio.tempo_por_questao_s}
-              verificacao={desafio.tempo_verificacao_s ?? null}
-              questoes={comTempo}
-            />
-          </Cartao>
-          <Cartao className="flex flex-wrap items-center justify-between gap-3 lg:col-span-2">
-            <BotaoLink href={`/professor/desafios/${id}/csv`} variante="secundario" prefetch={false}>
-              Exportar planilha (CSV)
-            </BotaoLink>
-            <BotaoConfirmar
-              acao={excluirDesafio.bind(null, id)}
-              pergunta="Apagar este desafio? As tentativas e os pontos dos alunos nele também serão apagados."
-            >
-              Apagar desafio
-            </BotaoConfirmar>
-          </Cartao>
-        </div>
+        <AjustesDesafio
+          key={JSON.stringify([desafio, temposPersonalizados])}
+          id={id}
+          situacao={situacao}
+          relampago={desafio.tipo === "relampago"}
+          comecaram={comecaram}
+          janela={{
+            titulo: desafio.titulo,
+            abreEm: isoParaDataHoraLocal(desafio.abre_em),
+            fechaEm: isoParaDataHoraLocal(desafio.fecha_em),
+            fechaIso: desafio.fecha_em,
+            pesquisaBloqueada: desafio.saida_zera_questao,
+          }}
+          regras={regras}
+          tempos={{
+            todas: desafio.tempo_por_questao_s,
+            verificacao: desafio.tempo_verificacao_s ?? null,
+            percentual: percentualEmVigor(desafio),
+            questoes: comTempo,
+          }}
+          especial={{
+            ligado: Boolean(desafio.especial),
+            multiplicador: desafio.multiplicador ?? null,
+            percentual: desafio.tempo_percentual ?? null,
+            pontosBase: pontosBase(desafio),
+            padraoMultiplicador: padroes.especial_multiplicador,
+            padraoPercentual: padroes.especial_tempo_percentual,
+          }}
+          gabarito={{
+            manual: !!desafio.gabarito_manual,
+            liberadoEm: desafio.gabarito_liberado_em ?? null,
+            visivelEm: gabaritoLiberadoEm(desafio).toISOString(),
+            visivel: gabaritoLiberado(desafio),
+            nunca: regras.gabarito_nunca,
+            soNoEncerramento: desafio.temporadas.gabarito_so_no_encerramento ? diaEncerramento : null,
+            encerramento: desafio.temporadas.gabarito_no_encerramento === false ? null : diaEncerramento,
+          }}
+          resumos={{
+            janela: `${formatarDataHora(desafio.abre_em)} até ${formatarDataHora(desafio.fecha_em)}`,
+            consulta: desafio.saida_zera_questao
+              ? `Sem consulta: ${descreverRegraSaidas(desafio)}, ${descreverRegraCliques(desafio)}${regras.teclado_bloqueado ? ", tecla zera" : ""}`
+              : "Com consulta: pesquisa liberada",
+            tempo: `${desafio.tempo_por_questao_s ? `${desafio.tempo_por_questao_s} s em todas` : "tempo de cada questão"}${temposPersonalizados ? ` (${temposPersonalizados} com tempo próprio)` : ""} · teste ${tempoVerificacao(desafio)} s`,
+            questoes: [
+              textoVerificacoes,
+              regras.ordem_fixa ? "ordem fixa" : "ordem sorteada",
+              regras.eliminacoes_max === 0 && regras.dicas_max === 0 ? "sem ajudas" : "ajudas da temporada",
+            ].join(" · "),
+            depois: [
+              regras.gabarito_nunca
+                ? "gabarito nunca aparece"
+                : desafio.gabarito_manual
+                  ? desafio.gabarito_liberado_em
+                    ? "gabarito liberado"
+                    : "gabarito só quando você liberar"
+                  : desafio.temporadas.gabarito_so_no_encerramento
+                    ? `gabarito no encerramento da temporada (${diaEncerramento})`
+                    : `gabarito em ${formatarDataHora(gabaritoLiberadoEm(desafio))}`,
+              regras.treino_liberado && !regras.gabarito_nunca ? "treino depois" : "sem treino",
+              regras.bonus_rapidez ? "bônus por rapidez" : null,
+            ]
+              .filter(Boolean)
+              .join(" · "),
+            especial: desafio.especial ? descreverEspecial(desafio) : "não",
+          }}
+        />
       )}
     </div>
   );

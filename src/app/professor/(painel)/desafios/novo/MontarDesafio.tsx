@@ -4,11 +4,20 @@ import { EscolhaPesquisa } from "@/components/EscolhaPesquisa";
 import { CamposRegras, regrasParaEnvio, regrasParaForm, type Regras } from "@/components/CamposRegras";
 import { Aviso, Botao, Campo, Cartao, Entrada, Etiqueta, Selecao } from "@/components/ui";
 import { CamposEspecial } from "@/components/CamposEspecial";
+import { Gabarito } from "@/components/Gabarito";
+import { capituloDaTemporada, escolherAutomatico } from "@/lib/montar-desafio";
 import { DURACAO_PADRAO_MIN } from "@/lib/cadurush";
 import { isoParaDataHoraLocal } from "@/lib/datas";
 import { formatarMultiplicador, pontosDoEspecial } from "@/lib/especial";
 import type { Padroes } from "@/lib/padroes";
-import { NOME_DIFICULDADE, NOME_TIPO, TEMPO_MAX_S, TEMPO_MIN_S, type TipoQuestao } from "@/lib/questoes/tipos";
+import {
+  NOME_DIFICULDADE,
+  NOME_TIPO,
+  TEMPO_MAX_S,
+  TEMPO_MIN_S,
+  type Conteudo,
+  type TipoQuestao,
+} from "@/lib/questoes/tipos";
 import { VERIFICACAO_MAX_S, VERIFICACAO_MIN_S } from "@/lib/questoes/tempos";
 import { VERIFICACAO_TEMPO_S } from "@/lib/questoes/verificacao";
 import { criarDesafio } from "../../actions";
@@ -17,6 +26,7 @@ type Opcao = {
   id: string;
   tipo: TipoQuestao;
   enunciado: string;
+  conteudo: Conteudo;
   capitulo: string | null;
   habilidades: string[];
   dificuldade: number;
@@ -36,8 +46,15 @@ function fechaPara(abre: string, emSala: boolean, dias: number) {
   return `${d.toISOString().slice(0, 10)}T23:59`;
 }
 
+export type OutraTurma = { temporadaId: string; temporadaNome: string; turmaNome: string; escolaNome: string };
+
+/** Valor do filtro que mostra só os capítulos da temporada. */
+const DA_TEMPORADA = "__temporada";
+
 export function MontarDesafio({
   temporadaId,
+  turmaNome,
+  outrasTurmas,
   emSalaInicial,
   padroes,
   questoes,
@@ -50,6 +67,8 @@ export function MontarDesafio({
   questoes: Opcao[];
   capitulosTemporada: string[];
   abrePadrao: string;
+  turmaNome: string;
+  outrasTurmas: OutraTurma[];
 }) {
   const [titulo, setTitulo] = useState("");
   const [abre, setAbre] = useState(abrePadrao);
@@ -66,7 +85,10 @@ export function MontarDesafio({
   const [saidaZera, setSaidaZera] = useState(padroes.pesquisa_bloqueada || emSalaInicial);
   const [regras, setRegras] = useState<Regras>(() => regrasParaForm(padroes.regras));
   const [escolhidas, setEscolhidas] = useState<string[]>([]);
-  const [filtroCapitulo, setFiltroCapitulo] = useState("");
+  const temDaTemporada = questoes.some((q) => capituloDaTemporada(q.capitulo, capitulosTemporada));
+  const [filtroCapitulo, setFiltroCapitulo] = useState(temDaTemporada ? DA_TEMPORADA : "");
+  const [aberta, setAberta] = useState<string | null>(null);
+  const [copiar, setCopiar] = useState<string[]>([]);
   const [busca, setBusca] = useState("");
   const [soNovas, setSoNovas] = useState(false);
   const [erro, setErro] = useState<string>();
@@ -78,12 +100,18 @@ export function MontarDesafio({
     ],
     [capitulosTemporada, questoes],
   );
-  const visiveis = questoes.filter(
-    (q) =>
-      (!filtroCapitulo || q.capitulo === filtroCapitulo) &&
-      (!busca || q.enunciado.toLowerCase().includes(busca.toLowerCase())) &&
-      (!soNovas || q.usos === 0),
-  );
+  const visiveis = questoes
+    .filter(
+      (q) =>
+        (!filtroCapitulo ||
+          (filtroCapitulo === DA_TEMPORADA
+            ? capituloDaTemporada(q.capitulo, capitulosTemporada)
+            : q.capitulo === filtroCapitulo)) &&
+        (!busca || q.enunciado.toLowerCase().includes(busca.toLowerCase())) &&
+        (!soNovas || q.usos === 0),
+    )
+    // Nunca usadas primeiro; a ordem do servidor (capítulo, mais nova) desempata.
+    .sort((a, b) => Number(a.usos > 0) - Number(b.usos > 0));
   const selecionadas = questoes.filter((q) => escolhidas.includes(q.id));
   const comImagem = selecionadas.filter((q) => q.temImagem).length;
   const pctImagem = selecionadas.length ? Math.round((comImagem / selecionadas.length) * 100) : 0;
@@ -108,6 +136,7 @@ export function MontarDesafio({
         saida_zera_questao: saidaZera,
         ...regrasParaEnvio(regras),
         questoes: escolhidas,
+        outras_temporadas: copiar,
       });
       if (r?.erro) setErro(r.erro);
     });
@@ -117,6 +146,7 @@ export function MontarDesafio({
       <Cartao className="space-y-3">
         <div className="flex flex-wrap gap-2">
           <Selecao value={filtroCapitulo} onChange={(e) => setFiltroCapitulo(e.target.value)} className="max-w-xs">
+            {temDaTemporada && <option value={DA_TEMPORADA}>Capítulos da temporada</option>}
             <option value="">Todos os capítulos</option>
             {capitulos.map((c) => (
               <option key={c}>{c}</option>
@@ -131,34 +161,61 @@ export function MontarDesafio({
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={soNovas} onChange={(e) => setSoNovas(e.target.checked)} /> Só nunca usadas
           </label>
+          <Botao
+            variante="secundario"
+            className="ml-auto"
+            disabled={!visiveis.length}
+            title="Escolhe 10 das questões listadas: nunca usadas primeiro, formatos variados e 40% com imagem quando houver."
+            onClick={() => setEscolhidas(escolherAutomatico(visiveis, 10))}
+          >
+            ✨ Escolher 10 para mim
+          </Botao>
         </div>
+        <p className="text-xs text-slate-500">
+          {visiveis.length} {visiveis.length === 1 ? "questão" : "questões"} na lista. Clique no texto de uma questão
+          para ver as alternativas e a resposta.
+        </p>
         {!questoes.length && (
           <Aviso tipo="info">Não há questões publicadas. Publique questões no banco primeiro.</Aviso>
         )}
         <ul className="max-h-[60vh] divide-y divide-slate-100 overflow-y-auto">
           {visiveis.map((q) => (
             <li key={q.id}>
-              <label className="flex cursor-pointer gap-3 py-2.5">
+              <div className="flex gap-3 py-2.5">
                 <input
                   type="checkbox"
-                  className="mt-1"
+                  className="mt-1 cursor-pointer"
+                  aria-label={`Escolher: ${q.enunciado}`}
                   checked={escolhidas.includes(q.id)}
                   onChange={() => alternar(q.id)}
                 />
                 <span className="min-w-0 flex-1">
-                  <span className="line-clamp-2 text-sm">
+                  <button
+                    type="button"
+                    onClick={() => setAberta(aberta === q.id ? null : q.id)}
+                    className={`text-left text-sm hover:text-marca-700 ${aberta === q.id ? "" : "line-clamp-2"}`}
+                  >
                     {q.temImagem && "🖼️ "}
                     {q.enunciado}
-                  </span>
+                  </button>
                   <span className="mt-1 flex flex-wrap gap-1">
                     <Etiqueta cor="azul">{NOME_TIPO[q.tipo]}</Etiqueta>
                     {q.relampago && <Etiqueta cor="ambar">⚡ relâmpago</Etiqueta>}
                     {q.capitulo && <Etiqueta>{q.capitulo}</Etiqueta>}
                     <Etiqueta>{NOME_DIFICULDADE[q.dificuldade]}</Etiqueta>
-                    {q.usos > 0 && <Etiqueta cor="ambar">usada {q.usos}×</Etiqueta>}
+                    {q.usos > 0 ? (
+                      <Etiqueta cor="ambar">usada {q.usos}×</Etiqueta>
+                    ) : (
+                      <Etiqueta cor="verde">nova</Etiqueta>
+                    )}
                   </span>
+                  {aberta === q.id && (
+                    <span className="mt-2 block rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <Gabarito conteudo={q.conteudo} />
+                    </span>
+                  )}
                 </span>
-              </label>
+              </div>
             </li>
           ))}
         </ul>
@@ -287,6 +344,32 @@ export function MontarDesafio({
               />
             </div>
           </details>
+          {outrasTurmas.length > 0 && (
+            <fieldset className="space-y-1.5 rounded-xl border border-slate-200 p-3 text-sm">
+              <legend className="px-1 font-semibold">Criar também para (além da {turmaNome})</legend>
+              {outrasTurmas.map((t) => (
+                <label key={t.temporadaId} className="flex cursor-pointer items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={copiar.includes(t.temporadaId)}
+                    onChange={(e) =>
+                      setCopiar((c) =>
+                        e.target.checked ? [...c, t.temporadaId] : c.filter((x) => x !== t.temporadaId),
+                      )
+                    }
+                  />
+                  <span>
+                    Turma {t.turmaNome}
+                    <span className="block text-xs text-slate-500">
+                      {t.escolaNome} · {t.temporadaNome}
+                    </span>
+                  </span>
+                </label>
+              ))}
+              <p className="text-xs text-slate-500">Mesmas questões, datas e regras. Cada turma tem o seu ranking.</p>
+            </fieldset>
+          )}
           <div className="rounded-lg bg-slate-50 p-3 text-sm">
             <p>
               <strong>{escolhidas.length}</strong> de 5 a 15 questões
@@ -297,7 +380,9 @@ export function MontarDesafio({
           </div>
           {erro && <Aviso>{erro}</Aviso>}
           <Botao className="w-full" disabled={pendente || escolhidas.length < 5 || !titulo.trim()} onClick={salvar}>
-            {pendente ? "Criando…" : especial ? "Criar desafio especial" : "Criar desafio"}
+            {pendente
+              ? "Criando…"
+              : `${especial ? "Criar desafio especial" : "Criar desafio"}${copiar.length ? ` em ${copiar.length + 1} turmas` : ""}`}
           </Botao>
         </Cartao>
       </div>

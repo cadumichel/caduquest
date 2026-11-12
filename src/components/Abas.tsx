@@ -5,7 +5,10 @@ export type Aba = { id: string; rotulo: string; href: string; contagem?: number 
 /** Abas por link (o estado fica na URL, ?aba=...), para páginas do servidor. */
 export function Abas({ abas, atual }: { abas: Aba[]; atual: string }) {
   return (
-    <nav className="-mx-1 flex gap-1 overflow-x-auto border-b border-slate-200 px-1" aria-label="Seções">
+    <nav
+      className="-mx-1 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-slate-200 px-1"
+      aria-label="Seções"
+    >
       {abas.map((a) => {
         const ativa = a.id === atual;
         return (
