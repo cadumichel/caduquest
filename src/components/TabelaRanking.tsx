@@ -9,15 +9,18 @@ export function TabelaRanking({
   ranking,
   nomes,
   medalhas,
+  semCabecalho = false,
 }: {
   ranking: LinhaRanking[];
   nomes?: Map<string, string | null>;
   medalhas?: Map<string, number>;
+  /** Continuação de uma tabela já mostrada (ex.: "ver todos"). */
+  semCabecalho?: boolean;
 }) {
   if (!ranking.length) return <Vazio>Sem alunos ainda.</Vazio>;
   return (
     <table className="w-full text-sm">
-      <thead className="text-left text-slate-500">
+      <thead className={semCabecalho ? "sr-only" : "text-left text-slate-500"}>
         <tr>
           <th className="py-2 pr-2">#</th>
           <th className="py-2 pr-2">Apelido</th>

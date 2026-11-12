@@ -28,6 +28,7 @@ import { verificacoesAutomaticas } from "@/lib/questoes/verificacao";
 import { regrasDoDesafio } from "@/lib/questoes/regras-desafio";
 import { tempoVerificacao } from "@/lib/questoes/tempos";
 import { formatarPontos } from "@/lib/pontos";
+import { descreverAlertas } from "@/lib/alertas-resultado";
 
 export const metadata: Metadata = { title: "Desafio" };
 
@@ -90,6 +91,9 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
       : null;
   const alertasDe = (l: (typeof linhas)[number]) => l.zeradasPorSaida + l.verificacoesErradas;
   const comAlerta = linhas.filter((l) => alertasDe(l) > 0).length;
+  const faltam = linhas
+    .filter((l) => l.situacao !== "concluiu")
+    .sort((a, b) => (a.nomeReal ?? a.apelido).localeCompare(b.nomeReal ?? b.apelido, "pt-BR"));
   // Aba Questões: em ordem numérica (a da montagem), igual à tabela.
   const listaQuestoes = questoes.map((q, i) => ({ q, numero: i + 1, acerto: acertoPorQuestao.get(q.id) ?? null }));
   const regras = regrasDoDesafio(desafio);
@@ -152,6 +156,29 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
 
       {aba === "resultado" && (
         <div className="space-y-5">
+          {faltam.length > 0 && situacao !== "agendado" && (
+            <Cartao className="border-amber-300 bg-amber-50">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="font-bold text-amber-900">
+                  {situacao === "aberto"
+                    ? `${faltam.length === 1 ? "Falta 1 aluno" : `Faltam ${faltam.length} alunos`}`
+                    : `${faltam.length === 1 ? "1 aluno não terminou" : `${faltam.length} alunos não terminaram`}`}
+                </p>
+                {situacao === "aberto" && (
+                  <span className="text-sm text-amber-800">fecha {formatarDataHora(desafio.fecha_em)}</span>
+                )}
+              </div>
+              <p className="mt-1 text-sm text-amber-950">
+                {faltam.map((l, i) => (
+                  <span key={l.alunoId}>
+                    {i > 0 && " · "}
+                    {l.nomeReal ?? l.apelido}
+                    {l.situacao === "em andamento" && <span className="text-amber-700"> (começou)</span>}
+                  </span>
+                ))}
+              </p>
+            </Cartao>
+          )}
           <div className="grid grid-cols-3 gap-3">
             <Numero valor={`${concluiram}/${linhas.length}`} rotulo="concluíram" />
             <Numero valor={mediaAcerto === null ? "–" : `${mediaAcerto}%`} rotulo="acerto médio de quem fez" />
@@ -166,8 +193,8 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
                   <th className="py-2 text-right">Pontos</th>
                   <th className="py-2 text-right">Acertos</th>
                   <th
-                    className="py-2 text-right"
-                    title="Questões zeradas pelas regras do desafio e questões teste erradas"
+                    className="py-2 pl-4"
+                    title="Em vermelho, o que tirou pontos; em cinza, o que só ficou registrado"
                   >
                     Alertas
                   </th>
@@ -175,23 +202,34 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {linhas.map((l) => {
-                  const alertas = alertasDe(l);
-                  const temDetalhe = alertas > 0 || l.saidasTela > 0 || l.esgotadas > 0 || l.verificacoes > 0;
+                  const { graves, avisos } = descreverAlertas(l);
+                  const fez = l.situacao !== "não fez";
                   return (
-                    <tr key={l.alunoId} className="align-top">
+                    <tr key={l.alunoId} className="align-top hover:bg-marca-50/40">
                       <td className="py-1.5">
-                        <Link href={`/professor/alunos/${l.alunoId}`} className="hover:text-marca-700">
-                          {l.apelido}
-                          {l.nomeReal && <span className="text-slate-500"> · {l.nomeReal}</span>}
-                        </Link>
-                        {l.situacao !== "não fez" && (
+                        <span className="flex items-center gap-1.5">
                           <Link
-                            href={`/professor/desafios/${id}/alunos/${l.alunoId}`}
-                            className="ml-2 text-xs whitespace-nowrap text-marca-700"
+                            href={
+                              fez ? `/professor/desafios/${id}/alunos/${l.alunoId}` : `/professor/alunos/${l.alunoId}`
+                            }
+                            className="hover:text-marca-700"
+                            title={fez ? "Ver as respostas deste aluno" : "Ver o perfil do aluno"}
                           >
-                            ver respostas
+                            {l.apelido}
+                            {l.nomeReal && <span className="text-slate-500"> · {l.nomeReal}</span>}
+                            {fez && <span className="text-marca-700"> ›</span>}
                           </Link>
-                        )}
+                          {fez && (
+                            <Link
+                              href={`/professor/alunos/${l.alunoId}`}
+                              className="rounded px-1 text-xs text-slate-400 hover:bg-marca-50 hover:text-marca-700"
+                              title="Perfil do aluno"
+                              aria-label={`Perfil de ${l.apelido}`}
+                            >
+                              👤
+                            </Link>
+                          )}
+                        </span>
                       </td>
                       <td className="py-1.5">
                         <Etiqueta cor={COR_SITUACAO[l.situacao]}>{l.situacao}</Etiqueta>
@@ -200,54 +238,10 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
                       <td className="py-1.5 text-right tabular-nums">
                         {l.acertos}/{questoes.length}
                       </td>
-                      <td className="py-1.5 text-right">
-                        {temDetalhe && (
-                          <details className="inline-block text-left">
-                            <summary
-                              className={`cursor-pointer list-none rounded-full px-2 py-0.5 text-center text-xs font-semibold tabular-nums ${
-                                alertas ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-500"
-                              }`}
-                            >
-                              {alertas || "0"}
-                            </summary>
-                            <ul className="mt-1 space-y-0.5 text-xs whitespace-nowrap text-slate-600">
-                              {l.zeradasTeclado > 0 && (
-                                <li className="text-red-700">{l.zeradasTeclado} zerada(s) por tecla</li>
-                              )}
-                              {l.zeradasClique > 0 && (
-                                <li className="text-red-700">{l.zeradasClique} zerada(s) por clique fora</li>
-                              )}
-                              {l.zeradasSemMouse > 0 && (
-                                <li className="text-red-700">{l.zeradasSemMouse} zerada(s) sem mexer o mouse</li>
-                              )}
-                              {l.zeradasTela > 0 && (
-                                <li className="text-red-700">{l.zeradasTela} zerada(s) por extensão</li>
-                              )}
-                              {l.zeradasPorSaida -
-                                l.zeradasTeclado -
-                                l.zeradasClique -
-                                l.zeradasSemMouse -
-                                l.zeradasTela >
-                                0 && (
-                                <li className="text-red-700">
-                                  {l.zeradasPorSaida -
-                                    l.zeradasTeclado -
-                                    l.zeradasClique -
-                                    l.zeradasSemMouse -
-                                    l.zeradasTela}{" "}
-                                  zerada(s) por sair da tela
-                                </li>
-                              )}
-                              {l.verificacoes > 0 && (
-                                <li className={l.verificacoesErradas ? "text-red-700" : ""}>
-                                  {l.verificacoesErradas} de {l.verificacoes} questões teste erradas
-                                </li>
-                              )}
-                              {l.saidasTela > 0 && <li>saiu da tela {l.saidasTela}×</li>}
-                              {l.esgotadas > 0 && <li>{l.esgotadas} com tempo esgotado</li>}
-                            </ul>
-                          </details>
-                        )}
+                      <td className="py-1.5 pl-4 text-xs">
+                        {graves.length > 0 && <span className="text-red-700">{graves.join(" · ")}</span>}
+                        {graves.length > 0 && avisos.length > 0 && " · "}
+                        {avisos.length > 0 && <span className="text-slate-500">{avisos.join(" · ")}</span>}
                       </td>
                     </tr>
                   );

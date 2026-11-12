@@ -1,10 +1,10 @@
 "use client";
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { Aviso, Botao, Etiqueta } from "@/components/ui";
+import { Botao, Etiqueta } from "@/components/ui";
 import { eraPorId } from "@/lib/publico/regras";
-import { NOME_DIFICULDADE, NOME_TIPO, type TipoQuestao } from "@/lib/questoes/tipos";
-import { duplicarQuestao, excluirQuestao, mudarStatusQuestoes } from "../actions";
+import { NOME_TIPO, type TipoQuestao } from "@/lib/questoes/tipos";
+import { duplicarQuestao, mudarStatusQuestoes } from "../actions";
 
 export type ItemLista = {
   id: string;
@@ -22,10 +22,21 @@ export type ItemLista = {
   usos: number;
 };
 
-export function ListaQuestoes({ itens }: { itens: ItemLista[] }) {
+/** mostrarStatus: só na aba "Todas"; mostrarCapitulo: fora de uma pasta de capítulo. */
+export function ListaQuestoes({
+  itens,
+  mostrarStatus = false,
+  mostrarCapitulo = true,
+  revisao = false,
+}: {
+  itens: ItemLista[];
+  mostrarStatus?: boolean;
+  mostrarCapitulo?: boolean;
+  /** Abre a questão no modo de revisão em sequência ("Publicar e próxima"). */
+  revisao?: boolean;
+}) {
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
   const [pendente, iniciar] = useTransition();
-  const [erro, setErro] = useState<string>();
 
   const alternar = (id: string) =>
     setSelecionadas((s) => {
@@ -59,28 +70,25 @@ export function ListaQuestoes({ itens }: { itens: ItemLista[] }) {
           Voltar para rascunho
         </Botao>
       </div>
-      {erro && <Aviso>{erro}</Aviso>}
       <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white">
         {itens.map((q) => (
           <li key={q.id} className="flex gap-3 p-3">
             <input type="checkbox" className="mt-1" checked={selecionadas.has(q.id)} onChange={() => alternar(q.id)} />
             <div className="min-w-0 flex-1 space-y-1">
-              <Link href={`/professor/questoes/${q.id}`} className="line-clamp-2 font-medium hover:text-marca-700">
+              <Link
+                href={`/professor/questoes/${q.id}${revisao ? "?revisao=1" : ""}`}
+                className="line-clamp-2 font-medium hover:text-marca-700"
+              >
                 {q.temImagem && "🖼️ "}
                 {q.enunciado}
               </Link>
               <div className="flex flex-wrap gap-1.5">
-                <Etiqueta cor={q.status === "publicada" ? "verde" : "ambar"}>{q.status}</Etiqueta>
+                {mostrarStatus && <Etiqueta cor={q.status === "publicada" ? "verde" : "ambar"}>{q.status}</Etiqueta>}
                 <Etiqueta cor="azul">{NOME_TIPO[q.tipo]}</Etiqueta>
                 {q.relampago && <Etiqueta cor="ambar">⚡ relâmpago</Etiqueta>}
                 {q.era && <Etiqueta cor="azul">🌎 público · {eraPorId(q.era)?.nome ?? q.era}</Etiqueta>}
-                {q.capitulo && <Etiqueta>{q.capitulo}</Etiqueta>}
-                {q.habilidades.map((h) => (
-                  <Etiqueta key={h}>{h}</Etiqueta>
-                ))}
-                <Etiqueta>{NOME_DIFICULDADE[q.dificuldade]}</Etiqueta>
-                {q.origem === "claude" && <Etiqueta>gerada pelo Claude</Etiqueta>}
-                <Etiqueta>{q.usos ? `usada em ${q.usos} desafio(s)` : "nunca usada"}</Etiqueta>
+                {mostrarCapitulo && q.capitulo && <Etiqueta>{q.capitulo}</Etiqueta>}
+                {q.usos ? <Etiqueta>usada {q.usos}×</Etiqueta> : <Etiqueta cor="verde">nova</Etiqueta>}
               </div>
             </div>
             <div className="flex shrink-0 flex-col gap-1 text-sm">
@@ -90,17 +98,6 @@ export function ListaQuestoes({ itens }: { itens: ItemLista[] }) {
                 onClick={() => iniciar(() => duplicarQuestao(q.id))}
               >
                 Duplicar
-              </button>
-              <button
-                className="text-red-700 hover:underline disabled:opacity-40"
-                disabled={pendente || q.usos > 0}
-                title={q.usos > 0 ? "Questão usada em desafio" : undefined}
-                onClick={() => {
-                  if (!confirm("Apagar esta questão?")) return;
-                  iniciar(async () => setErro((await excluirQuestao(q.id))?.erro));
-                }}
-              >
-                Apagar
               </button>
             </div>
           </li>
