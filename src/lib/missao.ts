@@ -10,7 +10,7 @@ import { situacaoDesafio, type TipoDesafio } from "./tipos-banco";
 export type DesafioMissao = { id: string; tipo?: TipoDesafio; titulo: string; abre_em: string; fecha_em: string };
 
 export type Missao = {
-  tipo: "cadurush" | "desafio" | "revisao" | "aguardar" | "prova" | "encerrada";
+  tipo: "cadurush" | "desafio" | "revisao" | "aguardar" | "estudo" | "prova" | "encerrada";
   titulo: string;
   texto: string;
   href?: string;
@@ -33,6 +33,7 @@ export function calcularMissao({
   iniciados,
   errosParaRevisar,
   diasAteProva,
+  estudo = false,
   agora = new Date(),
 }: {
   desafios: DesafioMissao[];
@@ -40,6 +41,8 @@ export function calcularMissao({
   iniciados: Set<string>;
   errosParaRevisar: number;
   diasAteProva: number;
+  /** Pontuação encerrada, prova por vir: hora de estudar com o treino. */
+  estudo?: boolean;
   agora?: Date;
 }): Missao {
   const pendentes = desafios
@@ -76,6 +79,20 @@ export function calcularMissao({
       texto: `Você tem ${errosParaRevisar} ${errosParaRevisar === 1 ? "questão errada" : "questões erradas"} para revisar. Uma rodada rápida de ${n} já ajuda na prova!`,
       href: "/aluno/revisao",
       botao: "Começar a revisão",
+    };
+  }
+
+  if (estudo && diasAteProva >= 0) {
+    const quando =
+      diasAteProva === 0
+        ? "A prova é hoje!"
+        : `${diasAteProva === 1 ? "Falta 1 dia" : `Faltam ${diasAteProva} dias`} para a prova.`;
+    return {
+      tipo: "estudo",
+      titulo: "Hora de estudar para a prova",
+      texto: `A pontuação da temporada encerrou. ${quando} Refaça os desafios como treino e confira o gabarito comentado.`,
+      href: "#desafios-anteriores",
+      botao: "Ver os desafios",
     };
   }
 

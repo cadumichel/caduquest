@@ -15,6 +15,7 @@ export function ControlesDesafio({
   liberadoEm,
   visivelEm,
   visivel,
+  encerramento,
 }: {
   id: string;
   relampago: boolean;
@@ -25,6 +26,8 @@ export function ControlesDesafio({
   /** Quando o gabarito aparece sozinho (prazo + janela de quem ainda respondia). */
   visivelEm: string;
   visivel: boolean;
+  /** Dia em que o gabarito guardado sai sozinho (encerramento da temporada), se a temporada libera. */
+  encerramento: string | null;
 }) {
   const router = useRouter();
   const [msg, setMsg] = useState<EstadoForm>({});
@@ -38,7 +41,12 @@ export function ControlesDesafio({
   const status = visivel
     ? { cor: "verde" as const, texto: "Gabarito visível para os alunos" }
     : manual && !liberadoEm
-      ? { cor: "ambar" as const, texto: "Gabarito guardado até você liberar" }
+      ? {
+          cor: "ambar" as const,
+          texto: encerramento
+            ? `Gabarito guardado até você liberar ou até o encerramento da temporada (${encerramento})`
+            : "Gabarito guardado até você liberar",
+        }
       : { cor: "cinza" as const, texto: `Gabarito aparece em ${formatarDataHora(visivelEm)}` };
 
   return (

@@ -1,10 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { Botao, BotaoLink, Cartao, Etiqueta, Subtitulo, Titulo, Vazio } from "@/components/ui";
 import { formatarData, formatarDataHora, hojeEmBrasilia } from "@/lib/datas";
 import { exigirProfessor } from "@/lib/professor";
-import { situacaoDesafio } from "@/lib/tipos-banco";
+import {
+  gabaritoAguardaProfessor,
+  pontuacaoEncerrada,
+  situacaoDesafio,
+  type Desafio,
+  type TemporadaEncerramento,
+} from "@/lib/tipos-banco";
 import { aprovarTodos } from "./actions";
 
 export const metadata: Metadata = { title: "Hoje" };
@@ -25,6 +31,8 @@ type TemporadaHoje = {
   nome: string;
   turma_id: string;
   data_prova: string;
+  encerramento?: string | null;
+  encerrada_em?: string | null;
   turmas: { nome: string; escolas: { nome: string } };
   desafios: { abre_em: string; fecha_em: string }[];
 };
@@ -61,24 +69,31 @@ export default async function Hoje() {
       .order("fecha_em"),
     supabase
       .from("temporadas")
-      .select("id, nome, turma_id, data_prova, turmas(nome, escolas(nome)), desafios(abre_em, fecha_em)")
-      .is("encerrada_em", null)
+      // "*" traz também o encerramento, quando o SQL dele já rodou.
+      .select("*, turmas(nome, escolas(nome)), desafios(abre_em, fecha_em)")
       .lte("inicio", hoje)
       .gte("data_prova", hoje)
       .order("data_prova"),
   ]);
   // Sem o SQL da carta coringa ou dos controles do gabarito, estas consultas falham e nada aparece.
-  const [{ data: cartasPendentes }, { data: gabaritosGuardados }] = await Promise.all([
+  const [{ data: cartasPendentes }, { data: gabaritosBrutos }] = await Promise.all([
     supabase.from("cartas_coringa").select("id, alunos(apelido, turma_id, turmas(nome))").eq("status", "pendente"),
     supabase
       .from("desafios")
-      .select("id, titulo, temporadas(turmas(nome))")
+      .select("*, temporadas(*, turmas(nome))")
       .eq("gabarito_manual", true)
       .is("gabarito_liberado_em", null)
       .lt("fecha_em", agora)
       .order("fecha_em", { ascending: false })
       .limit(10),
   ]);
+
+  // O que a temporada já liberou sozinha no encerramento não é mais pendência.
+  const gabaritosGuardados = (
+    (gabaritosBrutos ?? []) as unknown as (Desafio & {
+      temporadas: TemporadaEncerramento & { turmas: { nome: string } };
+    })[]
+  ).filter((d) => gabaritoAguardaProfessor(d));
 
   const pendentesPorTurma = new Map<string, { nome: string; n: number }>();
   for (const a of pendentesBrutos ?? []) {
@@ -92,7 +107,10 @@ export default async function Hoje() {
     .filter((d) => situacaoDesafio(d) === "agendado")
     .sort((a, b) => a.abre_em.localeCompare(b.abre_em));
   const temporadas = (temporadasBrutas ?? []) as unknown as TemporadaHoje[];
-  const semDesafio = temporadas.filter((t) => !t.desafios.some((d) => situacaoDesafio(d) !== "encerrado"));
+  // No período de estudo (pontuação encerrada, prova por vir) não há mais desafios a criar.
+  const semDesafio = temporadas.filter(
+    (t) => !pontuacaoEncerrada(t) && !t.desafios.some((d) => situacaoDesafio(d) !== "encerrado"),
+  );
 
   const totalPendencias =
     (rascunhos ? 1 : 0) +
@@ -244,12 +262,23 @@ export default async function Hoje() {
             </li>
           ))}
           {temporadas.map((t) => (
-            <li key={t.id} className="flex flex-wrap justify-between gap-2 py-2">
-              <Link href={`/professor/turmas/${t.turma_id}`} className="font-medium hover:text-marca-700">
-                Prova da turma {t.turmas.nome} <span className="text-slate-500">· {t.turmas.escolas.nome}</span>
-              </Link>
-              <Etiqueta>{formatarData(t.data_prova)}</Etiqueta>
-            </li>
+            <Fragment key={t.id}>
+              {t.encerramento && t.encerramento < t.data_prova && !pontuacaoEncerrada(t) && (
+                <li className="flex flex-wrap justify-between gap-2 py-2">
+                  <Link href={`/professor/turmas/${t.turma_id}`} className="font-medium hover:text-marca-700">
+                    Encerramento da temporada {t.turmas.nome}{" "}
+                    <span className="text-slate-500">· {t.turmas.escolas.nome}</span>
+                  </Link>
+                  <Etiqueta cor="ambar">{formatarData(t.encerramento)}</Etiqueta>
+                </li>
+              )}
+              <li className="flex flex-wrap justify-between gap-2 py-2">
+                <Link href={`/professor/turmas/${t.turma_id}`} className="font-medium hover:text-marca-700">
+                  Prova da turma {t.turmas.nome} <span className="text-slate-500">· {t.turmas.escolas.nome}</span>
+                </Link>
+                <Etiqueta>{formatarData(t.data_prova)}</Etiqueta>
+              </li>
+            </Fragment>
           ))}
         </ul>
       </Cartao>

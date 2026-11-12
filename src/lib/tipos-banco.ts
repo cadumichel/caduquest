@@ -30,7 +30,47 @@ export type Temporada = {
   capitulos: string[];
   /** Encerrada pelo professor antes da prova (ausente sem o SQL dos controles). */
   encerrada_em?: string | null;
+  /**
+   * Último dia que vale pontos; vazio = o dia da prova. Depois dele, até a prova,
+   * é o período de estudo (ausente sem o SQL do encerramento).
+   */
+  encerramento?: string | null;
+  /** No encerramento, libera o gabarito guardado para liberação manual (padrão true). */
+  gabarito_no_encerramento?: boolean;
 };
+
+export type TemporadaEncerramento = Pick<Temporada, "data_prova"> &
+  Partial<Pick<Temporada, "encerramento" | "encerrada_em" | "gabarito_no_encerramento">>;
+
+/** Último dia que vale pontos (AAAA-MM-DD). */
+export const ultimoDiaComPontos = (t: TemporadaEncerramento) => t.encerramento || t.data_prova;
+
+/**
+ * Fim da pontuação: 23h59 (Brasília) do último dia com pontos, ou antes, se o
+ * professor encerrou a temporada na mão. Nenhum desafio fecha depois disso.
+ */
+export function fimDaPontuacao(t: TemporadaEncerramento): Date {
+  const fimDoDia = new Date(`${ultimoDiaComPontos(t)}T23:59:00-03:00`);
+  if (t.encerrada_em && new Date(t.encerrada_em) < fimDoDia) return new Date(t.encerrada_em);
+  return fimDoDia;
+}
+
+/** A temporada já não vale pontos: encerrada, esperando a prova (período de estudo) ou terminada. */
+export const pontuacaoEncerrada = (t: TemporadaEncerramento, agora = new Date()) => agora > fimDaPontuacao(t);
+
+/**
+ * Fase da temporada: "pontos" até o encerramento; "estudo" do encerramento até
+ * o dia da prova (treino e revisão, sem pontos); depois, "encerrada".
+ */
+export function faseDaTemporada(t: TemporadaEncerramento, agora = new Date()): "pontos" | "estudo" | "encerrada" {
+  if (!pontuacaoEncerrada(t, agora)) return "pontos";
+  const hoje = new Date(agora.getTime() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+  return hoje <= t.data_prova ? "estudo" : "encerrada";
+}
+
+/** No encerramento o gabarito guardado para liberação manual é liberado sozinho. */
+export const gabaritoLiberadoNoEncerramento = (t: TemporadaEncerramento | null | undefined, agora = new Date()) =>
+  !!t?.data_prova && t.gabarito_no_encerramento !== false && pontuacaoEncerrada(t, agora);
 export type Questao = {
   id: string;
   tipo: TipoQuestao;
@@ -159,18 +199,25 @@ export function situacaoDesafio(d: Pick<Desafio, "abre_em" | "fecha_em">, agora 
 export const gabaritoLiberadoEm = (d: Pick<Desafio, "fecha_em">) =>
   new Date(new Date(d.fecha_em).getTime() + JANELA_APOS_FECHAR_S * 1000);
 
-type DesafioGabarito = Pick<Desafio, "fecha_em" | "gabarito_manual" | "gabarito_liberado_em" | "gabarito_nunca">;
+type DesafioGabarito = Pick<Desafio, "fecha_em" | "gabarito_manual" | "gabarito_liberado_em" | "gabarito_nunca"> & {
+  /** A temporada do desafio, quando a consulta traz (join "temporadas(*)"). */
+  temporadas?: TemporadaEncerramento | null;
+};
 
-/** O professor escolheu liberar o gabarito ele mesmo e ainda não liberou (ou escolheu nunca mostrar). */
-export const gabaritoAguardaProfessor = (d: DesafioGabarito) =>
-  !!d.gabarito_nunca || (!!d.gabarito_manual && !d.gabarito_liberado_em);
+/**
+ * O professor escolheu liberar o gabarito ele mesmo e ainda não liberou (ou
+ * escolheu nunca mostrar). O guardado sai sozinho no encerramento da temporada.
+ */
+export const gabaritoAguardaProfessor = (d: DesafioGabarito, agora = new Date()) =>
+  !!d.gabarito_nunca ||
+  (!!d.gabarito_manual && !d.gabarito_liberado_em && !gabaritoLiberadoNoEncerramento(d.temporadas, agora));
 
 /**
  * Gabarito visível ao aluno: depois do fim do prazo (com a janela de quem ainda
  * estava respondendo) e, se o professor quis, só depois de ele liberar.
  */
 export const gabaritoLiberado = (d: DesafioGabarito, agora = new Date()) =>
-  agora > gabaritoLiberadoEm(d) && !gabaritoAguardaProfessor(d);
+  agora > gabaritoLiberadoEm(d) && !gabaritoAguardaProfessor(d, agora);
 
 /** Refazer como treino: só com o gabarito visível e se o professor não desligou. */
 export const treinoLiberado = (d: DesafioGabarito & Pick<Desafio, "treino_liberado">, agora = new Date()) =>

@@ -58,6 +58,14 @@ describe("calcularMissao", () => {
     expect(calcularMissao({ ...base, desafios: [] }).tipo).toBe("prova");
     expect(calcularMissao({ ...base, desafios: [], diasAteProva: -1 }).tipo).toBe("encerrada");
   });
+  it("no período de estudo, revisão primeiro e depois o treino até a prova", () => {
+    const estudo = { ...base, desafios: [], diasAteProva: 5, estudo: true };
+    expect(calcularMissao({ ...estudo, errosParaRevisar: 2 }).tipo).toBe("revisao");
+    const m = calcularMissao(estudo);
+    expect(m.tipo).toBe("estudo");
+    expect(m.texto).toContain("Faltam 5 dias");
+    expect(calcularMissao({ ...estudo, diasAteProva: -1 }).tipo).toBe("encerrada");
+  });
 });
 
 describe("proximoCaduRush", () => {

@@ -11,7 +11,8 @@ import type { Temporada } from "@/lib/tipos-banco";
 export async function temporadaAtual(db: SupabaseClient, turmaId: string): Promise<Temporada | null> {
   const { data } = await db
     .from("temporadas")
-    .select("id, turma_id, professor_id, nome, narrativa, inicio, data_prova, capitulos")
+    // "*" traz também o encerramento, quando o SQL dele já rodou.
+    .select("*")
     .eq("turma_id", turmaId)
     .order("inicio", { ascending: true });
   const temporadas = (data ?? []) as Temporada[];
