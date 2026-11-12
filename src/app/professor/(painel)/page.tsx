@@ -67,7 +67,7 @@ export default async function Inicio() {
     { data: turmasBrutas },
     { count: rascunhos },
     { data: pedidosBrutos },
-    { data: desafiosBrutos },
+    { data: desafiosBrutos, error: erroDesafios },
     { data: temporadasBrutas },
   ] = await Promise.all([
     supabase.from("escolas").select("id, nome").order("nome"),
@@ -76,7 +76,9 @@ export default async function Inicio() {
     supabase.from("alunos").select(COLUNAS_PEDIDO).eq("aprovado", false).order("criado_em"),
     supabase
       .from("desafios")
-      .select("id, titulo, especial, abre_em, fecha_em, temporadas(turma_id), tentativas(concluida_em)")
+      // "*" e não a lista de colunas: se uma coluna nova (ex.: especial) ainda não existir
+      // no banco, a consulta inteira falharia e toda turma apareceria "sem desafio".
+      .select("*, temporadas(turma_id), tentativas(concluida_em)")
       .gte("fecha_em", agora)
       .order("fecha_em"),
     supabase
@@ -127,6 +129,7 @@ export default async function Inicio() {
   const pedidosPorTurma = new Map<string, number>();
   for (const p of pedidos) pedidosPorTurma.set(p.turma_id, (pedidosPorTurma.get(p.turma_id) ?? 0) + 1);
 
+  if (erroDesafios) console.error("Início: falha ao buscar desafios abertos", erroDesafios);
   const desafiosPorTurma = new Map<string, DesafioInicio[]>();
   for (const d of (desafiosBrutos ?? []) as unknown as DesafioInicio[]) {
     const t = d.temporadas.turma_id;
@@ -219,6 +222,7 @@ export default async function Inicio() {
                     pedidos={pedidosPorTurma.get(t.id) ?? 0}
                     desafios={desafiosPorTurma.get(t.id) ?? []}
                     temporada={temporadaPorTurma.get(t.id) ?? null}
+                    semDados={Boolean(erroDesafios)}
                   />
                 ))}
               </div>
@@ -236,11 +240,14 @@ function BoxTurma({
   pedidos,
   desafios,
   temporada,
+  semDados,
 }: {
   turma: TurmaInicio;
   pedidos: number;
   desafios: DesafioInicio[];
   temporada: TemporadaInicio | null;
+  /** A busca dos desafios falhou: não dá para afirmar que a turma está sem desafio. */
+  semDados: boolean;
 }) {
   // A contagem inclui quem ainda espera aprovação.
   const total = Math.max(0, (turma.alunos[0]?.count ?? 0) - pedidos);
@@ -293,6 +300,7 @@ function BoxTurma({
       })}
 
       {!abertos.length &&
+        !semDados &&
         (proximo ? (
           <p className="text-xs text-slate-500">
             Próximo: <span className="font-medium text-slate-700">{proximo.titulo}</span> abre{" "}
