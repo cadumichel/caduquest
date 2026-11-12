@@ -34,7 +34,7 @@ import {
 import { criarClienteNavegador } from "@/lib/supabase/client";
 import type { Questao } from "@/lib/tipos-banco";
 import { urlImagem } from "@/lib/tipos-banco";
-import { salvarQuestao } from "../actions";
+import { excluirQuestao, salvarQuestao } from "../actions";
 
 const LETRAS = "ABCDE";
 
@@ -43,11 +43,14 @@ export function EditorQuestao({
   professorId,
   capitulos,
   usada,
+  revisao = null,
 }: {
   inicial: Questao | null;
   professorId: string;
   capitulos: string[];
   usada: boolean;
+  /** Revisão em sequência dos rascunhos: depois de publicar ou pular, abre o próximo. */
+  revisao?: { posicao: number; total: number; proximaId: string | null } | null;
 }) {
   const router = useRouter();
   const [pendente, iniciar] = useTransition();
@@ -103,7 +106,21 @@ export function EditorQuestao({
     else set("imagem_path", caminho);
   };
 
-  const salvar = (status: "rascunho" | "publicada") =>
+  const irParaProxima = () =>
+    router.push(
+      revisao?.proximaId ? `/professor/questoes/${revisao.proximaId}?revisao=1` : "/professor/questoes?aba=revisar",
+    );
+
+  const apagar = () =>
+    confirm("Apagar esta questão? Não dá para desfazer.") &&
+    iniciar(async () => {
+      const r = await excluirQuestao(inicial!.id);
+      if (r?.erro) return setMensagem({ erro: r.erro });
+      if (revisao) irParaProxima();
+      else router.push("/professor/questoes");
+    });
+
+  const salvar = (status: "rascunho" | "publicada", proxima = false) =>
     iniciar(async () => {
       const r = await salvarQuestao({
         id: inicial?.id,
@@ -114,6 +131,7 @@ export function EditorQuestao({
         imagem_path: conteudo.tipo === "mapa" ? null : campos.imagem_path,
       });
       setMensagem(r);
+      if (proxima && !r.erro) return irParaProxima();
       if (r.id && !inicial) router.replace(`/professor/questoes/${r.id}`);
       else router.refresh();
     });
@@ -323,19 +341,40 @@ export function EditorQuestao({
         )}
         {mensagem.erro && <Aviso>{mensagem.erro}</Aviso>}
         {mensagem.ok && <Aviso tipo="ok">{mensagem.ok}</Aviso>}
-        <div className="flex flex-wrap gap-2">
-          <Botao disabled={pendente} onClick={() => salvar("publicada")}>
-            {pendente ? "Salvando…" : "Salvar e publicar"}
-          </Botao>
-          <Botao variante="secundario" disabled={pendente} onClick={() => salvar("rascunho")}>
-            Salvar como rascunho
-          </Botao>
-          {inicial && (
-            <span className="self-center text-sm text-slate-500">
-              Status atual: <strong>{inicial.status}</strong>
-            </span>
-          )}
-        </div>
+        {revisao ? (
+          <div className="flex flex-wrap gap-2">
+            <Botao disabled={pendente} onClick={() => salvar("publicada", true)}>
+              {pendente ? "Salvando…" : revisao.proximaId ? "Publicar e próxima" : "Publicar e terminar"}
+            </Botao>
+            <Botao variante="secundario" disabled={pendente} onClick={() => salvar("rascunho", true)}>
+              Guardar e próxima
+            </Botao>
+            <Botao variante="fantasma" disabled={pendente} onClick={irParaProxima}>
+              Pular
+            </Botao>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <Botao disabled={pendente} onClick={() => salvar("publicada")}>
+              {pendente ? "Salvando…" : "Salvar e publicar"}
+            </Botao>
+            <Botao variante="secundario" disabled={pendente} onClick={() => salvar("rascunho")}>
+              Salvar como rascunho
+            </Botao>
+            {inicial && (
+              <span className="self-center text-sm text-slate-500">
+                Status atual: <strong>{inicial.status}</strong>
+              </span>
+            )}
+          </div>
+        )}
+        {inicial && !usada && (
+          <div className="border-t border-slate-200 pt-3">
+            <Botao variante="perigo" disabled={pendente} onClick={apagar}>
+              Apagar questão
+            </Botao>
+          </div>
+        )}
       </div>
 
       <div className="lg:sticky lg:top-4 lg:self-start">

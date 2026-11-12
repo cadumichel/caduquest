@@ -64,7 +64,7 @@ export default async function BancoQuestoes({ searchParams }: PageProps<"/profes
 
   const [{ data }, { data: capitulosBrutos }, { data: erasBrutas }] = await Promise.all([
     consulta,
-    supabase.from("questoes").select("capitulo").not("capitulo", "is", null),
+    supabase.from("questoes").select("capitulo, status"),
     aba === "publicos"
       ? supabase.from("questoes").select("era_publica, status").not("era_publica", "is", null)
       : Promise.resolve({ data: [] as { era_publica: string; status: string }[] }),
@@ -77,7 +77,29 @@ export default async function BancoQuestoes({ searchParams }: PageProps<"/profes
     porEra.set(q.era_publica, atual);
   }
   const href = (a: AbaBanco) => `/professor/questoes?aba=${a}`;
-  const capitulos = [...new Set((capitulosBrutos ?? []).map((c) => c.capitulo as string))].sort();
+  // Sem filtro nas abas de publicadas/todas, o banco abre em pastas por capítulo.
+  const semFiltro =
+    !filtros.capitulo &&
+    !filtros.habilidade &&
+    !filtros.tipo &&
+    !filtros.dificuldade &&
+    !filtros.uso &&
+    !filtros.publico;
+  const emPastas = (aba === "publicadas" || aba === "todas") && semFiltro && param(sp.lista) !== "1";
+  const capitulos = [
+    ...new Set((capitulosBrutos ?? []).map((c) => c.capitulo as string | null).filter((c): c is string => !!c)),
+  ].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+  const pastas = new Map<string, { publicadas: number; rascunhos: number }>();
+  for (const c of (capitulosBrutos ?? []) as { capitulo: string | null; status: string }[]) {
+    const nome = c.capitulo?.trim() || "";
+    const atual = pastas.get(nome) ?? { publicadas: 0, rascunhos: 0 };
+    if (c.status === "publicada") atual.publicadas += 1;
+    else atual.rascunhos += 1;
+    pastas.set(nome, atual);
+  }
+  const listaPastas = [...pastas].sort(([a], [b]) =>
+    a === "" ? 1 : b === "" ? -1 : a.localeCompare(b, "pt-BR", { numeric: true }),
+  );
 
   let itens: ItemLista[] = (data ?? []).map((q) => ({
     id: q.id,
@@ -209,7 +231,65 @@ export default async function BancoQuestoes({ searchParams }: PageProps<"/profes
         </details>
       </form>
 
-      {itens.length ? <ListaQuestoes itens={itens} /> : <Vazio>Nenhuma questão com esses filtros.</Vazio>}
+      {filtros.capitulo && aba !== "publicos" && (
+        <a href={href(aba)} className="inline-block text-sm text-marca-700">
+          ← Todos os capítulos
+        </a>
+      )}
+
+      {aba === "revisar" && itens.length > 0 && (
+        <Cartao className="flex flex-wrap items-center justify-between gap-3 border-amber-300 bg-amber-50">
+          <p className="text-sm text-amber-900">
+            Abra uma questão para revisar uma por uma: <strong>Publicar e próxima</strong> leva direto à seguinte.
+          </p>
+          <BotaoLink href={`/professor/questoes/${itens[0].id}?revisao=1`}>Começar a revisão</BotaoLink>
+        </Cartao>
+      )}
+
+      {emPastas ? (
+        <section className="space-y-2">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {listaPastas.map(([nome, n]) => {
+              const qtd = aba === "publicadas" ? n.publicadas : n.publicadas + n.rascunhos;
+              if (!nome || (!qtd && !n.rascunhos)) return null;
+              return (
+                <a
+                  key={nome || "sem"}
+                  href={`${href(aba)}&capitulo=${encodeURIComponent(nome)}`}
+                  className="flex items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm hover:border-marca-300"
+                >
+                  <span className="min-w-0">
+                    <span className="block font-semibold text-marca-900">📁 {nome}</span>
+                    <span className="text-sm text-slate-500">
+                      {qtd} {qtd === 1 ? "questão" : "questões"}
+                    </span>
+                  </span>
+                  {n.rascunhos > 0 && (
+                    <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                      {n.rascunhos} para revisar
+                    </span>
+                  )}
+                </a>
+              );
+            })}
+          </div>
+          <a href={`${href(aba)}&lista=1`} className="inline-block text-sm text-marca-700">
+            Ver todas em lista
+            {pastas.get("")
+              ? ` (inclui ${aba === "publicadas" ? pastas.get("")!.publicadas : pastas.get("")!.publicadas + pastas.get("")!.rascunhos} sem capítulo)`
+              : ""}
+          </a>
+        </section>
+      ) : itens.length ? (
+        <ListaQuestoes
+          itens={itens}
+          mostrarStatus={aba === "todas" || aba === "publicos"}
+          mostrarCapitulo={!filtros.capitulo}
+          revisao={aba === "revisar"}
+        />
+      ) : (
+        <Vazio>Nenhuma questão com esses filtros.</Vazio>
+      )}
     </div>
   );
 }

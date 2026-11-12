@@ -8,6 +8,7 @@ import { BotaoEnviar } from "@/components/BotaoEnviar";
 import { ExcluirComConfirmacao } from "@/components/ExcluirComConfirmacao";
 import { FormAcao } from "@/components/FormAcao";
 import { TabelaRanking } from "@/components/TabelaRanking";
+import { CodigoNoQuadro } from "@/components/CodigoNoQuadro";
 import {
   AreaTexto,
   Botao,
@@ -54,6 +55,8 @@ type DesafioLista = Desafio & {
   desafio_questoes: { count: number }[];
   tentativas: { concluida_em: string | null }[];
 };
+
+const RANKING_VISIVEL = 10;
 
 export default async function PaginaTurma({ params, searchParams }: PageProps<"/professor/turmas/[id]">) {
   const { id } = await params;
@@ -103,14 +106,7 @@ export default async function PaginaTurma({ params, searchParams }: PageProps<"/
         <Link href="/professor/turmas" className="text-sm text-marca-700">
           ← Turmas
         </Link>
-        <Titulo
-          acao={
-            <div className="text-right">
-              <p className="text-xs text-slate-500">Código de acesso</p>
-              <p className="font-mono text-2xl font-bold tracking-[0.2em] text-marca-700">{turma.codigo}</p>
-            </div>
-          }
-        >
+        <Titulo acao={<CodigoNoQuadro codigo={turma.codigo} turma={turma.nome} />}>
           Turma {turma.nome}{" "}
           <span className="text-base font-normal text-slate-500">
             · {turma.serie ?? ""} {escola.nome}
@@ -397,6 +393,20 @@ async function AbaTemporada({
   const temEncerramento = ultimoDiaComPontos(temporada) !== temporada.data_prova;
   const abertos = desafios.filter((d) => situacaoDesafio(d) === "aberto").length;
   const agendados = desafios.filter((d) => situacaoDesafio(d) === "agendado").length;
+  // Resumo: participação nos desafios que já abriram, acerto médio, quem não fez nenhum e dias até a prova.
+  const jaAbriram = desafios.filter((d) => situacaoDesafio(d) !== "agendado");
+  const concluidas = jaAbriram.reduce((s, d) => s + d.tentativas.filter((t) => t.concluida_em).length, 0);
+  const participacao =
+    totalAlunos && jaAbriram.length ? Math.round((concluidas / (totalAlunos * jaAbriram.length)) * 100) : null;
+  const responderam = ranking.filter((l) => l.questoes > 0);
+  const acertoMedio = responderam.length
+    ? Math.round((responderam.reduce((s, l) => s + l.acerto, 0) / responderam.length) * 100)
+    : null;
+  const semNenhum = jaAbriram.length ? ranking.filter((l) => l.desafiosCompletos === 0) : [];
+  const diasProva = Math.round(
+    (new Date(`${temporada.data_prova}T12:00:00Z`).getTime() - new Date(`${hojeEmBrasilia()}T12:00:00Z`).getTime()) /
+      86_400_000,
+  );
 
   return (
     <div className="space-y-5">
@@ -425,6 +435,49 @@ async function AbaTemporada({
         )}
       </div>
 
+      {faseAtual !== "encerrada" && (jaAbriram.length > 0 || diasProva >= 0) && (
+        <div className="flex flex-wrap gap-2 text-sm">
+          {participacao !== null && (
+            <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
+              <strong className="tabular-nums">{participacao}%</strong> dos desafios feitos
+            </span>
+          )}
+          {acertoMedio !== null && (
+            <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
+              <strong className="tabular-nums">{acertoMedio}%</strong> de acerto médio
+            </span>
+          )}
+          {semNenhum.length > 0 && (
+            <span
+              className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-amber-900"
+              title={semNenhum.map((l) => nomes.get(l.alunoId) ?? l.apelido).join(", ")}
+            >
+              <strong className="tabular-nums">{semNenhum.length}</strong>{" "}
+              {semNenhum.length === 1 ? "aluno sem nenhum desafio feito" : "alunos sem nenhum desafio feito"}:{" "}
+              {semNenhum
+                .slice(0, 4)
+                .map((l) => nomes.get(l.alunoId) ?? l.apelido)
+                .join(", ")}
+              {semNenhum.length > 4 && "…"}
+            </span>
+          )}
+          {diasProva >= 0 && (
+            <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
+              Prova{" "}
+              {diasProva === 0 ? (
+                <strong>hoje</strong>
+              ) : diasProva === 1 ? (
+                <strong>amanhã</strong>
+              ) : (
+                <>
+                  em <strong className="tabular-nums">{diasProva} dias</strong>
+                </>
+              )}
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="grid gap-5 lg:grid-cols-[3fr_2fr]">
         <Cartao>
           <Subtitulo>Desafios</Subtitulo>
@@ -437,7 +490,7 @@ async function AbaTemporada({
                 <li key={d.id}>
                   <Link
                     href={`/professor/desafios/${d.id}`}
-                    className="flex flex-wrap items-center justify-between gap-2 py-3 hover:text-marca-700"
+                    className="-mx-2 flex flex-wrap items-center justify-between gap-2 rounded-lg px-2 py-3 hover:bg-marca-50/60 hover:text-marca-700"
                   >
                     <span>
                       <span className="font-medium">
@@ -454,7 +507,18 @@ async function AbaTemporada({
                         {feitos}/{totalAlunos} concluíram
                       </span>
                       <Etiqueta cor={COR_SITUACAO[situacao]}>{situacao}</Etiqueta>
+                      <span className="text-marca-700" aria-hidden>
+                        ›
+                      </span>
                     </span>
+                    {situacao !== "agendado" && totalAlunos > 0 && (
+                      <span className="block h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                        <span
+                          className="block h-full rounded-full bg-marca-500"
+                          style={{ width: `${Math.round((feitos / totalAlunos) * 100)}%` }}
+                        />
+                      </span>
+                    )}
                   </Link>
                 </li>
               );
@@ -464,7 +528,15 @@ async function AbaTemporada({
 
         <Cartao>
           <Subtitulo>Ranking</Subtitulo>
-          <TabelaRanking ranking={ranking} nomes={nomes} medalhas={medalhas} />
+          <TabelaRanking ranking={ranking.slice(0, RANKING_VISIVEL)} nomes={nomes} medalhas={medalhas} />
+          {ranking.length > RANKING_VISIVEL && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-sm font-medium text-marca-700">
+                Ver todos ({ranking.length})
+              </summary>
+              <TabelaRanking ranking={ranking.slice(RANKING_VISIVEL)} nomes={nomes} medalhas={medalhas} semCabecalho />
+            </details>
+          )}
         </Cartao>
       </div>
 
