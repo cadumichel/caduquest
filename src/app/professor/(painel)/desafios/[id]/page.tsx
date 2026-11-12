@@ -52,7 +52,10 @@ const ABAS = ["resultado", "questoes", "ajustes"] as const;
 
 export default async function PaginaDesafioProfessor({ params, searchParams }: PageProps<"/professor/desafios/[id]">) {
   const { id } = await params;
-  const aba = abaAtual((await searchParams).aba, ABAS);
+  const sp = await searchParams;
+  const aba = abaAtual(sp.aba, ABAS);
+  // Questão escolhida na tabela (?q=3): a lista abaixo abre o gabarito dela.
+  const questaoAberta = typeof sp.q === "string" ? Number(sp.q) : null;
   const { supabase } = await exigirProfessor();
   const { data } = await supabase
     .from("desafios")
@@ -93,11 +96,10 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
       : null;
   const alertasDe = (l: (typeof linhas)[number]) => l.zeradasPorSaida + l.verificacoesErradas;
   const comAlerta = linhas.filter((l) => alertasDe(l) > 0).length;
-  // Ordem da aba Questões: da que teve menos acerto para a que teve mais (sem dados vão para o fim).
-  const porAcerto = questoes
-    .map((q, i) => ({ q, numero: i + 1, acerto: acertoPorQuestao.get(q.id) ?? null }))
-    .sort((a, b) => (a.acerto ?? 2) - (b.acerto ?? 2));
+  // Aba Questões: em ordem numérica (a da montagem), igual à tabela.
+  const listaQuestoes = questoes.map((q, i) => ({ q, numero: i + 1, acerto: acertoPorQuestao.get(q.id) ?? null }));
   const url = (a: (typeof ABAS)[number]) => `/professor/desafios/${id}?aba=${a}`;
+  const linkQuestao = (numero: number) => `${url("questoes")}&q=${numero}#questao-${numero}`;
 
   return (
     <div className="space-y-6">
@@ -268,8 +270,8 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <Subtitulo>Desempenho por questão</Subtitulo>
               <span className="text-xs text-slate-500">
-                ✓ acertou · ✗ errou · ½ acertou em parte · em branco: não chegou na questão. Clique no aluno para ver as
-                respostas dele.
+                ✓ acertou · ✗ errou · ½ acertou em parte · em branco: não chegou na questão. Clique no número para ver a
+                questão e no aluno para ver as respostas dele.
               </span>
             </div>
             {linhas.every((l) => l.situacao === "não fez") ? (
@@ -280,8 +282,16 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
                   <tr>
                     <th className="sticky left-0 bg-white py-2 pr-3 text-left">Aluno</th>
                     {questoes.map((q, i) => (
-                      <th key={q.id} className="px-0.5 py-2 text-center font-medium" title={q.enunciado}>
-                        {i + 1}
+                      <th key={q.id} className="px-0.5 py-2 text-center font-medium">
+                        <Link
+                          href={linkQuestao(i + 1)}
+                          title={`${i + 1}. ${q.enunciado}`}
+                          className={`inline-flex size-7 items-center justify-center rounded-md underline decoration-dotted underline-offset-4 hover:bg-marca-50 hover:text-marca-700 ${
+                            questaoAberta === i + 1 ? "bg-marca-100 text-marca-800" : "text-marca-700"
+                          }`}
+                        >
+                          {i + 1}
+                        </Link>
                       </th>
                     ))}
                     <th className="py-2 pl-3 text-right">Acertos</th>
@@ -303,12 +313,13 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
                           const m = MARCA[marcaResultado(r)];
                           return (
                             <td key={q.id} className="px-0.5 py-1 text-center">
-                              <span
-                                className={`inline-flex size-7 items-center justify-center rounded-md font-semibold ${m.classe}`}
-                                title={`Questão ${i + 1}: ${rotuloResultado(r)}`}
+                              <Link
+                                href={linkQuestao(i + 1)}
+                                className={`inline-flex size-7 items-center justify-center rounded-md font-semibold hover:ring-2 hover:ring-marca-300 ${m.classe}`}
+                                title={`Questão ${i + 1}: ${rotuloResultado(r)}. Clique para ver a questão.`}
                               >
                                 {m.simbolo}
-                              </span>
+                              </Link>
                             </td>
                           );
                         })}
@@ -321,14 +332,18 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
               </table>
             )}
             <p className="mt-3 text-xs text-slate-500">
-              A numeração é a da montagem do desafio (cada aluno vê em ordem embaralhada). Abaixo, as questões vêm da
-              que teve menos acerto para a que teve mais.
+              A numeração é a da montagem do desafio (cada aluno vê em ordem embaralhada). Abaixo, as questões na mesma
+              ordem, com o gabarito.
             </p>
           </Cartao>
 
           <section className="space-y-3">
-            {porAcerto.map(({ q, numero, acerto }) => (
-              <Cartao key={q.id} className="space-y-2">
+            {listaQuestoes.map(({ q, numero, acerto }) => (
+              <Cartao
+                key={q.id}
+                id={`questao-${numero}`}
+                className={`scroll-mt-4 space-y-2 ${questaoAberta === numero ? "ring-2 ring-marca-400" : ""}`}
+              >
                 <div className="flex items-start justify-between gap-3">
                   <Link href={`/professor/questoes/${q.id}`} className="font-medium hover:text-marca-700">
                     {numero}. {q.enunciado}
@@ -342,7 +357,7 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
                     )}
                   </div>
                 </div>
-                <details>
+                <details open={questaoAberta === numero}>
                   <summary className="cursor-pointer text-sm text-marca-700">Ver gabarito</summary>
                   <div className="mt-2">
                     <Gabarito conteudo={{ tipo: q.tipo, conteudo: q.conteudo } as Conteudo} />

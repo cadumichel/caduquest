@@ -134,6 +134,8 @@ export async function removerAluno(alunoId: string) {
   const { supabase } = await exigirProfessor();
   const { data } = await supabase.from("alunos").delete().eq("id", alunoId).select("turma_id").single();
   if (data) revalidatePath(`/professor/turmas/${data.turma_id}`);
+  // Pedidos de entrada aparecem também no Início, em Turmas e no menu.
+  revalidatePath("/professor", "layout");
 }
 
 /** Carta coringa: o professor pode apagar um tema impróprio ou fora do conteúdo. */
@@ -173,12 +175,14 @@ export async function aprovarAluno(alunoId: string) {
     .select("turma_id")
     .single();
   if (data) revalidatePath(`/professor/turmas/${data.turma_id}`);
+  revalidatePath("/professor", "layout");
 }
 
 export async function aprovarTodos(turmaId: string) {
   const { supabase } = await exigirProfessor();
   await supabase.from("alunos").update({ aprovado: true }).eq("turma_id", turmaId).eq("aprovado", false);
   revalidatePath(`/professor/turmas/${turmaId}`);
+  revalidatePath("/professor", "layout");
 }
 
 export async function alternarAprovacao(turmaId: string, exige: boolean) {
