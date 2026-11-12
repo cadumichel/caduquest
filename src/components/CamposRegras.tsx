@@ -12,6 +12,8 @@ import {
   type RegraSaidas,
 } from "@/lib/tela-protegida";
 
+export type ParteRegras = "consulta" | "questoes" | "ajudas" | "pontos";
+
 /** Estado do formulário: números como texto (vazio = automático ou sem teto). */
 export type Regras = {
   regraCliques: RegraCliques;
@@ -213,131 +215,145 @@ export function CamposRegras({
   onChange,
   pesquisaBloqueada,
   totalQuestoes,
+  partes,
 }: {
   valor: Regras;
   onChange: (v: Regras) => void;
   pesquisaBloqueada: boolean;
   totalQuestoes: number;
+  /** Só estes grupos (a página do desafio divide as regras em seções). Sem a lista, todos. */
+  partes?: ParteRegras[];
 }) {
+  const ver = (p: ParteRegras) => !partes || partes.includes(p);
   const mudar = <K extends keyof Regras>(k: K, v: Regras[K]) => onChange({ ...valor, [k]: v });
   const automatico = verificacoesAutomaticas(totalQuestoes);
   return (
     <div className="space-y-4">
-      <Grupo
-        titulo="🚫 Sem consulta"
-        nota={
-          pesquisaBloqueada ? undefined : "Só vale com a pesquisa bloqueada. Com a pesquisa liberada, nada disso zera."
-        }
-      >
-        <Opcoes
-          nome="regra_cliques"
-          rotulo="Clique fora das alternativas e dos botões"
-          opcoes={OPCOES_CLIQUES}
-          valor={valor.regraCliques}
-          onChange={(v) => mudar("regraCliques", v)}
-        />
-        {valor.regraCliques === "tolerancia" && (
-          <Numero
-            rotulo="Cliques tolerados por aluno no desafio"
-            valor={valor.toleranciaCliques}
-            onChange={(v) => mudar("toleranciaCliques", v)}
-            min={TOLERANCIA_MIN}
-            max={TOLERANCIA_MAX}
+      {ver("consulta") && (
+        <Grupo
+          titulo="🚫 Sem consulta"
+          nota={
+            pesquisaBloqueada
+              ? undefined
+              : "Só vale com a pesquisa bloqueada. Com a pesquisa liberada, nada disso zera."
+          }
+        >
+          <Opcoes
+            nome="regra_cliques"
+            rotulo="Clique fora das alternativas e dos botões"
+            opcoes={OPCOES_CLIQUES}
+            valor={valor.regraCliques}
+            onChange={(v) => mudar("regraCliques", v)}
           />
-        )}
-        <Opcoes
-          nome="regra_saidas"
-          rotulo="Saída da tela (trocar de aba, de app ou de janela)"
-          opcoes={OPCOES_SAIDAS}
-          valor={valor.regraSaidas}
-          onChange={(v) => mudar("regraSaidas", v)}
-        />
-        {valor.regraSaidas === "tolerancia" && (
-          <Numero
-            rotulo="Saídas toleradas por aluno no desafio"
-            valor={valor.toleranciaSaidas}
-            onChange={(v) => mudar("toleranciaSaidas", v)}
-            min={TOLERANCIA_MIN}
-            max={TOLERANCIA_MAX}
+          {valor.regraCliques === "tolerancia" && (
+            <Numero
+              rotulo="Cliques tolerados por aluno no desafio"
+              valor={valor.toleranciaCliques}
+              onChange={(v) => mudar("toleranciaCliques", v)}
+              min={TOLERANCIA_MIN}
+              max={TOLERANCIA_MAX}
+            />
+          )}
+          <Opcoes
+            nome="regra_saidas"
+            rotulo="Saída da tela (trocar de aba, de app ou de janela)"
+            opcoes={OPCOES_SAIDAS}
+            valor={valor.regraSaidas}
+            onChange={(v) => mudar("regraSaidas", v)}
           />
-        )}
-        <Caixa
-          rotulo="Apertar uma tecla zera a questão"
-          dica="Desmarcado, o teclado fica liberado para todos neste desafio. A liberação individual (acessibilidade) continua na página da turma."
-          marcado={valor.tecladoBloqueado}
-          onChange={(v) => mudar("tecladoBloqueado", v)}
-        />
-      </Grupo>
+          {valor.regraSaidas === "tolerancia" && (
+            <Numero
+              rotulo="Saídas toleradas por aluno no desafio"
+              valor={valor.toleranciaSaidas}
+              onChange={(v) => mudar("toleranciaSaidas", v)}
+              min={TOLERANCIA_MIN}
+              max={TOLERANCIA_MAX}
+            />
+          )}
+          <Caixa
+            rotulo="Apertar uma tecla zera a questão"
+            dica="Desmarcado, o teclado fica liberado para todos neste desafio. A liberação individual (acessibilidade) continua na página da turma."
+            marcado={valor.tecladoBloqueado}
+            onChange={(v) => mudar("tecladoBloqueado", v)}
+          />
+        </Grupo>
+      )}
 
-      <Grupo titulo="📝 Questões">
-        <Numero
-          rotulo="📖 Questões teste (verificação de leitura) por aluno"
-          valor={valor.verificacoes}
-          onChange={(v) => mudar("verificacoes", v)}
-          min={VERIFICACOES_MIN}
-          max={VERIFICACOES_MAX}
-          placeholder={`${automatico} (automático)`}
-          dica={`Em branco: 2 a cada 10 (${automatico} neste desafio). 0 = nenhuma. Espalhadas e sorteadas para cada aluno; relâmpago e questões sem tema não recebem.`}
-        />
-        <Caixa
-          rotulo="Ordem fixa das questões"
-          dica="Todos recebem na ordem em que o desafio foi montado. Desmarcado, cada aluno recebe numa ordem diferente."
-          marcado={valor.ordemFixa}
-          onChange={(v) => mudar("ordemFixa", v)}
-        />
-        <Caixa
-          rotulo="Embaralhar as alternativas"
-          dica="Desmarcado, as alternativas aparecem na ordem em que foram escritas (múltipla escolha, interpretação, fonte primária, V/F e intruso). Ordenar, ligar e classificar sempre embaralham."
-          marcado={valor.embaralharAlternativas}
-          onChange={(v) => mudar("embaralharAlternativas", v)}
-        />
-      </Grupo>
-
-      <Grupo
-        titulo="🛟 Ajudas"
-        nota={`A cota da temporada (${ELIMINACOES_POR_TEMPORADA} eliminações e ${DICAS_POR_TEMPORADA} dicas) continua valendo. Aqui dá para limitar mais neste desafio. Em branco = sem limite extra; 0 = desligada.`}
-      >
-        <div className="flex flex-wrap gap-4">
+      {ver("questoes") && (
+        <Grupo titulo="📝 Questões">
           <Numero
-            rotulo="✂️ Eliminações neste desafio"
-            valor={valor.eliminacoesMax}
-            onChange={(v) => mudar("eliminacoesMax", v)}
-            min={0}
-            max={AJUDAS_MAX_DESAFIO}
-            placeholder="Só a cota"
+            rotulo="📖 Questões teste (verificação de leitura) por aluno"
+            valor={valor.verificacoes}
+            onChange={(v) => mudar("verificacoes", v)}
+            min={VERIFICACOES_MIN}
+            max={VERIFICACOES_MAX}
+            placeholder={`${automatico} (automático)`}
+            dica={`Em branco: 2 a cada 10 (${automatico} neste desafio). 0 = nenhuma. Espalhadas e sorteadas para cada aluno; relâmpago e questões sem tema não recebem.`}
           />
-          <Numero
-            rotulo="💡 Dicas neste desafio"
-            valor={valor.dicasMax}
-            onChange={(v) => mudar("dicasMax", v)}
-            min={0}
-            max={AJUDAS_MAX_DESAFIO}
-            placeholder="Só a cota"
+          <Caixa
+            rotulo="Ordem fixa das questões"
+            dica="Todos recebem na ordem em que o desafio foi montado. Desmarcado, cada aluno recebe numa ordem diferente."
+            marcado={valor.ordemFixa}
+            onChange={(v) => mudar("ordemFixa", v)}
           />
-        </div>
-      </Grupo>
+          <Caixa
+            rotulo="Embaralhar as alternativas"
+            dica="Desmarcado, as alternativas aparecem na ordem em que foram escritas (múltipla escolha, interpretação, fonte primária, V/F e intruso). Ordenar, ligar e classificar sempre embaralham."
+            marcado={valor.embaralharAlternativas}
+            onChange={(v) => mudar("embaralharAlternativas", v)}
+          />
+        </Grupo>
+      )}
 
-      <Grupo titulo="🏁 Pontos e depois do desafio">
-        <Caixa
-          rotulo="⚡ Bônus por rapidez"
-          dica="Acertar logo de cara vale até 50% a mais; o bônus cai até zero no fim do tempo. Erro não ganha bônus."
-          marcado={valor.bonusRapidez}
-          onChange={(v) => mudar("bonusRapidez", v)}
-        />
-        <Caixa
-          rotulo="Nunca mostrar o gabarito aos alunos"
-          dica="Nem depois de fechar. Também desliga o treino e tira estas questões da revisão de erros."
-          marcado={valor.gabaritoNunca}
-          onChange={(v) => mudar("gabaritoNunca", v)}
-        />
-        <Caixa
-          rotulo="Refazer como treino depois que fechar"
-          dica="O treino não vale ranking nem XP."
-          marcado={valor.treinoLiberado && !valor.gabaritoNunca}
-          desabilitado={valor.gabaritoNunca}
-          onChange={(v) => mudar("treinoLiberado", v)}
-        />
-      </Grupo>
+      {ver("ajudas") && (
+        <Grupo
+          titulo="🧰 Ajudas"
+          nota={`A cota da temporada (${ELIMINACOES_POR_TEMPORADA} eliminações e ${DICAS_POR_TEMPORADA} dicas) continua valendo. Aqui dá para limitar mais neste desafio. Em branco = sem limite extra; 0 = desligada.`}
+        >
+          <div className="flex flex-wrap gap-4">
+            <Numero
+              rotulo="✂️ Eliminações neste desafio"
+              valor={valor.eliminacoesMax}
+              onChange={(v) => mudar("eliminacoesMax", v)}
+              min={0}
+              max={AJUDAS_MAX_DESAFIO}
+              placeholder="Só a cota"
+            />
+            <Numero
+              rotulo="💡 Dicas neste desafio"
+              valor={valor.dicasMax}
+              onChange={(v) => mudar("dicasMax", v)}
+              min={0}
+              max={AJUDAS_MAX_DESAFIO}
+              placeholder="Só a cota"
+            />
+          </div>
+        </Grupo>
+      )}
+
+      {ver("pontos") && (
+        <Grupo titulo="🏁 Pontos e depois do desafio">
+          <Caixa
+            rotulo="⚡ Bônus por rapidez"
+            dica="Acertar logo de cara vale até 50% a mais; o bônus cai até zero no fim do tempo. Erro não ganha bônus."
+            marcado={valor.bonusRapidez}
+            onChange={(v) => mudar("bonusRapidez", v)}
+          />
+          <Caixa
+            rotulo="Nunca mostrar o gabarito aos alunos"
+            dica="Nem depois de fechar. Também desliga o treino e tira estas questões da revisão de erros."
+            marcado={valor.gabaritoNunca}
+            onChange={(v) => mudar("gabaritoNunca", v)}
+          />
+          <Caixa
+            rotulo="Refazer como treino depois que fechar"
+            dica="O treino não vale ranking nem XP."
+            marcado={valor.treinoLiberado && !valor.gabaritoNunca}
+            desabilitado={valor.gabaritoNunca}
+            onChange={(v) => mudar("treinoLiberado", v)}
+          />
+        </Grupo>
+      )}
     </div>
   );
 }

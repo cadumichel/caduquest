@@ -434,6 +434,8 @@ const schemaDesafio = z.object({
   multiplicador: z.number().nullable().default(null),
   tempo_percentual: z.number().nullable().default(null),
   questoes: z.array(z.uuid()).min(5, "Escolha de 5 a 15 questões.").max(15, "Escolha de 5 a 15 questões."),
+  // Outras turmas que recebem uma cópia (a temporada atual de cada uma).
+  outras_temporadas: z.array(z.uuid()).max(20).default([]),
 });
 
 export async function criarDesafio(dados: z.input<typeof schemaDesafio>): Promise<EstadoForm> {
@@ -449,11 +451,6 @@ export async function criarDesafio(dados: z.input<typeof schemaDesafio>): Promis
   const { especial, multiplicador, tempo_percentual } = r.data;
   if (especial && (!ehMultiplicador(multiplicador) || !ehPercentual(tempo_percentual)))
     return { erro: "Escolha o multiplicador e o tempo do desafio especial." };
-  const { data: temporada } = await supabase.from("temporadas").select("*").eq("id", r.data.temporada_id).maybeSingle();
-  if ((temporada as { encerrada_em?: string | null } | null)?.encerrada_em) {
-    return { erro: "Esta temporada foi encerrada. Reabra a temporada para criar desafios nela." };
-  }
-
   const { data: publicadas } = await supabase
     .from("questoes")
     .select("id")
@@ -461,44 +458,62 @@ export async function criarDesafio(dados: z.input<typeof schemaDesafio>): Promis
     .eq("status", "publicada");
   if ((publicadas ?? []).length !== r.data.questoes.length) return { erro: "Use só questões publicadas." };
 
-  const { data: desafio, error } = await supabase
-    .from("desafios")
-    .insert({
-      temporada_id: r.data.temporada_id,
-      tipo: r.data.tipo,
-      codigo_dia: r.data.tipo === "relampago" ? gerarCodigoDia() : null,
-      titulo: r.data.titulo,
-      abre_em: abre,
-      fecha_em: fecha,
-      pontos_por_acerto: especial
-        ? pontosDoEspecial(r.data.pontos_por_acerto, multiplicador!)
-        : r.data.pontos_por_acerto,
-      tempo_por_questao_s: r.data.tempo_por_questao_s,
-      // Só envia se escrito: sem o SQL dos tempos a coluna não existe.
-      ...(r.data.tempo_verificacao_s !== null && { tempo_verificacao_s: r.data.tempo_verificacao_s }),
-      saida_zera_questao: r.data.saida_zera_questao,
-      ...regrasParaGravar(regras),
-      // Só envia no especial: sem o SQL do especial as colunas não existem.
-      ...(especial && { especial: true, multiplicador, tempo_percentual }),
-    })
-    .select("id")
-    .single();
-  if (error || !desafio)
-    return {
-      erro: especial
-        ? ERRO_SQL_ESPECIAL
-        : Object.keys(regrasParaGravar(regras)).length
-          ? ERRO_SQL_REGRAS
-          : "Não foi possível criar o desafio.",
-    };
-  const { error: erroQuestoes } = await supabase
-    .from("desafio_questoes")
-    .insert(r.data.questoes.map((questao_id, posicao) => ({ desafio_id: desafio.id, questao_id, posicao })));
-  if (erroQuestoes) {
-    await supabase.from("desafios").delete().eq("id", desafio.id);
-    return { erro: "Não foi possível salvar as questões do desafio." };
-  }
-  redirect(`/professor/desafios/${desafio.id}`);
+  /** Cria o desafio numa temporada; devolve o id ou a mensagem de erro. */
+  const criarEm = async (temporadaId: string): Promise<{ id: string } | { erro: string }> => {
+    const { data: temporada } = await supabase.from("temporadas").select("*").eq("id", temporadaId).maybeSingle();
+    if (!temporada) return { erro: "Temporada não encontrada." };
+    if ((temporada as { encerrada_em?: string | null }).encerrada_em) {
+      return { erro: "Esta temporada foi encerrada. Reabra a temporada para criar desafios nela." };
+    }
+    const { data: desafio, error } = await supabase
+      .from("desafios")
+      .insert({
+        temporada_id: temporadaId,
+        tipo: r.data.tipo,
+        codigo_dia: r.data.tipo === "relampago" ? gerarCodigoDia() : null,
+        titulo: r.data.titulo,
+        abre_em: abre,
+        fecha_em: fecha,
+        pontos_por_acerto: especial
+          ? pontosDoEspecial(r.data.pontos_por_acerto, multiplicador!)
+          : r.data.pontos_por_acerto,
+        tempo_por_questao_s: r.data.tempo_por_questao_s,
+        // Só envia se escrito: sem o SQL dos tempos a coluna não existe.
+        ...(r.data.tempo_verificacao_s !== null && { tempo_verificacao_s: r.data.tempo_verificacao_s }),
+        saida_zera_questao: r.data.saida_zera_questao,
+        ...regrasParaGravar(regras),
+        // Só envia no especial: sem o SQL do especial as colunas não existem.
+        ...(especial && { especial: true, multiplicador, tempo_percentual }),
+      })
+      .select("id")
+      .single();
+    if (error || !desafio)
+      return {
+        erro: especial
+          ? ERRO_SQL_ESPECIAL
+          : Object.keys(regrasParaGravar(regras)).length
+            ? ERRO_SQL_REGRAS
+            : "Não foi possível criar o desafio.",
+      };
+    const { error: erroQuestoes } = await supabase
+      .from("desafio_questoes")
+      .insert(r.data.questoes.map((questao_id, posicao) => ({ desafio_id: desafio.id, questao_id, posicao })));
+    if (erroQuestoes) {
+      await supabase.from("desafios").delete().eq("id", desafio.id);
+      return { erro: "Não foi possível salvar as questões do desafio." };
+    }
+    return { id: desafio.id };
+  };
+
+  const principal = await criarEm(r.data.temporada_id);
+  if ("erro" in principal) return principal;
+  const outras = [...new Set(r.data.outras_temporadas)].filter((t) => t !== r.data.temporada_id);
+  let copias = 0;
+  for (const t of outras) if ("id" in (await criarEm(t))) copias += 1;
+  const falhas = outras.length - copias;
+  redirect(
+    `/professor/desafios/${principal.id}${outras.length ? `?copias=${copias}${falhas ? `&falhas=${falhas}` : ""}` : ""}`,
+  );
 }
 
 export async function atualizarJanelaDesafio(_: EstadoForm, form: FormData): Promise<EstadoForm> {

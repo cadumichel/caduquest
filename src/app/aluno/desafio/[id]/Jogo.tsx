@@ -73,8 +73,8 @@ function textoFaixaBloqueada(itens: (string | null)[]) {
 
 /** Linha das orientações sobre as ajudas, com o teto do desafio se houver. */
 function textoAjudas(eliminacoesMax: number | null, dicasMax: number | null) {
-  if (eliminacoesMax === 0 && dicasMax === 0) return "🛟 Este desafio não tem ajudas (eliminações e dicas).";
-  const base = `🛟 Ajudas da temporada: ${ELIMINACOES_POR_TEMPORADA} eliminações (tiram uma opção errada ou revelam um item certo) e ${DICAS_POR_TEMPORADA} dicas. Use quando quiser; acabou, só na próxima temporada.`;
+  if (eliminacoesMax === 0 && dicasMax === 0) return "🧰 Este desafio não tem ajudas (eliminações e dicas).";
+  const base = `🧰 Ajudas da temporada: ${ELIMINACOES_POR_TEMPORADA} eliminações (tiram uma opção errada ou revelam um item certo) e ${DICAS_POR_TEMPORADA} dicas. Use quando quiser; acabou, só na próxima temporada.`;
   if (eliminacoesMax === null && dicasMax === null) return base;
   const parte = (n: number | null, um: string, varios: string) =>
     n === null ? null : n === 0 ? `nenhuma ${um}` : `até ${n} ${n === 1 ? um : varios}`;

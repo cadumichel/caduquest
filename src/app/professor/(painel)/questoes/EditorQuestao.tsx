@@ -2,6 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { FaixaRelampago } from "@/components/FaixaRelampago";
+import { Gabarito } from "@/components/Gabarito";
 import { ERAS } from "@/lib/publico/regras";
 import { QuestaoInterativa } from "@/components/QuestaoInterativa";
 import { AreaTexto, Aviso, Botao, Campo, Cartao, Entrada, Selecao, classeInput } from "@/components/ui";
@@ -352,6 +353,14 @@ export function EditorQuestao({
             <p className="p-6 text-center text-sm text-slate-500">{validacao.error.issues[0].message}</p>
           )}
         </div>
+        {validacao.success && (
+          <details open className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-3">
+            <summary className="cursor-pointer text-sm font-semibold text-emerald-800">✓ Resposta certa</summary>
+            <div className="mt-2">
+              <Gabarito conteudo={{ tipo: conteudo.tipo, conteudo: validacao.data } as Conteudo} />
+            </div>
+          </details>
+        )}
       </div>
     </div>
   );

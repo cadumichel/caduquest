@@ -41,7 +41,7 @@ function RegrasFinal() {
       <li>🚫 Sem consulta: não saia desta tela nem troque de aba ou de app.</li>
       <li>⌨️ Não use o teclado: responda só com o mouse ou tocando na tela.</li>
       <li>🖱️ No computador, clique só nas alternativas e nos botões.</li>
-      <li>🛟 Sem ajudas: eliminações e dicas não valem na rodada final.</li>
+      <li>🧰 Sem ajudas: eliminações e dicas não valem na rodada final.</li>
       <li>❗ Se alguma dessas regras for quebrada, aquela questão vale zero.</li>
       <li>⭐ Cada questão da rodada final vale o dobro: até {PESO_FINAL * (PONTOS_ACERTO + BONUS_RAPIDEZ)} pontos.</li>
     </ul>
@@ -93,7 +93,7 @@ export function JogoPublico({
             ⚡ Cada acerto vale {PONTOS_ACERTO} pontos, mais até {BONUS_RAPIDEZ} de bônus pela rapidez.
           </li>
           <li>
-            🛟 Ajudas do desafio: {ELIMINACOES_POR_PARTIDA} eliminações (tiram uma opção errada ou revelam um item
+            🧰 Ajudas do desafio: {ELIMINACOES_POR_PARTIDA} eliminações (tiram uma opção errada ou revelam um item
             certo) e {DICAS_POR_PARTIDA} dicas, para usar nas questões 1 a {NORMAIS}.
           </li>
           <li>
