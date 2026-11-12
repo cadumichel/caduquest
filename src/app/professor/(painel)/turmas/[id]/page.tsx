@@ -25,6 +25,7 @@ import { medalhasDaTurma } from "@/lib/medalhas";
 import { exigirProfessor } from "@/lib/professor";
 import { rankingDaTemporada, temporadaAtual } from "@/lib/temporada-dados";
 import { situacaoDesafio } from "@/lib/tipos-banco";
+import { PedidosEntrada } from "../../PedidosEntrada";
 import type { Aluno, Desafio, Temporada } from "@/lib/tipos-banco";
 import { cartasParaAProxima } from "@/lib/carta-coringa";
 import {
@@ -33,8 +34,6 @@ import {
   recusarCarta,
   alternarAprovacao,
   alternarTeclado,
-  aprovarAluno,
-  aprovarTodos,
   atualizarAluno,
   atualizarTemporada,
   criarTemporada,
@@ -119,6 +118,8 @@ export default async function PaginaTurma({ params, searchParams }: PageProps<"/
         </Titulo>
       </div>
 
+      <PedidosEntrada pedidos={pendentes} mostrarTurma={false} />
+
       <Abas
         atual={aba}
         abas={[
@@ -142,42 +143,6 @@ export default async function PaginaTurma({ params, searchParams }: PageProps<"/
 
       {aba === "alunos" && (
         <div className="space-y-5">
-          {pendentes.length > 0 && (
-            <Cartao className="border-amber-300 bg-amber-50">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <Subtitulo>Aguardando aprovação ({pendentes.length})</Subtitulo>
-                {pendentes.length > 1 && (
-                  <form action={aprovarTodos.bind(null, id)}>
-                    <Botao>Aprovar todos</Botao>
-                  </form>
-                )}
-              </div>
-              <ul className="divide-y divide-amber-200">
-                {pendentes.map((a) => (
-                  <li key={a.id} className="flex flex-wrap items-center gap-3 py-2.5">
-                    <Avatar avatar={a.avatar} cor={a.cor} tamanho={36} />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold">
-                        {a.nome_real ?? "Sem nome informado"}{" "}
-                        <span className="font-normal text-slate-600">· {a.apelido}</span>
-                      </p>
-                      <p className="text-xs text-slate-500">Cadastro em {formatarDataHora(a.criado_em)}</p>
-                    </div>
-                    <form action={aprovarAluno.bind(null, a.id)}>
-                      <Botao>Aprovar</Botao>
-                    </form>
-                    <BotaoConfirmar
-                      acao={removerAluno.bind(null, a.id)}
-                      pergunta={`Recusar o cadastro de ${a.apelido}? O cadastro será apagado.`}
-                    >
-                      Recusar
-                    </BotaoConfirmar>
-                  </li>
-                ))}
-              </ul>
-            </Cartao>
-          )}
-
           <Cartao>
             {!alunos.length && <Vazio>Nenhum aluno entrou ainda. Passe o código {turma.codigo} para a turma.</Vazio>}
             <ul className="divide-y divide-slate-100">
