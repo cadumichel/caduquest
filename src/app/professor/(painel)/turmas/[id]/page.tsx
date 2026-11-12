@@ -524,6 +524,7 @@ async function AbaTemporada({
               dataProva={temporada.data_prova}
               encerramento={temporada.encerramento ?? ""}
               gabaritoNoEncerramento={temporada.gabarito_no_encerramento !== false}
+              gabaritoSoNoEncerramento={!!temporada.gabarito_so_no_encerramento}
             />
             <Campo rotulo="Capítulos cobertos" dica="Um por linha. Aparecem como a trilha do mapa do aluno.">
               <AreaTexto name="capitulos" rows={4} defaultValue={temporada.capitulos.join("\n")} />
@@ -574,11 +575,13 @@ function CamposDatasTemporada({
   dataProva = "",
   encerramento = "",
   gabaritoNoEncerramento = true,
+  gabaritoSoNoEncerramento = false,
 }: {
   inicio: string;
   dataProva?: string;
   encerramento?: string;
   gabaritoNoEncerramento?: boolean;
+  gabaritoSoNoEncerramento?: boolean;
 }) {
   return (
     <div className="space-y-3">
@@ -593,6 +596,40 @@ function CamposDatasTemporada({
           <Entrada type="date" name="data_prova" defaultValue={dataProva} required />
         </Campo>
       </div>
+      <fieldset className="space-y-2 text-sm">
+        <legend className="mb-1 font-medium text-slate-700">Quando o aluno vê o gabarito</legend>
+        <label className="flex cursor-pointer items-start gap-2">
+          <input
+            type="radio"
+            name="quando_gabarito"
+            value="desafio"
+            defaultChecked={!gabaritoSoNoEncerramento}
+            className="mt-1"
+          />
+          <span>
+            Quando cada desafio fecha
+            <span className="block text-xs text-slate-500">
+              O aluno confere os erros a cada semana e já pode treinar e revisar.
+            </span>
+          </span>
+        </label>
+        <label className="flex cursor-pointer items-start gap-2">
+          <input
+            type="radio"
+            name="quando_gabarito"
+            value="encerramento"
+            defaultChecked={gabaritoSoNoEncerramento}
+            className="mt-1"
+          />
+          <span>
+            Só no encerramento da temporada
+            <span className="block text-xs text-slate-500">
+              Nenhum gabarito aparece antes; no encerramento todos saem juntos, com treino e revisão de erros até a
+              prova.
+            </span>
+          </span>
+        </label>
+      </fieldset>
       <label className="flex cursor-pointer items-start gap-2 text-sm">
         <input
           type="checkbox"
@@ -601,10 +638,9 @@ function CamposDatasTemporada({
           className="mt-1"
         />
         <span>
-          Liberar o gabarito no encerramento
+          No encerramento, liberar também o gabarito que guardei
           <span className="block text-xs text-slate-500">
-            Os desafios em que você guardou o gabarito para liberar depois mostram as respostas no encerramento, para os
-            alunos estudarem até a prova com o treino e a revisão de erros. Os marcados &quot;nunca mostrar&quot;
+            Vale para os desafios em que você escolheu liberar o gabarito na mão. Os marcados &quot;nunca mostrar&quot;
             continuam escondidos.
           </span>
         </span>

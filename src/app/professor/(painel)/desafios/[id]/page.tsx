@@ -378,6 +378,11 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
               liberadoEm={desafio.gabarito_liberado_em ?? null}
               visivelEm={gabaritoLiberadoEm(desafio).toISOString()}
               visivel={gabaritoLiberado(desafio)}
+              soNoEncerramento={
+                desafio.temporadas.gabarito_so_no_encerramento
+                  ? formatarData(ultimoDiaComPontos(desafio.temporadas))
+                  : null
+              }
               encerramento={
                 desafio.temporadas.gabarito_no_encerramento === false
                   ? null

@@ -37,10 +37,14 @@ export type Temporada = {
   encerramento?: string | null;
   /** No encerramento, libera o gabarito guardado para liberação manual (padrão true). */
   gabarito_no_encerramento?: boolean;
+  /** Nenhum gabarito durante a temporada: tudo sai no encerramento (padrão false). */
+  gabarito_so_no_encerramento?: boolean;
 };
 
 export type TemporadaEncerramento = Pick<Temporada, "data_prova"> &
-  Partial<Pick<Temporada, "encerramento" | "encerrada_em" | "gabarito_no_encerramento">>;
+  Partial<
+    Pick<Temporada, "encerramento" | "encerrada_em" | "gabarito_no_encerramento" | "gabarito_so_no_encerramento">
+  >;
 
 /** Último dia que vale pontos (AAAA-MM-DD). */
 export const ultimoDiaComPontos = (t: TemporadaEncerramento) => t.encerramento || t.data_prova;
@@ -70,7 +74,9 @@ export function faseDaTemporada(t: TemporadaEncerramento, agora = new Date()): "
 
 /** No encerramento o gabarito guardado para liberação manual é liberado sozinho. */
 export const gabaritoLiberadoNoEncerramento = (t: TemporadaEncerramento | null | undefined, agora = new Date()) =>
-  !!t?.data_prova && t.gabarito_no_encerramento !== false && pontuacaoEncerrada(t, agora);
+  !!t?.data_prova &&
+  (t.gabarito_no_encerramento !== false || !!t.gabarito_so_no_encerramento) &&
+  pontuacaoEncerrada(t, agora);
 export type Questao = {
   id: string;
   tipo: TipoQuestao;
@@ -213,11 +219,22 @@ export const gabaritoAguardaProfessor = (d: DesafioGabarito, agora = new Date())
   (!!d.gabarito_manual && !d.gabarito_liberado_em && !gabaritoLiberadoNoEncerramento(d.temporadas, agora));
 
 /**
+ * Temporada com "gabarito só no encerramento": até lá nenhum gabarito aparece
+ * (a não ser que o professor libere um desafio na mão).
+ */
+export const gabaritoAguardaEncerramento = (d: DesafioGabarito, agora = new Date()) =>
+  !d.gabarito_nunca &&
+  !d.gabarito_liberado_em &&
+  !!d.temporadas?.gabarito_so_no_encerramento &&
+  !pontuacaoEncerrada(d.temporadas, agora);
+
+/**
  * Gabarito visível ao aluno: depois do fim do prazo (com a janela de quem ainda
- * estava respondendo) e, se o professor quis, só depois de ele liberar.
+ * estava respondendo) e, se o professor quis, só depois de ele liberar ou do
+ * encerramento da temporada.
  */
 export const gabaritoLiberado = (d: DesafioGabarito, agora = new Date()) =>
-  agora > gabaritoLiberadoEm(d) && !gabaritoAguardaProfessor(d, agora);
+  agora > gabaritoLiberadoEm(d) && !gabaritoAguardaProfessor(d, agora) && !gabaritoAguardaEncerramento(d, agora);
 
 /** Refazer como treino: só com o gabarito visível e se o professor não desligou. */
 export const treinoLiberado = (d: DesafioGabarito & Pick<Desafio, "treino_liberado">, agora = new Date()) =>

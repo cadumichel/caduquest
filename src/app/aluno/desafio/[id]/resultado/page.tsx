@@ -8,6 +8,7 @@ import { desafioDoAluno } from "@/lib/jogo";
 import type { Conteudo, Resposta } from "@/lib/questoes/tipos";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import {
+  gabaritoAguardaEncerramento,
   gabaritoAguardaProfessor,
   treinoLiberado,
   gabaritoLiberado,
@@ -99,8 +100,15 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
         <Aviso tipo="info">
           {desafio.gabarito_manual
             ? `O gabarito e as explicações aparecem depois que o desafio fechar (${formatarDataHora(desafio.fecha_em)}), quando o professor liberar${noEncerramento}.`
-            : `O gabarito e as explicações aparecem quando o desafio fechar, em ${formatarDataHora(desafio.fecha_em)}.`}{" "}
+            : desafio.temporadas.gabarito_so_no_encerramento
+              ? `O gabarito e as explicações aparecem no encerramento da temporada (${formatarData(ultimoDiaComPontos(desafio.temporadas))}).`
+              : `O gabarito e as explicações aparecem quando o desafio fechar, em ${formatarDataHora(desafio.fecha_em)}.`}{" "}
           Assim ninguém passa as respostas enquanto ele está aberto.
+        </Aviso>
+      ) : gabaritoAguardaEncerramento(desafio) ? (
+        <Aviso tipo="info">
+          Nesta temporada o gabarito de todos os desafios aparece junto, no encerramento (
+          {formatarData(ultimoDiaComPontos(desafio.temporadas))}).
         </Aviso>
       ) : gabaritoAguardaProfessor(desafio) ? (
         <Aviso tipo="info">O desafio fechou. O gabarito aparece quando o professor liberar{noEncerramento}.</Aviso>

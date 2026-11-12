@@ -1119,6 +1119,12 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           .describe(
             "true (padrão) = no encerramento sai o gabarito dos desafios guardados para liberação manual. Os marcados 'nunca mostrar' continuam escondidos.",
           ),
+        gabarito_so_no_encerramento: z
+          .boolean()
+          .optional()
+          .describe(
+            "false (padrão) = cada desafio mostra o gabarito quando fecha. true = nenhum gabarito durante a temporada; todos saem juntos no encerramento.",
+          ),
         capitulos: z
           .array(z.string().min(1).max(200))
           .max(30)
@@ -1134,6 +1140,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
       const erroDatas = conferirDatasTemporada({ inicio: args.inicio, data_prova: args.data_prova, encerramento });
       if (erroDatas) return falha(erroDatas);
       const gabaritoNoEncerramento = args.gabarito_no_encerramento ?? true;
+      const gabaritoSoNoEncerramento = args.gabarito_so_no_encerramento ?? false;
       const { data: turma } = await db
         .from("turmas")
         .select("id, nome, escolas!inner(nome, professor_id), temporadas(nome, inicio, data_prova)")
@@ -1153,7 +1160,9 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         inicio: formatarData(args.inicio),
         encerramento: formatarData(encerramento ?? args.data_prova),
         prova: formatarData(args.data_prova),
-        gabarito_no_encerramento: gabaritoNoEncerramento ? "libera o gabarito guardado" : "não libera",
+        gabarito: gabaritoSoNoEncerramento
+          ? "só no encerramento (todos juntos)"
+          : `quando cada desafio fecha; no encerramento ${gabaritoNoEncerramento ? "libera" : "não libera"} o guardado`,
         capitulos,
         narrativa: args.narrativa?.trim() || null,
         ...(sobrepostas.length && {
@@ -1170,7 +1179,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           nome: previa.nome,
           inicio: args.inicio,
           data_prova: args.data_prova,
-          ...colunasEncerramento(encerramento, gabaritoNoEncerramento),
+          ...colunasEncerramento({ encerramento, gabaritoNoEncerramento, gabaritoSoNoEncerramento }),
           capitulos,
           narrativa: previa.narrativa,
         })
@@ -1178,7 +1187,9 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         .single();
       if (error || !temporada)
         return falha(
-          encerramento || !gabaritoNoEncerramento ? ERRO_SQL_ENCERRAMENTO : "Não foi possível criar a temporada.",
+          encerramento || !gabaritoNoEncerramento || gabaritoSoNoEncerramento
+            ? ERRO_SQL_ENCERRAMENTO
+            : "Não foi possível criar a temporada.",
         );
       return resultado({
         criada: previa,
@@ -1206,6 +1217,10 @@ export function registrarFerramentas(server: McpServer, origem: string) {
             'Último dia que vale pontos; "" = o dia da prova. Desafios que fechariam depois passam a fechar nele.',
           ),
         gabarito_no_encerramento: z.boolean().optional(),
+        gabarito_so_no_encerramento: z
+          .boolean()
+          .optional()
+          .describe("true = gabaritos só no encerramento; false = quando cada desafio fecha."),
         capitulos: z.array(z.string().min(1).max(200)).max(30).optional(),
         narrativa: z.string().max(2000).optional().describe('Envie "" para apagar.'),
         confirmar: z.boolean(),
@@ -1231,6 +1246,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         narrativa: args.narrativa === undefined ? atual.narrativa : args.narrativa.trim() || null,
         encerramento: null as string | null,
         gabarito_no_encerramento: args.gabarito_no_encerramento ?? atual.gabarito_no_encerramento !== false,
+        gabarito_so_no_encerramento: args.gabarito_so_no_encerramento ?? !!atual.gabarito_so_no_encerramento,
       };
       novo.encerramento = encerramentoOuNulo(
         args.encerramento === undefined ? atual.encerramento : args.encerramento,
@@ -1247,7 +1263,9 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         inicio: formatarData(t.inicio),
         encerramento: formatarData(t.encerramento || t.data_prova),
         prova: formatarData(t.data_prova),
-        gabarito_no_encerramento: t.gabarito_no_encerramento !== false ? "libera o gabarito guardado" : "não libera",
+        gabarito: t.gabarito_so_no_encerramento
+          ? "só no encerramento (todos juntos)"
+          : `quando cada desafio fecha; no encerramento ${t.gabarito_no_encerramento !== false ? "libera" : "não libera"} o guardado`,
         capitulos: t.capitulos,
         narrativa: t.narrativa,
       });
@@ -1260,8 +1278,15 @@ export function registrarFerramentas(server: McpServer, origem: string) {
       };
       if (!args.confirmar) return resultado({ previa, proximo_passo: "Mostre a prévia e confirme com o professor." });
 
-      const { encerramento, gabarito_no_encerramento, ...basicos } = novo;
-      const extras = colunasEncerramento(encerramento, gabarito_no_encerramento, atual);
+      const { encerramento, gabarito_no_encerramento, gabarito_so_no_encerramento, ...basicos } = novo;
+      const extras = colunasEncerramento(
+        {
+          encerramento,
+          gabaritoNoEncerramento: gabarito_no_encerramento,
+          gabaritoSoNoEncerramento: gabarito_so_no_encerramento,
+        },
+        atual,
+      );
       const { error } = await db
         .from("temporadas")
         .update({ ...basicos, ...extras })

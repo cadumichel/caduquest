@@ -219,6 +219,8 @@ function lerTemporada(form: FormData) {
     encerramento,
     // Caixa marcada por padrão: no encerramento sai o gabarito guardado.
     gabaritoNoEncerramento: form.get("gabarito_no_encerramento") === "on",
+    // "desafio" (padrão): cada gabarito sai quando o desafio fecha; "encerramento": tudo de uma vez.
+    gabaritoSoNoEncerramento: form.get("quando_gabarito") === "encerramento",
   } as const;
 }
 
@@ -226,7 +228,7 @@ export async function criarTemporada(_: EstadoForm, form: FormData): Promise<Est
   const { supabase } = await exigirProfessor();
   const lido = lerTemporada(form);
   if ("erro" in lido) return { erro: lido.erro };
-  const extras = colunasEncerramento(lido.encerramento, lido.gabaritoNoEncerramento);
+  const extras = colunasEncerramento(lido);
   const { data, error } = await supabase
     .from("temporadas")
     .insert({ ...lido.dados, ...extras, turma_id: texto(form, "turma_id") })
@@ -244,7 +246,7 @@ export async function atualizarTemporada(_: EstadoForm, form: FormData): Promise
   const id = texto(form, "id");
   const { data: atual } = await supabase.from("temporadas").select("*").eq("id", id).maybeSingle();
   if (!atual) return { erro: "Temporada não encontrada." };
-  const extras = colunasEncerramento(lido.encerramento, lido.gabaritoNoEncerramento, atual);
+  const extras = colunasEncerramento(lido, atual);
   const novas = { data_prova: lido.dados.data_prova, encerramento: lido.encerramento };
   // Só confere os desafios quando o fim da pontuação muda.
   const mudouFim = ultimoDiaComPontos(novas) !== ultimoDiaComPontos(atual as Temporada);

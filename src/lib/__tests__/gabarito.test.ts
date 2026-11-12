@@ -61,6 +61,23 @@ describe("encerramento da temporada", () => {
   });
 });
 
+describe("gabarito só no encerramento", () => {
+  const temporada = { data_prova: "2026-11-20", encerramento: "2026-11-13", gabarito_so_no_encerramento: true };
+  const desafio = { fecha_em: "2026-11-05T15:00:00Z", temporadas: temporada };
+
+  it("segura o gabarito até o encerramento e libera todos juntos", () => {
+    expect(gabaritoLiberado(desafio, new Date("2026-11-10T12:00:00Z"))).toBe(false);
+    expect(gabaritoLiberado(desafio, new Date("2026-11-14T03:00:00Z"))).toBe(true);
+    const manual = { ...desafio, gabarito_manual: true, gabarito_liberado_em: null };
+    expect(gabaritoLiberado(manual, new Date("2026-11-14T03:00:00Z"))).toBe(true);
+  });
+
+  it("o professor ainda pode liberar um desafio antes", () => {
+    const liberado = { ...desafio, gabarito_liberado_em: "2026-11-06T12:00:00Z" };
+    expect(gabaritoLiberado(liberado, new Date("2026-11-10T12:00:00Z"))).toBe(true);
+  });
+});
+
 describe("fase da temporada", () => {
   const t = { data_prova: "2026-11-20", encerramento: "2026-11-13" };
   it("pontos até o encerramento, estudo até a prova, depois encerrada", () => {

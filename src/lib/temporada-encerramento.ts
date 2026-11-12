@@ -25,14 +25,17 @@ export function conferirDatasTemporada(t: { inicio: string; data_prova: string; 
  * ou quando a linha atual já tem as colunas.
  */
 export function colunasEncerramento(
-  encerramento: string | null,
-  gabaritoNoEncerramento: boolean,
+  o: { encerramento: string | null; gabaritoNoEncerramento: boolean; gabaritoSoNoEncerramento: boolean },
   atual?: Record<string, unknown> | null,
 ) {
   // Encerrar no dia da prova é o mesmo que não ter encerramento separado.
   const colunasExistem = !!atual && "encerramento" in atual;
-  if (!colunasExistem && !encerramento && gabaritoNoEncerramento) return {};
-  return { encerramento, gabarito_no_encerramento: gabaritoNoEncerramento };
+  if (!colunasExistem && !o.encerramento && o.gabaritoNoEncerramento && !o.gabaritoSoNoEncerramento) return {};
+  return {
+    encerramento: o.encerramento,
+    gabarito_no_encerramento: o.gabaritoNoEncerramento,
+    gabarito_so_no_encerramento: o.gabaritoSoNoEncerramento,
+  };
 }
 
 /** Normaliza: encerramento igual à prova vira vazio (é o padrão). */

@@ -16,6 +16,7 @@ export function ControlesDesafio({
   visivelEm,
   visivel,
   encerramento,
+  soNoEncerramento,
 }: {
   id: string;
   relampago: boolean;
@@ -28,6 +29,8 @@ export function ControlesDesafio({
   visivel: boolean;
   /** Dia em que o gabarito guardado sai sozinho (encerramento da temporada), se a temporada libera. */
   encerramento: string | null;
+  /** A temporada segura todos os gabaritos até o encerramento (dd/mm/aaaa), se for o caso. */
+  soNoEncerramento: string | null;
 }) {
   const router = useRouter();
   const [msg, setMsg] = useState<EstadoForm>({});
@@ -47,7 +50,9 @@ export function ControlesDesafio({
             ? `Gabarito guardado até você liberar ou até o encerramento da temporada (${encerramento})`
             : "Gabarito guardado até você liberar",
         }
-      : { cor: "cinza" as const, texto: `Gabarito aparece em ${formatarDataHora(visivelEm)}` };
+      : soNoEncerramento
+        ? { cor: "ambar" as const, texto: `Gabarito sai no encerramento da temporada (${soNoEncerramento})` }
+        : { cor: "cinza" as const, texto: `Gabarito aparece em ${formatarDataHora(visivelEm)}` };
 
   return (
     <div className="space-y-3">
