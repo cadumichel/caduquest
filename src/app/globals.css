@@ -32,6 +32,16 @@ body {
   -webkit-touch-callout: none;
 }
 
+/* Barra do popup de clique fora: esvazia em 10 s. */
+@keyframes esvaziar {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
 /* Personagens especiais: aura dourada girando e um brilho que passa pela imagem. */
 @keyframes girar {
   to {

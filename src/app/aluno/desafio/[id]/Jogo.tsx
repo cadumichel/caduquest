@@ -46,13 +46,21 @@ function useTolerancia(
 ) {
   const restantes = useRef(inicial);
   const [aviso, setAviso] = useState<string | null>(null);
+  // Clique fora: o aviso é um popup que some sozinho em 10 s (a chave reinicia a contagem).
+  const [popup, setPopup] = useState<{ restantes: number; chave: number } | null>(null);
+  useEffect(() => {
+    if (!popup) return;
+    const t = setTimeout(() => setPopup(null), POPUP_CLIQUE_MS);
+    return () => clearTimeout(t);
+  }, [popup]);
   const motivo: MotivoZerada = tipo === "clique" ? "clique_fora" : "saida";
   const avisar = useCallback(() => {
     const atual = restantes.current;
     if (atual === null) return;
     if (atual <= 0) return zerar(motivo);
     restantes.current = atual - 1;
-    setAviso(tipo === "clique" ? avisoCliqueTolerado(atual - 1) : avisoSaidaTolerada(atual - 1));
+    if (tipo === "clique") setPopup({ restantes: atual - 1, chave: Date.now() });
+    else setAviso(avisoSaidaTolerada(atual - 1));
     avisoTolerado(desafioId, tipo)
       .then((r) => {
         if (r.zerar) zerar(motivo);
@@ -61,7 +69,30 @@ function useTolerancia(
       .catch(() => {});
   }, [desafioId, tipo, motivo, zerar]);
   // Proibido: o caminho de sempre (zera na primeira vez).
-  return { avisar: inicial === 0 ? undefined : avisar, aviso };
+  return { avisar: inicial === 0 ? undefined : avisar, aviso, popup };
+}
+
+const POPUP_CLIQUE_MS = 10_000;
+
+/** Popup do clique fora tolerado: fica 10 s no topo da tela e não recebe cliques. */
+function PopupCliqueFora({ popup }: { popup: { restantes: number; chave: number } | null }) {
+  if (!popup) return null;
+  const { titulo, texto } = avisoCliqueTolerado(popup.restantes);
+  return (
+    <div
+      key={popup.chave}
+      role="alert"
+      className="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-4"
+    >
+      <div className="w-full max-w-md overflow-hidden rounded-2xl border-2 border-amber-400 bg-amber-50 shadow-2xl">
+        <div className="px-4 py-3 text-center">
+          <p className="text-base font-extrabold text-amber-900">⚠️ {titulo}</p>
+          <p className="mt-1 text-sm font-semibold text-amber-900">{texto}</p>
+        </div>
+        <div className="h-1.5 bg-amber-400" style={{ animation: `esvaziar ${POPUP_CLIQUE_MS}ms linear forwards` }} />
+      </div>
+    </div>
+  );
 }
 
 /** Faixa da questão com a pesquisa bloqueada: o que faz a questão valer zero. */
@@ -480,7 +511,8 @@ function TelaQuestao({
           🔎 Pesquisa liberada: pode consultar, o tempo continua correndo.
         </p>
       )}
-      {[saida.aviso, clique.aviso].filter(Boolean).map((a) => (
+      <PopupCliqueFora popup={clique.popup} />
+      {[saida.aviso].filter(Boolean).map((a) => (
         <p
           key={a}
           role="alert"
@@ -655,7 +687,8 @@ function TelaVerificacao({
         <span className={`tabular-nums ${segundos <= 5 ? "font-bold text-red-600" : ""}`}>⏱️ {segundos}s</span>
       </div>
       {aviso && <Aviso>{aviso}</Aviso>}
-      {[saida.aviso, clique.aviso].filter(Boolean).map((a) => (
+      <PopupCliqueFora popup={clique.popup} />
+      {[saida.aviso].filter(Boolean).map((a) => (
         <p
           key={a}
           role="alert"

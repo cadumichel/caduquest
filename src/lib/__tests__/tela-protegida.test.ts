@@ -112,7 +112,7 @@ describe("regra de cliques fora", () => {
     expect(cliquesRestantes(d, 9)).toBe(0);
   });
   it("aviso ao aluno não cita o mouse", () => {
-    for (const n of [0, 1, 3]) expect(avisoCliqueTolerado(n).toLowerCase()).not.toContain("mouse");
+    for (const n of [0, 1, 3]) expect(JSON.stringify(avisoCliqueTolerado(n)).toLowerCase()).not.toContain("mouse");
   });
 });
 
