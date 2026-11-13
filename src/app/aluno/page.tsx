@@ -269,7 +269,7 @@ export default async function Inicio() {
           <p className="mt-2 text-xs text-marca-100">
             A ofensiva vai até a prova. Termine cada desafio da semana antes de ele fechar: o 1º seguido dá +10 pts de
             bônus, o 2º +12, o 3º +14, e assim por diante até +20. Se um desafio fechar sem você fazer, a sequência
-            recomeça, mas o bônus já ganho fica. Veja tudo em Ranking › Como ganhar pontos de bônus.
+            recomeça, mas o bônus já ganho fica. Veja tudo em Ranking › Como funcionam os pontos e os bônus.
           </p>
         </section>
 

@@ -5,7 +5,16 @@ import { Avatar } from "@/components/Avatar";
 import { Vazio } from "@/components/ui";
 import { formatarPontos } from "@/lib/pontos";
 import { rankingPublico } from "@/lib/publico/ranking";
-import { ehEra, ERAS } from "@/lib/publico/regras";
+import {
+  BONUS_RAPIDEZ,
+  ehEra,
+  ERAS,
+  PESO_FINAL,
+  PONTOS_ACERTO,
+  PONTUACAO_MAXIMA,
+  QUESTOES_FINAIS,
+  QUESTOES_POR_PARTIDA,
+} from "@/lib/publico/regras";
 import { obterJogador } from "@/lib/publico/sessao";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 
@@ -49,6 +58,8 @@ export default async function RankingPublico({ searchParams }: PageProps<"/jogar
         ))}
       </nav>
 
+      <ComoFuncionaPontuacao />
+
       {eu && (
         <p className="rounded-xl bg-ouro/15 px-4 py-3 text-sm font-semibold text-marca-900">
           Você está em {eu.posicao}º lugar, com {formatarPontos(eu.pontos)} pontos.
@@ -83,5 +94,37 @@ export default async function RankingPublico({ searchParams }: PageProps<"/jogar
         Voltar aos desafios
       </Link>
     </div>
+  );
+}
+
+/** Caixa de info: como os pontos da partida e do ranking são contados. */
+function ComoFuncionaPontuacao() {
+  return (
+    <details className="group rounded-3xl border border-sky-200 bg-sky-50 p-4 shadow-sm">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 font-extrabold text-marca-900">
+        <span>ℹ️ Como funcionam os pontos e os bônus</span>
+        <span className="text-sm text-sky-700 group-open:rotate-180">▾</span>
+      </summary>
+      <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-700">
+        <li>
+          Cada partida tem {QUESTOES_POR_PARTIDA} questões. Cada acerto vale {PONTOS_ACERTO} pontos.
+        </li>
+        <li>
+          ⚡ Bônus por rapidez: até +{BONUS_RAPIDEZ} por questão certa. Quanto mais tempo sobrar quando você responder,
+          maior o bônus. Errou, não ganha bônus.
+        </li>
+        <li>Nas questões com vários itens, acertar só uma parte vale parte dos pontos (e do bônus).</li>
+        <li>
+          🏁 Rodada final: as {QUESTOES_FINAIS} últimas questões valem o dobro (até{" "}
+          {PESO_FINAL * (PONTOS_ACERTO + BONUS_RAPIDEZ)} pontos cada), sem consulta e sem ajudas. Quebrar uma regra zera
+          a questão.
+        </li>
+        <li>Uma partida vale no máximo {PONTUACAO_MAXIMA} pontos.</li>
+        <li>
+          Só a primeira partida de cada era conta. O ranking de uma era mostra essa partida, e o ranking geral soma a
+          primeira partida de cada era: quem joga mais eras soma mais.
+        </li>
+      </ul>
+    </details>
   );
 }
