@@ -10,6 +10,8 @@ import { ExcluirComConfirmacao } from "@/components/ExcluirComConfirmacao";
 import { FormAcao } from "@/components/FormAcao";
 import { TabelaRanking } from "@/components/TabelaRanking";
 import { CodigoNoQuadro } from "@/components/CodigoNoQuadro";
+import { DisputaTurmas } from "@/components/DisputaTurmas";
+import { disputaDaTurma } from "@/lib/disputa-turmas-dados";
 import {
   AreaTexto,
   Botao,
@@ -458,7 +460,7 @@ async function AbaTemporada({
     );
   }
   const { supabase } = await exigirProfessor();
-  const [{ data: desafiosBrutos }, ranking, consultas] = await Promise.all([
+  const [{ data: desafiosBrutos }, ranking, consultas, disputa] = await Promise.all([
     supabase
       .from("desafios")
       .select("*, desafio_questoes(count), tentativas(aluno_id, concluida_em)")
@@ -466,6 +468,7 @@ async function AbaTemporada({
       .order("abre_em", { ascending: false }),
     rankingDaTemporada(supabase, temporada),
     consultaPorAluno(supabase, { temporadaId: temporada.id }),
+    ehAtual ? disputaDaTurma(supabase, temporada.turma_id) : null,
   ]);
   for (const alunoId of deTeste.keys()) consultas.delete(alunoId);
   const consultaTurma = resumoConsulta(somarConsultas(consultas.values()));
@@ -533,6 +536,15 @@ async function AbaTemporada({
               title="As questões em que a turma mais errou, em letras grandes para projetar"
             >
               📺 Revisão no quadro
+            </Link>
+          )}
+          {jaAbriram.length > 0 && (
+            <Link
+              href={`/professor/turmas/${temporada.turma_id}/relatorio?temporada=${temporada.id}`}
+              className="rounded-xl border border-marca-200 bg-white px-4 py-2 text-sm font-medium text-marca-700 hover:border-marca-400 hover:bg-marca-50"
+              title="Uma página para imprimir ou salvar em PDF: participação, acerto e uma linha por aluno"
+            >
+              📄 Relatório para o conselho
             </Link>
           )}
           {faseAtual === "pontos" && (
@@ -655,6 +667,8 @@ async function AbaTemporada({
           )}
         </Cartao>
       </div>
+
+      {disputa && <DisputaTurmas disputa={disputa} turmaId={temporada.turma_id} doProfessor />}
 
       <details className="rounded-2xl border border-slate-200 bg-white p-4">
         <summary className="cursor-pointer text-sm font-semibold text-marca-700">

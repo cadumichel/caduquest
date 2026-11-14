@@ -17,12 +17,17 @@ import { rankingParaAluno, type LinhaRanking } from "@/lib/ranking";
 import { errosParaRevisar } from "@/lib/revisao";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { situacaoDaTemporada } from "@/lib/temporada-dados";
+import { DisputaTurmas } from "@/components/DisputaTurmas";
 import { MetaTurma } from "@/components/MetaTurma";
+import { disputaDaTurma } from "@/lib/disputa-turmas-dados";
 import { escolherFundo, FUNDOS_TEMPORADA, imagemDoFundo } from "@/lib/fundos-temporada";
 import { faseDaTemporada, situacaoDesafio, treinoLiberado, type Desafio, type Tentativa } from "@/lib/tipos-banco";
 import { formatarPontos } from "@/lib/pontos";
 
 export const metadata: Metadata = { title: "Início" };
+
+/** O plano de estudo aparece no Início a partir de tantos dias antes da prova. */
+const DIAS_DO_PLANO = 10;
 
 export default async function Inicio() {
   const aluno = await exigirAluno();
@@ -58,7 +63,8 @@ export default async function Inicio() {
       curiosidadeDoDia(temporada),
       progressoDoAluno(aluno.id, aluno.turmaId),
     ]);
-  const [cartas, minhaCarta, { count: temporadasAntes }] = await Promise.all([
+  const [disputa, cartas, minhaCarta, { count: temporadasAntes }] = await Promise.all([
+    disputaDaTurma(db, aluno.turmaId),
     cartasParaAProxima(db, aluno.turmaId),
     cartaDoAluno(db, aluno.id, aluno.turmaId),
     db
@@ -260,6 +266,23 @@ export default async function Inicio() {
             <CartasCoringa cartas={cartas} prova={faltam >= 0 ? temporada.data_prova : null} meuId={aluno.id} />
           )}
 
+          {(estudo || (faltam >= 0 && faltam <= DIAS_DO_PLANO)) && outros.length > 0 && (
+            <Link
+              href="/aluno/plano"
+              className="flex items-center gap-3 rounded-3xl border border-amber-200 bg-amber-50 p-4 shadow-sm transition hover:shadow-md"
+            >
+              <span className="text-3xl">🧭</span>
+              <div className="min-w-0 flex-1">
+                <p className="font-extrabold text-marca-900">Plano de estudo para a prova</p>
+                <p className="text-sm text-slate-700">
+                  {faltam === 0 ? "A prova é hoje" : faltam === 1 ? "A prova é amanhã" : `Faltam ${faltam} dias`}. Veja
+                  o que rever primeiro e as páginas da apostila.
+                </p>
+              </div>
+              <span className="font-bold text-marca-700">Ver ›</span>
+            </Link>
+          )}
+
           {erros.length > 0 && missao.tipo !== "revisao" && (
             <Link
               href="/aluno/revisao"
@@ -383,6 +406,8 @@ export default async function Inicio() {
           </div>
 
           {!encerrada && <MetaTurma meta={situacao.meta} />}
+
+          {disputa && <DisputaTurmas disputa={disputa} turmaId={aluno.turmaId} />}
 
           <MuralRanking top={top} eu={eu} total={total} medalhas={medalhas} alunoId={aluno.id} />
 

@@ -11,7 +11,7 @@ export default async function LayoutProfessor({ children }: { children: React.Re
     .eq("aprovado", false);
   return (
     <div className="flex flex-1 flex-col">
-      <header className="bg-gradient-to-r from-marca-950 via-marca-900 to-marca-800 text-white shadow">
+      <header className="print:hidden bg-gradient-to-r from-marca-950 via-marca-900 to-marca-800 text-white shadow">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
           <MarcaCabecalho href="/professor" claro sufixo="· professor" />
           <MenuPainel pedidos={pedidos ?? 0} />
