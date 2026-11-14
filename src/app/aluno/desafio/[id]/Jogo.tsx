@@ -3,6 +3,7 @@ import { formatarMultiplicador } from "@/lib/especial";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { FaixaRelampago } from "@/components/FaixaRelampago";
+import { PalcoQuestao, useModoFoco } from "@/components/PalcoQuestao";
 import { QuestaoInterativa } from "@/components/QuestaoInterativa";
 import { Aviso, Botao, BotaoLink } from "@/components/ui";
 import type { Ajudas, EstadoJogo, ResultadoAjuda } from "@/lib/jogo";
@@ -18,6 +19,7 @@ import {
   type MotivoZerada,
   type RegraCliques,
 } from "@/lib/tela-protegida";
+import { FimDoDesafio } from "./FimDoDesafio";
 import { avisoTolerado, carregarJogo, eliminar, enviarResposta, enviarVerificacao, pedirDica } from "../../actions";
 
 type QuestaoEmJogo = Extract<EstadoJogo, { fase: "questao" }>;
@@ -115,6 +117,42 @@ function textoAjudas(eliminacoesMax: number | null, dicasMax: number | null) {
   return `${base} Neste desafio: ${limites}.`;
 }
 
+/** "(3 avisos antes)" nas regras com tolerância; vazio quando a primeira vez já zera. */
+const avisos = (n: number) => (n > 0 ? ` (${n} ${n === 1 ? "aviso" : "avisos"} antes)` : "");
+
+type Regra = string | false | null | undefined;
+
+/** As regras do desafio em três cartões: o que pode, o que zera a questão e quanto vale. */
+function ResumoRegras({ pode, naoPode, vale }: { pode: Regra[]; naoPode: Regra[]; vale: Regra[] }) {
+  const cartoes = [
+    { titulo: "✅ Pode", itens: pode, classe: "border-emerald-200 bg-emerald-50 text-emerald-950", nota: null },
+    {
+      titulo: "🚫 Não pode",
+      itens: naoPode,
+      classe: "border-red-200 bg-red-50 text-red-950",
+      nota: "Qualquer um destes faz a questão valer zero.",
+    },
+    { titulo: "🎯 Quanto vale", itens: vale, classe: "border-marca-200 bg-marca-50 text-marca-950", nota: null },
+  ]
+    .map((c) => ({ ...c, itens: c.itens.filter((i): i is string => Boolean(i)) }))
+    .filter((c) => c.itens.length > 0);
+  return (
+    <div className={`grid gap-3 ${cartoes.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+      {cartoes.map((c) => (
+        <section key={c.titulo} className={`rounded-2xl border p-4 text-sm ${c.classe}`}>
+          <h2 className="font-extrabold">{c.titulo}</h2>
+          <ul className="mt-2 list-disc space-y-1.5 pl-4">
+            {c.itens.map((i) => (
+              <li key={i}>{i}</li>
+            ))}
+          </ul>
+          {c.nota && <p className="mt-2 text-xs font-semibold">{c.nota}</p>}
+        </section>
+      ))}
+    </div>
+  );
+}
+
 /** Linha das orientações sobre cliques fora, conforme a regra do desafio. */
 function textoRegraCliques(regra: RegraCliques, tolerancia: number) {
   if (regra === "permitido") return null;
@@ -197,6 +235,7 @@ export function Jogo({
 
   if (!estado || estado.fase === "codigo") {
     const pedirCodigo = relampago && !jaComecou;
+    const semAjudas = eliminacoesMax === 0 && dicasMax === 0;
     return (
       <div className="space-y-5">
         {especial || relampago ? (
@@ -211,56 +250,82 @@ export function Jogo({
         ) : (
           <h1 className="text-2xl font-bold">{titulo}</h1>
         )}
-        <ul className="space-y-2 rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-700">
-          <li>📝 {totalQuestoes} questões, uma por vez.</li>
-          <li>
-            ⏱️ {tempoFixo ? `${tempoFixo} segundos por questão.` : "Cada questão tem tempo limite."} O tempo continua
-            correndo se você sair da tela.
-          </li>
-          {saidaZera ? (
-            <>
-              <li className="font-semibold text-red-700">
-                {toleranciaSaidas
-                  ? `🚫 Pesquisa bloqueada: não saia desta tela nem troque de aba ou de app. Cada saída gera um aviso: você tem ${toleranciaSaidas} ${toleranciaSaidas === 1 ? "aviso" : "avisos"} neste desafio; depois deles, sair faz a questão valer zero.`
-                  : "🚫 Pesquisa bloqueada: não saia desta tela nem troque de aba ou de app. Se sair, a questão vale zero."}
-              </li>
-              {tecladoLiberado ? (
-                <li>⌨️ O teclado está liberado para você neste desafio.</li>
-              ) : (
-                <li className="font-semibold text-red-700">
-                  ⌨️ Não use o teclado: apertar qualquer tecla durante uma questão, mesmo sem querer, faz ela valer
-                  zero. Responda só com o mouse ou tocando na tela.
-                </li>
-              )}
-              {textoRegraCliques(regraCliques, toleranciaCliques) && (
-                <li className="font-semibold text-red-700">{textoRegraCliques(regraCliques, toleranciaCliques)}</li>
-              )}
-            </>
-          ) : (
-            <li className="font-semibold text-emerald-700">
-              🔎 Pesquisa liberada: pode sair da tela para consultar, mas o tempo continua correndo.
-            </li>
-          )}
-          <li>↩️ Não dá para voltar à questão anterior.</li>
-          {temVerificacao && (
+        <ResumoRegras
+          pode={[
+            !saidaZera && "Consultar a apostila e sair da tela",
+            !semAjudas && "Usar eliminações e dicas",
+            saidaZera && tecladoLiberado && "Usar o teclado",
+            "Parar e continuar depois, enquanto o desafio estiver aberto",
+          ]}
+          naoPode={[
+            saidaZera && `Sair desta tela ou trocar de aba${avisos(toleranciaSaidas ?? 0)}`,
+            saidaZera && !tecladoLiberado && "Apertar qualquer tecla",
+            saidaZera &&
+              regraCliques !== "permitido" &&
+              `Clicar fora das alternativas e dos botões${avisos(regraCliques === "tolerancia" ? toleranciaCliques : 0)}`,
+          ]}
+          vale={[
+            `${totalQuestoes} questões · ${pontosPorAcerto} pts por acerto`,
+            tempoFixo ? `${tempoFixo} segundos por questão` : "Tempo limite em cada questão",
+            "Uma questão por vez, sem voltar",
+            bonusRapidez && "Responder rápido vale até 50% a mais",
+            temVerificacao && "Às vezes você marca o tema da questão: errou, ela vale zero",
+            "Só a primeira tentativa conta",
+          ]}
+        />
+        <details className="rounded-2xl border border-slate-200 bg-white text-sm text-slate-700">
+          <summary className="cursor-pointer px-5 py-3 font-semibold text-marca-800">Ver todas as regras</summary>
+          <ul className="space-y-2 px-5 pb-5">
+            <li>📝 {totalQuestoes} questões, uma por vez.</li>
             <li>
-              📖 Verificação de leitura: em algumas questões, logo depois de responder, você marca qual era o tema dela.
-              Errou, a questão vale zero.
+              ⏱️ {tempoFixo ? `${tempoFixo} segundos por questão.` : "Cada questão tem tempo limite."} O tempo continua
+              correndo se você sair da tela.
             </li>
-          )}
-          <li>{textoAjudas(eliminacoesMax, dicasMax)}</li>
-          {bonusRapidez && (
-            <li>⚡ Bônus por rapidez: quanto mais rápido você acerta, mais vale a questão (até 50% a mais).</li>
-          )}
-          <li>
-            🎯 Só a primeira tentativa vale para o ranking e o XP.
-            {mostraGabarito
-              ? temTreino
-                ? " Quando o desafio fechar, saem o gabarito e a opção de refazer como treino."
-                : " Quando o desafio fechar, sai o gabarito."
-              : ""}
-          </li>
-        </ul>
+            {saidaZera ? (
+              <>
+                <li className="font-semibold text-red-700">
+                  {toleranciaSaidas
+                    ? `🚫 Pesquisa bloqueada: não saia desta tela nem troque de aba ou de app. Cada saída gera um aviso: você tem ${toleranciaSaidas} ${toleranciaSaidas === 1 ? "aviso" : "avisos"} neste desafio; depois deles, sair faz a questão valer zero.`
+                    : "🚫 Pesquisa bloqueada: não saia desta tela nem troque de aba ou de app. Se sair, a questão vale zero."}
+                </li>
+                {tecladoLiberado ? (
+                  <li>⌨️ O teclado está liberado para você neste desafio.</li>
+                ) : (
+                  <li className="font-semibold text-red-700">
+                    ⌨️ Não use o teclado: apertar qualquer tecla durante uma questão, mesmo sem querer, faz ela valer
+                    zero. Responda só clicando nas alternativas.
+                  </li>
+                )}
+                {textoRegraCliques(regraCliques, toleranciaCliques) && (
+                  <li className="font-semibold text-red-700">{textoRegraCliques(regraCliques, toleranciaCliques)}</li>
+                )}
+              </>
+            ) : (
+              <li className="font-semibold text-emerald-700">
+                🔎 Pesquisa liberada: pode sair da tela para consultar, mas o tempo continua correndo.
+              </li>
+            )}
+            <li>↩️ Não dá para voltar à questão anterior.</li>
+            {temVerificacao && (
+              <li>
+                📖 Verificação de leitura: em algumas questões, logo depois de responder, você marca qual era o tema
+                dela. Errou, a questão vale zero.
+              </li>
+            )}
+            <li>{textoAjudas(eliminacoesMax, dicasMax)}</li>
+            {bonusRapidez && (
+              <li>⚡ Bônus por rapidez: quanto mais rápido você acerta, mais vale a questão (até 50% a mais).</li>
+            )}
+            <li>
+              🎯 Só a primeira tentativa vale para o ranking e o XP.
+              {mostraGabarito
+                ? temTreino
+                  ? " Quando o desafio fechar, saem o gabarito e a opção de refazer como treino."
+                  : " Quando o desafio fechar, sai o gabarito."
+                : ""}
+            </li>
+          </ul>
+        </details>
         {pedirCodigo && (
           <label className="block space-y-2">
             <span className="block text-sm font-semibold">Código do dia (está no quadro)</span>
@@ -303,19 +368,7 @@ export function Jogo({
   }
 
   if (estado.fase === "fim") {
-    return (
-      <div className="space-y-5 py-8 text-center">
-        {estado.aviso && <Aviso>{estado.aviso}</Aviso>}
-        <p className="text-6xl">🏆</p>
-        <h1 className="text-2xl font-bold">Desafio concluído!</h1>
-        <div className="flex flex-col gap-3">
-          <BotaoLink href={`/aluno/desafio/${desafioId}/resultado`}>Ver meu resultado</BotaoLink>
-          <BotaoLink href="/aluno" variante="secundario">
-            Voltar ao início
-          </BotaoLink>
-        </div>
-      </div>
-    );
+    return <FimDoDesafio desafioId={desafioId} aviso={estado.aviso} />;
   }
 
   if (estado.fase === "verificacao") {
@@ -372,6 +425,7 @@ function TelaQuestao({
   enviar: (resposta: Resposta | null, saidas: number, motivo: MotivoZerada | null) => void;
 }) {
   const { questao, posicao, total, aviso } = estado;
+  useModoFoco();
   const [resposta, setResposta] = useState<Resposta>(() =>
     aplicarAjuda(questao.vista, respostaInicial(questao.vista), questao.ajuda),
   );
@@ -476,129 +530,128 @@ function TelaQuestao({
           </div>
         </div>
       )}
-      <div className="flex items-center justify-between text-sm font-medium text-slate-600">
-        <span>
-          Questão {posicao} de {total}
-        </span>
-        <span
-          className={`tabular-nums ${questao.relampago ? "text-base font-black" : ""} ${
-            segundos <= (questao.relampago ? 5 : 10)
-              ? "font-bold text-red-600"
-              : questao.relampago
-                ? "text-amber-600"
-                : ""
-          }`}
-        >
-          {questao.relampago ? "⚡" : "⏱️"} {segundos}s
-        </span>
-      </div>
-      {questao.relampago && <FaixaRelampago tempo={questao.tempoLimite} />}
-      {aviso && <Aviso>{aviso}</Aviso>}
-      {questao.saidaZera ? (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-center text-xs font-semibold text-red-700">
-          {textoFaixaBloqueada([
-            questao.saidasRestantes > 0 ? "sair desta tela (depois dos avisos)" : "sair desta tela",
-            tecladoLiberado ? null : "apertar qualquer tecla",
-            cliquesLiberados
-              ? null
-              : questao.cliquesRestantes
-                ? "clicar fora das alternativas e dos botões (depois dos avisos)"
-                : "clicar fora das alternativas e dos botões",
-          ])}
-        </p>
-      ) : (
-        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-center text-xs font-semibold text-emerald-700">
-          🔎 Pesquisa liberada: pode consultar, o tempo continua correndo.
-        </p>
-      )}
-      <PopupCliqueFora popup={clique.popup} />
-      {[saida.aviso].filter(Boolean).map((a) => (
-        <p
-          key={a}
-          role="alert"
-          className="rounded-lg bg-amber-100 px-3 py-2 text-center text-sm font-semibold text-amber-900"
-        >
-          {a}
-        </p>
-      ))}
-      <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-        <div
-          className={`h-full transition-[width] duration-200 ${fracao < 0.25 ? "bg-red-500" : questao.relampago ? "bg-amber-400" : "bg-marca-600"}`}
-          style={{ width: `${Math.max(0, Math.min(1, fracao)) * 100}%` }}
-        />
-      </div>
-
-      {questao.imagemUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={questao.imagemUrl}
-          alt=""
-          draggable={false}
-          className="pointer-events-none mx-auto max-h-80 w-auto rounded-xl border border-slate-200"
-        />
-      )}
-      <p className="whitespace-pre-line text-lg font-medium">{questao.enunciado}</p>
-
-      <QuestaoInterativa
-        vista={questao.vista}
-        resposta={resposta}
-        onChange={setResposta}
-        desabilitada={pendente}
-        ajuda={ajuda}
-      />
-
-      {ajudas && (questao.podeEliminar || questao.temDica) && (
-        <div className="space-y-2">
-          <div className="flex flex-wrap gap-2">
-            {questao.podeEliminar && (
-              <button
-                type="button"
-                disabled={pendente || usandoAjuda || !podeEliminar || ajudas.eliminacoes <= 0}
-                onClick={() => usarAjuda(() => eliminar(desafioId, questao.id))}
-                className="flex-1 rounded-xl border-2 border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900 transition hover:bg-amber-100 disabled:opacity-40"
+      <PalcoQuestao
+        enunciado={questao.enunciado}
+        imagemUrl={questao.imagemUrl}
+        topo={
+          <>
+            <div className="flex items-center justify-between text-sm font-medium text-slate-600">
+              <span>
+                Questão {posicao} de {total}
+              </span>
+              <span
+                className={`tabular-nums ${questao.relampago ? "text-base font-black" : ""} ${
+                  segundos <= (questao.relampago ? 5 : 10)
+                    ? "font-bold text-red-600"
+                    : questao.relampago
+                      ? "text-amber-600"
+                      : ""
+                }`}
               >
-                ✂️ {rotuloEliminacao(questao.vista.tipo)} · {ajudas.eliminacoes}/{ELIMINACOES_POR_TEMPORADA}
-              </button>
+                {questao.relampago ? "⚡" : "⏱️"} {segundos}s
+              </span>
+            </div>
+            {questao.relampago && <FaixaRelampago tempo={questao.tempoLimite} />}
+            {aviso && <Aviso>{aviso}</Aviso>}
+            {questao.saidaZera ? (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-center text-xs font-semibold text-red-700">
+                {textoFaixaBloqueada([
+                  questao.saidasRestantes > 0 ? "sair desta tela (depois dos avisos)" : "sair desta tela",
+                  tecladoLiberado ? null : "apertar qualquer tecla",
+                  cliquesLiberados
+                    ? null
+                    : questao.cliquesRestantes
+                      ? "clicar fora das alternativas e dos botões (depois dos avisos)"
+                      : "clicar fora das alternativas e dos botões",
+                ])}
+              </p>
+            ) : (
+              <p className="rounded-lg bg-emerald-50 px-3 py-2 text-center text-xs font-semibold text-emerald-700">
+                🔎 Pesquisa liberada: pode consultar, o tempo continua correndo.
+              </p>
             )}
-            {questao.temDica && !dica && (
-              <button
-                type="button"
-                disabled={pendente || usandoAjuda || ajudas.dicas <= 0}
-                onClick={() => usarAjuda(() => pedirDica(desafioId, questao.id))}
-                className="flex-1 rounded-xl border-2 border-sky-300 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-900 transition hover:bg-sky-100 disabled:opacity-40"
+            <PopupCliqueFora popup={clique.popup} />
+            {[saida.aviso].filter(Boolean).map((a) => (
+              <p
+                key={a}
+                role="alert"
+                className="rounded-lg bg-amber-100 px-3 py-2 text-center text-sm font-semibold text-amber-900"
               >
-                💡 Ver dica · {ajudas.dicas}/{DICAS_POR_TEMPORADA}
-              </button>
-            )}
-          </div>
-          {dica && <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm whitespace-pre-line text-sky-900">💡 {dica}</p>}
-          {erroAjuda && <Aviso>{erroAjuda}</Aviso>}
-        </div>
-      )}
-
-      {erroRede && <Aviso>Falha de conexão. Toque em confirmar de novo.</Aviso>}
-      <Botao
-        variante="sucesso"
-        className="sticky bottom-4 w-full py-4 text-base shadow-lg"
-        disabled={pendente || (!completa && ESCOLHA_UNICA.includes(resposta.tipo))}
-        onClick={() => {
-          if (!completa) {
-            // O diálogo do navegador tira o foco da página: não conta como saída.
-            dialogoProprio.current = true;
-            const ok = confirm("Há itens sem resposta. Confirmar mesmo assim?");
-            dialogoProprio.current = false;
-            fora.current = false;
-            if (!ok) return;
-          }
-          confirmar(resposta);
-        }}
+                {a}
+              </p>
+            ))}
+            <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+              <div
+                className={`h-full transition-[width] duration-200 ${fracao < 0.25 ? "bg-red-500" : questao.relampago ? "bg-amber-400" : "bg-marca-600"}`}
+                style={{ width: `${Math.max(0, Math.min(1, fracao)) * 100}%` }}
+              />
+            </div>
+          </>
+        }
       >
-        {pendente ? "Enviando…" : "Confirmar resposta"}
-      </Botao>
-      {marca && <p className="text-right text-[11px] text-slate-400">{marca}</p>}
-      <p className="text-center text-xs text-slate-400">
-        <Link href="/aluno">Sair</Link> · o tempo continua correndo
-      </p>
+        <QuestaoInterativa
+          vista={questao.vista}
+          resposta={resposta}
+          onChange={setResposta}
+          desabilitada={pendente}
+          ajuda={ajuda}
+        />
+
+        {ajudas && (questao.podeEliminar || questao.temDica) && (
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-2">
+              {questao.podeEliminar && (
+                <button
+                  type="button"
+                  disabled={pendente || usandoAjuda || !podeEliminar || ajudas.eliminacoes <= 0}
+                  onClick={() => usarAjuda(() => eliminar(desafioId, questao.id))}
+                  className="flex-1 rounded-xl border-2 border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900 transition hover:bg-amber-100 disabled:opacity-40"
+                >
+                  ✂️ {rotuloEliminacao(questao.vista.tipo)} · {ajudas.eliminacoes}/{ELIMINACOES_POR_TEMPORADA}
+                </button>
+              )}
+              {questao.temDica && !dica && (
+                <button
+                  type="button"
+                  disabled={pendente || usandoAjuda || ajudas.dicas <= 0}
+                  onClick={() => usarAjuda(() => pedirDica(desafioId, questao.id))}
+                  className="flex-1 rounded-xl border-2 border-sky-300 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-900 transition hover:bg-sky-100 disabled:opacity-40"
+                >
+                  💡 Ver dica · {ajudas.dicas}/{DICAS_POR_TEMPORADA}
+                </button>
+              )}
+            </div>
+            {dica && (
+              <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm whitespace-pre-line text-sky-900">💡 {dica}</p>
+            )}
+            {erroAjuda && <Aviso>{erroAjuda}</Aviso>}
+          </div>
+        )}
+
+        {erroRede && <Aviso>Falha de conexão. Toque em confirmar de novo.</Aviso>}
+        <Botao
+          variante="sucesso"
+          className="sticky bottom-4 w-full py-4 text-base shadow-lg"
+          disabled={pendente || (!completa && ESCOLHA_UNICA.includes(resposta.tipo))}
+          onClick={() => {
+            if (!completa) {
+              // O diálogo do navegador tira o foco da página: não conta como saída.
+              dialogoProprio.current = true;
+              const ok = confirm("Há itens sem resposta. Confirmar mesmo assim?");
+              dialogoProprio.current = false;
+              fora.current = false;
+              if (!ok) return;
+            }
+            confirmar(resposta);
+          }}
+        >
+          {pendente ? "Enviando…" : "Confirmar resposta"}
+        </Botao>
+        {marca && <p className="text-right text-[11px] text-slate-400">{marca}</p>}
+        <p className="text-center text-xs text-slate-400">
+          <Link href="/aluno">Sair</Link> · o tempo continua correndo
+        </p>
+      </PalcoQuestao>
     </div>
   );
 }
@@ -622,6 +675,7 @@ function TelaVerificacao({
   enviar: (escolha: number | null, motivo: MotivoZerada | null) => void;
 }) {
   const { verificacao, posicao, total, aviso } = estado;
+  useModoFoco();
   const [restante, setRestante] = useState(verificacao.restanteMs);
   const enviado = useRef(false);
   const saidas = useRef(0);
@@ -676,7 +730,7 @@ function TelaVerificacao({
   return (
     <div
       translate={verificacao.saidaZera ? "no" : undefined}
-      className={`sem-selecao relative isolate space-y-4 ${verificacao.saidaZera ? "notranslate" : ""}`}
+      className={`sem-selecao relative isolate mx-auto max-w-3xl space-y-4 ${verificacao.saidaZera ? "notranslate" : ""}`}
       onCopy={(e) => e.preventDefault()}
       onContextMenu={(e) => e.preventDefault()}
     >

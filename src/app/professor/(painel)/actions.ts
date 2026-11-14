@@ -1,6 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { gerarCodigoDia, janelaLiberadaAgora } from "@/lib/cadurush";
 import { gerarCodigoTurma } from "@/lib/codigo";
@@ -8,6 +9,9 @@ import { dataHoraLocalParaIso } from "@/lib/datas";
 import { ehMultiplicador, ehPercentual, pontosBase, pontosDoEspecial } from "@/lib/especial";
 import { conferirPadroes } from "@/lib/padroes";
 import { exigirProfessor } from "@/lib/professor";
+import { iniciarSessaoAluno } from "@/lib/aluno-sessao";
+import { APELIDO_DE_TESTE } from "@/lib/aluno-teste";
+import { criarClienteAdmin } from "@/lib/supabase/admin";
 import {
   ajustarDesafiosAoEncerramento,
   colunasEncerramento,
@@ -88,6 +92,70 @@ export async function excluirEscola(escolaId: string, nomeDigitado: string) {
   revalidatePath("/professor");
 }
 
+/**
+ * Junta uma turma duplicada em outra: alunos e temporadas (com desafios, pontos
+ * e respostas) passam para a turma de destino e a de origem deixa de existir.
+ * Apelido repetido no destino ganha um número no fim, para ninguém perder o perfil.
+ */
+export async function juntarTurmas(_: EstadoForm, form: FormData): Promise<EstadoForm> {
+  const { supabase } = await exigirProfessor();
+  const origemId = texto(form, "origem");
+  const destinoId = texto(form, "destino");
+  if (!destinoId) return { erro: "Escolha a turma que vai ficar." };
+  if (origemId === destinoId) return { erro: "Escolha uma turma diferente desta." };
+  if (form.get("ciente") !== "on") return { erro: "Marque a caixa para confirmar." };
+  const { data: turmas } = await supabase.from("turmas").select("id, nome").in("id", [origemId, destinoId]);
+  const destino = turmas?.find((t) => t.id === destinoId);
+  if (!destino || turmas?.length !== 2) return { erro: "Turma não encontrada." };
+
+  const { data: alunos } = await supabase
+    .from("alunos")
+    .select("id, turma_id, apelido")
+    .in("turma_id", [origemId, destinoId]);
+  const usados = new Set((alunos ?? []).filter((a) => a.turma_id === destinoId).map((a) => a.apelido.toLowerCase()));
+  for (const a of (alunos ?? []).filter((a) => a.turma_id === origemId)) {
+    let apelido: string = a.apelido;
+    for (let n = 2; usados.has(apelido.toLowerCase()); n++) apelido = `${a.apelido.slice(0, 20 - ` ${n}`.length)} ${n}`;
+    usados.add(apelido.toLowerCase());
+    const { error } = await supabase.from("alunos").update({ turma_id: destinoId, apelido }).eq("id", a.id);
+    if (error) return { erro: `Não foi possível mover ${a.apelido}. Nada foi apagado; tente de novo.` };
+  }
+  const { error: erroTemporadas } = await supabase
+    .from("temporadas")
+    .update({ turma_id: destinoId })
+    .eq("turma_id", origemId);
+  if (erroTemporadas) return { erro: "Não foi possível mover as temporadas. Nada foi apagado; tente de novo." };
+
+  // Só apaga a turma de origem depois de conferir que ela ficou vazia.
+  const [{ count: restamAlunos }, { count: restamTemporadas }] = await Promise.all([
+    supabase.from("alunos").select("*", { count: "exact", head: true }).eq("turma_id", origemId),
+    supabase.from("temporadas").select("*", { count: "exact", head: true }).eq("turma_id", origemId),
+  ]);
+  if (restamAlunos || restamTemporadas) return { erro: "Sobrou algo na turma antiga; ela não foi apagada." };
+  await supabase.from("turmas").delete().eq("id", origemId);
+  revalidatePath("/professor", "layout");
+  redirect(`/professor/turmas/${destinoId}?aba=alunos`);
+}
+
+/** Junta uma escola duplicada em outra: as turmas passam para a escola de destino. */
+export async function juntarEscolas(_: EstadoForm, form: FormData): Promise<EstadoForm> {
+  const { supabase } = await exigirProfessor();
+  const origemId = texto(form, "origem");
+  const destinoId = texto(form, "destino");
+  if (!destinoId) return { erro: "Escolha a escola que vai ficar." };
+  if (origemId === destinoId) return { erro: "Escolha uma escola diferente desta." };
+  const { data: escolas } = await supabase.from("escolas").select("id, nome").in("id", [origemId, destinoId]);
+  const destino = escolas?.find((e) => e.id === destinoId);
+  if (!destino || escolas?.length !== 2) return { erro: "Escola não encontrada." };
+  const { error } = await supabase.from("turmas").update({ escola_id: destinoId }).eq("escola_id", origemId);
+  if (error) return { erro: "Não foi possível mover as turmas. Nada foi apagado." };
+  const { count } = await supabase.from("turmas").select("*", { count: "exact", head: true }).eq("escola_id", origemId);
+  if (count) return { erro: "Sobrou turma na escola antiga; ela não foi apagada." };
+  await supabase.from("escolas").delete().eq("id", origemId);
+  revalidatePath("/professor", "layout");
+  return { ok: `Turmas movidas para ${destino.nome}.` };
+}
+
 export async function novoCodigoTurma(turmaId: string) {
   const { supabase } = await exigirProfessor();
   await supabase.from("turmas").update({ codigo: gerarCodigoTurma() }).eq("id", turmaId);
@@ -128,6 +196,71 @@ export async function alternarTeclado(alunoId: string, liberado: boolean) {
     .select("turma_id")
     .single();
   if (data) revalidatePath(`/professor/turmas/${data.turma_id}`);
+}
+
+/** Aluno de teste: fica fora do ranking, da meta da turma e das contas do painel. */
+export async function marcarDeTeste(alunoId: string, deTeste: boolean) {
+  const { supabase } = await exigirProfessor();
+  const { data } = await supabase
+    .from("alunos")
+    .update({ de_teste: deTeste })
+    .eq("id", alunoId)
+    .select("turma_id")
+    .single();
+  if (data) revalidatePath(`/professor/turmas/${data.turma_id}`);
+  revalidatePath("/professor", "layout");
+}
+
+/**
+ * Abre o app do aluno como o aluno de teste da turma (cria na primeira vez).
+ * O professor continua logado no painel: são sessões separadas.
+ */
+export async function verComoAluno(turmaId: string) {
+  const { supabase } = await exigirProfessor();
+  // A leitura com a sessão do professor garante que a turma é dele.
+  const { data: turma } = await supabase.from("turmas").select("id").eq("id", turmaId).maybeSingle();
+  if (!turma) return;
+  const { data: existentes, error: erroLeitura } = await supabase
+    .from("alunos")
+    .select("id, versao_sessao")
+    .eq("turma_id", turmaId)
+    .eq("de_teste", true)
+    .order("criado_em")
+    .limit(1);
+  if (erroLeitura) throw new Error("Falta rodar o SQL do aluno de teste (20261114120000_aluno_de_teste.sql).");
+
+  const admin = criarClienteAdmin();
+  let aluno = existentes?.[0];
+  if (!aluno) {
+    // Apelido livre na turma: "Aluno teste", "Aluno teste 2"...
+    const { data: usados } = await supabase.from("alunos").select("apelido").eq("turma_id", turmaId);
+    const nomes = new Set((usados ?? []).map((a) => String(a.apelido).toLowerCase()));
+    let apelido = APELIDO_DE_TESTE;
+    for (let n = 2; nomes.has(apelido.toLowerCase()); n++) apelido = `${APELIDO_DE_TESTE} ${n}`;
+    const { data: novo, error } = await admin
+      .from("alunos")
+      .insert({
+        turma_id: turmaId,
+        apelido,
+        nome_real: "Perfil de teste do professor",
+        aprovado: true,
+        de_teste: true,
+        // PIN que ninguém conhece: só se entra neste perfil pelo botão do painel.
+        pin_hash: await bcrypt.hash(crypto.randomUUID(), 10),
+      })
+      .select("id, versao_sessao")
+      .single();
+    if (error || !novo) throw new Error(`Não foi possível criar o aluno de teste: ${error?.message ?? ""}`);
+    aluno = novo;
+  }
+  const versao = aluno.versao_sessao + 1;
+  await admin
+    .from("alunos")
+    .update({ versao_sessao: versao, ultimo_acesso: new Date().toISOString() })
+    .eq("id", aluno.id);
+  await iniciarSessaoAluno(aluno.id, turmaId, versao);
+  revalidatePath(`/professor/turmas/${turmaId}`);
+  redirect("/aluno");
 }
 
 export async function removerAluno(alunoId: string) {

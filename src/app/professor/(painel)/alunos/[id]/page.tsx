@@ -1,3 +1,4 @@
+import { consultaPorAluno, consultaVazia, resumoConsulta } from "@/lib/consulta";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -41,11 +42,12 @@ export default async function PerfilDoAluno({ params }: PageProps<"/professor/al
   if (!data) notFound();
   const aluno = data as unknown as Aluno & { turmas: { nome: string; escolas: { nome: string } } };
 
-  const [progresso, medalhasTurma, temporada, erros, { data: tentativasBrutas }] = await Promise.all([
+  const [progresso, medalhasTurma, temporada, erros, consultas, { data: tentativasBrutas }] = await Promise.all([
     progressoDoAluno(aluno.id, aluno.turma_id),
     medalhasDaTurma(supabase, aluno.turma_id),
     temporadaAtual(supabase, aluno.turma_id),
     errosParaRevisar(supabase, aluno.id, aluno.turma_id),
+    consultaPorAluno(supabase, { turmaId: aluno.turma_id }, aluno.id),
     supabase
       .from("tentativas")
       .select(
@@ -67,6 +69,7 @@ export default async function PerfilDoAluno({ params }: PageProps<"/professor/al
   const tentativas = ((tentativasBrutas ?? []) as unknown as TentativaPerfil[]).sort((a, b) =>
     b.desafios.abre_em.localeCompare(a.desafios.abre_em),
   );
+  const consulta = resumoConsulta(consultas.get(aluno.id) ?? consultaVazia());
   const forte = progresso.habilidades.filter((h) => h.questoes >= 3).sort((a, b) => b.acerto - a.acerto)[0];
 
   return (
@@ -115,6 +118,11 @@ export default async function PerfilDoAluno({ params }: PageProps<"/professor/al
             <Dado rotulo="Desafios concluídos" valor={String(progresso.desafiosConcluidos)} />
             <Dado rotulo="Especiais em sala" valor={`★ ${progresso.caduRushConcluidos}`} />
             <Dado rotulo="Habilidade mais forte" valor={forte ? forte.nome : "–"} />
+            <Dado rotulo="Acerto com consulta" valor={consulta.com === null ? "–" : `${consulta.com}%`} />
+            <Dado
+              rotulo="Acerto sem consulta"
+              valor={consulta.sem === null ? "–" : `${consulta.sem}%${consulta.faltaFixar ? " · falta fixar" : ""}`}
+            />
             <Dado rotulo="Erros revisados" valor={`📚 ${progresso.revisoesAcertadas}`} />
             <Dado rotulo="Erros ainda por revisar" valor={String(erros.length)} />
             <Dado rotulo="Maior ofensiva" valor={`🔥 ${eu?.maiorSequencia ?? 0} seguidos`} />

@@ -27,7 +27,7 @@ import { descreverRegraCliques, descreverRegraSaidas } from "@/lib/tela-protegid
 import { verificacoesAutomaticas } from "@/lib/questoes/verificacao";
 import { regrasDoDesafio } from "@/lib/questoes/regras-desafio";
 import { tempoVerificacao } from "@/lib/questoes/tempos";
-import { formatarPontos } from "@/lib/pontos";
+import { formatarAcertos, formatarPontos } from "@/lib/pontos";
 import { descreverAlertas } from "@/lib/alertas-resultado";
 
 export const metadata: Metadata = { title: "Desafio" };
@@ -202,7 +202,7 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {linhas.map((l) => {
-                  const { graves, avisos } = descreverAlertas(l);
+                  const { graves, avisos } = descreverAlertas(l, { pesquisaLiberada: !desafio.saida_zera_questao });
                   const fez = l.situacao !== "não fez";
                   return (
                     <tr key={l.alunoId} className="align-top hover:bg-marca-50/40">
@@ -235,9 +235,7 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
                         <Etiqueta cor={COR_SITUACAO[l.situacao]}>{l.situacao}</Etiqueta>
                       </td>
                       <td className="py-1.5 text-right tabular-nums">{formatarPontos(l.pontos)}</td>
-                      <td className="py-1.5 text-right tabular-nums">
-                        {l.acertos}/{questoes.length}
-                      </td>
+                      <td className="py-1.5 text-right tabular-nums">{formatarAcertos(l.acertos, questoes.length)}</td>
                       <td className="py-1.5 pl-4 text-xs">
                         {graves.length > 0 && <span className="text-red-700">{graves.join(" · ")}</span>}
                         {graves.length > 0 && avisos.length > 0 && " · "}
@@ -322,7 +320,7 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
                           );
                         })}
                         <td className="py-1 pl-3 text-right tabular-nums">
-                          {l.acertos}/{questoes.length}
+                          {formatarAcertos(l.acertos, questoes.length)}
                         </td>
                       </tr>
                     ))}

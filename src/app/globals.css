@@ -32,6 +32,21 @@ body {
   -webkit-touch-callout: none;
 }
 
+/* Modo foco (questão na tela): sem o menu do aluno e com a área útil mais larga. */
+html[data-foco] .fora-do-foco {
+  display: none;
+}
+html[data-foco] .palco-aluno {
+  max-width: 80rem;
+}
+
+/* Início do aluno: em tela larga usa duas colunas, então a página e o cabeçalho alargam. */
+@media (min-width: 1024px) {
+  body:has(.inicio-largo) .palco-aluno {
+    max-width: 64rem;
+  }
+}
+
 /* Barra do popup de clique fora: esvazia em 10 s. */
 @keyframes esvaziar {
   from {

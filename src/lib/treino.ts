@@ -4,7 +4,7 @@ import type { AlunoSessao } from "@/lib/aluno-sessao";
 import { desafioDoAluno } from "@/lib/jogo";
 import { montarVista } from "@/lib/questoes/apresentacao";
 import { calcularPontos, corrigir } from "@/lib/questoes/correcao";
-import { embaralhar, permutacaoAleatoria, permutacaoValida } from "@/lib/questoes/embaralhar";
+import { embaralhar, permutacaoSemRanking, permutacaoValida } from "@/lib/questoes/embaralhar";
 import { schemaResposta, tamanhoPermutacao, type Conteudo, type Vista } from "@/lib/questoes/tipos";
 import { treinoLiberado, urlImagem, type Desafio } from "@/lib/tipos-banco";
 
@@ -66,7 +66,7 @@ export async function iniciarTreino(db: SupabaseClient, aluno: AlunoSessao, desa
     ).map((l) => l.questoes),
   ).map((q): QuestaoTreino => {
     const conteudo = { tipo: q.tipo, conteudo: q.conteudo } as Conteudo;
-    const permutacao = permutacaoAleatoria(tamanhoPermutacao(conteudo));
+    const permutacao = permutacaoSemRanking(conteudo.tipo, tamanhoPermutacao(conteudo));
     return {
       id: q.id,
       enunciado: q.enunciado,

@@ -1,3 +1,4 @@
+import { consultaPorAluno, DIFERENCA_RELEVANTE, resumoConsulta, somarConsultas } from "@/lib/consulta";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -9,6 +10,8 @@ import { ExcluirComConfirmacao } from "@/components/ExcluirComConfirmacao";
 import { FormAcao } from "@/components/FormAcao";
 import { TabelaRanking } from "@/components/TabelaRanking";
 import { CodigoNoQuadro } from "@/components/CodigoNoQuadro";
+import { DisputaTurmas } from "@/components/DisputaTurmas";
+import { disputaDaTurma } from "@/lib/disputa-turmas-dados";
 import {
   AreaTexto,
   Botao,
@@ -17,10 +20,12 @@ import {
   Cartao,
   Entrada,
   Etiqueta,
+  Selecao,
   Subtitulo,
   Titulo,
   Vazio,
 } from "@/components/ui";
+import { alunosDeTeste } from "@/lib/aluno-teste";
 import { formatarData, formatarDataHora, hojeEmBrasilia } from "@/lib/datas";
 import { medalhasDaTurma } from "@/lib/medalhas";
 import { exigirProfessor } from "@/lib/professor";
@@ -35,11 +40,14 @@ import {
   recusarCarta,
   alternarAprovacao,
   alternarTeclado,
+  marcarDeTeste,
+  verComoAluno,
   atualizarAluno,
   atualizarTemporada,
   criarTemporada,
   encerrarTemporada,
   excluirTurma,
+  juntarTurmas,
   novoCodigoTurma,
   reabrirTemporada,
   redefinirPin,
@@ -53,8 +61,10 @@ const COR_SITUACAO = { agendado: "azul", aberto: "verde", encerrado: "cinza" } a
 
 type DesafioLista = Desafio & {
   desafio_questoes: { count: number }[];
-  tentativas: { concluida_em: string | null }[];
+  tentativas: { aluno_id: string; concluida_em: string | null }[];
 };
+
+type OutraTurma = { id: string; nome: string; serie: string | null; escolas: { nome: string } };
 
 const RANKING_VISIVEL = 10;
 
@@ -73,7 +83,7 @@ export default async function PaginaTurma({ params, searchParams }: PageProps<"/
   if (!turma) notFound();
   const escola = turma.escolas as unknown as { nome: string; periodo: string };
 
-  const [{ data: alunosBrutos }, { data: temporadasBrutas }, atual, medalhas, cartas] = await Promise.all([
+  const [{ data: alunosBrutos }, { data: temporadasBrutas }, atual, medalhas, cartas, deTeste] = await Promise.all([
     supabase
       .from("alunos")
       .select(
@@ -85,13 +95,24 @@ export default async function PaginaTurma({ params, searchParams }: PageProps<"/
     temporadaAtual(supabase, id),
     medalhasDaTurma(supabase, id),
     cartasParaAProxima(supabase, id, { todas: true }),
+    alunosDeTeste(supabase, id),
   ]);
-  const todos = (alunosBrutos ?? []) as Aluno[];
+  // Para "Juntar com outra": as demais turmas, as de mesmo nome primeiro.
+  const { data: outrasBrutas } =
+    aba === "ajustes"
+      ? await supabase.from("turmas").select("id, nome, serie, escolas(nome)").neq("id", id).order("nome")
+      : { data: [] };
+  const outrasTurmas = ((outrasBrutas ?? []) as unknown as OutraTurma[])
+    .map((o) => ({ id: o.id, nome: o.nome, serie: o.serie, escola: o.escolas.nome }))
+    .sort((a, b) => Number(b.nome === turma.nome) - Number(a.nome === turma.nome));
+  const todos = ((alunosBrutos ?? []) as Aluno[]).map((a) => ({ ...a, de_teste: deTeste.has(a.id) }));
   const alunos = todos.filter((a) => a.aprovado);
   const pendentes = todos.filter((a) => !a.aprovado);
   const temporadas = (temporadasBrutas ?? []) as Temporada[];
   const hoje = hojeEmBrasilia();
   const nomes = new Map(alunos.map((a) => [a.id, a.nome_real]));
+  // O aluno de teste aparece na lista, mas não entra nas contas.
+  const alunosReais = alunos.filter((a) => !a.de_teste);
   const cartasPendentes = cartas.filter((c) => c.status === "pendente").length;
 
   // Temporada mostrada na primeira aba: a pedida na URL, senão a atual.
@@ -106,7 +127,22 @@ export default async function PaginaTurma({ params, searchParams }: PageProps<"/
         <Link href="/professor/turmas" className="text-sm text-marca-700">
           ← Turmas
         </Link>
-        <Titulo acao={<CodigoNoQuadro codigo={turma.codigo} turma={turma.nome} />}>
+        <Titulo
+          acao={
+            <div className="flex flex-wrap items-stretch gap-2">
+              <form action={verComoAluno.bind(null, id)}>
+                <button
+                  className="h-full rounded-xl border border-marca-200 bg-white px-3 py-2 text-left hover:border-marca-400 hover:bg-marca-50"
+                  title="Abre o app como um aluno de teste desta turma. Ele não entra no ranking nem nas contas."
+                >
+                  <span className="block text-xs text-slate-500">Conferir o que a turma vê</span>
+                  <span className="font-semibold text-marca-700">👀 Ver como aluno</span>
+                </button>
+              </form>
+              <CodigoNoQuadro codigo={turma.codigo} turma={turma.nome} />
+            </div>
+          }
+        >
           Turma {turma.nome}{" "}
           <span className="text-base font-normal text-slate-500">
             · {turma.serie ?? ""} {escola.nome}
@@ -120,7 +156,7 @@ export default async function PaginaTurma({ params, searchParams }: PageProps<"/
         atual={aba}
         abas={[
           { id: "temporada", rotulo: temporada ? temporada.nome : "Temporada", href: url("temporada") },
-          { id: "alunos", rotulo: `Alunos (${alunos.length})`, href: url("alunos"), contagem: pendentes.length },
+          { id: "alunos", rotulo: `Alunos (${alunosReais.length})`, href: url("alunos"), contagem: pendentes.length },
           { id: "temporadas", rotulo: "Temporadas", href: url("temporadas"), contagem: cartasPendentes },
           { id: "ajustes", rotulo: "Ajustes", href: url("ajustes") },
         ]}
@@ -130,7 +166,8 @@ export default async function PaginaTurma({ params, searchParams }: PageProps<"/
         <AbaTemporada
           temporada={temporada}
           ehAtual={temporada?.id === atual?.id}
-          totalAlunos={alunos.length}
+          totalAlunos={alunosReais.length}
+          deTeste={deTeste}
           nomes={nomes}
           medalhas={medalhas}
           linkNova={url("temporadas")}
@@ -150,6 +187,7 @@ export default async function PaginaTurma({ params, searchParams }: PageProps<"/
                       <span className="font-semibold">{a.apelido}</span>
                       {a.nome_real && <span className="text-slate-500"> · {a.nome_real}</span>}
                     </Link>
+                    {a.de_teste && <Etiqueta cor="cinza">teste · fora das contas</Etiqueta>}
                     {a.pin_hash === null && <Etiqueta cor="ambar">PIN redefinido</Etiqueta>}
                     {a.teclado_liberado && <Etiqueta cor="azul">teclado liberado</Etiqueta>}
                     <details className="group">
@@ -180,6 +218,14 @@ export default async function PaginaTurma({ params, searchParams }: PageProps<"/
                               title="Acessibilidade: com o teclado liberado, apertar uma tecla não zera a questão nos desafios sem consulta"
                             >
                               {a.teclado_liberado ? "Bloquear teclado" : "Liberar teclado"}
+                            </Botao>
+                          </form>
+                          <form action={marcarDeTeste.bind(null, a.id, !a.de_teste)}>
+                            <Botao
+                              variante="fantasma"
+                              title="Aluno de teste não entra no ranking, na meta da turma nem nas contas do painel"
+                            >
+                              {a.de_teste ? "Voltar a contar como aluno" : "Marcar como aluno de teste"}
                             </Botao>
                           </form>
                           <BotaoConfirmar
@@ -340,6 +386,39 @@ export default async function PaginaTurma({ params, searchParams }: PageProps<"/
               </Botao>
             </form>
           </Cartao>
+          {outrasTurmas.length > 0 && (
+            <Cartao className="space-y-3">
+              <div>
+                <Subtitulo>Turma repetida? Juntar com outra</Subtitulo>
+                <p className="text-sm text-slate-600">
+                  Os {todos.length} aluno(s) e as {temporadas.length} temporada(s) daqui, com desafios, pontos e
+                  respostas, passam para a turma escolhida, e a turma {turma.nome} deixa de existir. Nada é apagado:
+                  apelido repetido ganha um número no fim. Os alunos daqui entram de novo com o código da outra turma.
+                </p>
+              </div>
+              <FormAcao acao={juntarTurmas} className="space-y-3">
+                <input type="hidden" name="origem" value={id} />
+                <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+                  <Campo rotulo="Turma que fica">
+                    <Selecao name="destino" defaultValue="">
+                      <option value="">Escolha a turma</option>
+                      {outrasTurmas.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.nome}
+                          {o.serie ? ` · ${o.serie}` : ""} · {o.escola}
+                        </option>
+                      ))}
+                    </Selecao>
+                  </Campo>
+                  <BotaoEnviar variante="secundario">Juntar turmas</BotaoEnviar>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input type="checkbox" name="ciente" /> Entendi que a turma {turma.nome} deixa de existir e que isso
+                  não dá para desfazer.
+                </label>
+              </FormAcao>
+            </Cartao>
+          )}
           <ExcluirComConfirmacao acao={excluirTurma.bind(null, id)} nome={turma.nome} rotulo="Excluir turma">
             <p>
               Apaga a turma {turma.nome}, {todos.length} aluno(s) e {temporadas.length} temporada(s), com desafios,
@@ -357,6 +436,7 @@ async function AbaTemporada({
   temporada,
   ehAtual,
   totalAlunos,
+  deTeste,
   nomes,
   medalhas,
   linkNova,
@@ -364,6 +444,7 @@ async function AbaTemporada({
   temporada: Temporada | null;
   ehAtual: boolean;
   totalAlunos: number;
+  deTeste: Map<string, string>;
   nomes: Map<string, string | null>;
   medalhas: Map<string, number>;
   linkNova: string;
@@ -379,15 +460,26 @@ async function AbaTemporada({
     );
   }
   const { supabase } = await exigirProfessor();
-  const [{ data: desafiosBrutos }, ranking] = await Promise.all([
+  const [{ data: desafiosBrutos }, ranking, consultas, disputa] = await Promise.all([
     supabase
       .from("desafios")
-      .select("*, desafio_questoes(count), tentativas(concluida_em)")
+      .select("*, desafio_questoes(count), tentativas(aluno_id, concluida_em)")
       .eq("temporada_id", temporada.id)
       .order("abre_em", { ascending: false }),
     rankingDaTemporada(supabase, temporada),
+    consultaPorAluno(supabase, { temporadaId: temporada.id }),
+    ehAtual ? disputaDaTurma(supabase, temporada.turma_id) : null,
   ]);
-  const desafios = (desafiosBrutos ?? []) as DesafioLista[];
+  for (const alunoId of deTeste.keys()) consultas.delete(alunoId);
+  const consultaTurma = resumoConsulta(somarConsultas(consultas.values()));
+  const faltaFixar = ranking.filter((l) => {
+    const c = consultas.get(l.alunoId);
+    return c && resumoConsulta(c).faltaFixar;
+  });
+  const desafios = ((desafiosBrutos ?? []) as DesafioLista[]).map((d) => ({
+    ...d,
+    tentativas: d.tentativas.filter((t) => !deTeste.has(t.aluno_id)),
+  }));
   const encerrada = !!temporada.encerrada_em;
   const faseAtual = fase(temporada);
   const temEncerramento = ultimoDiaComPontos(temporada) !== temporada.data_prova;
@@ -402,7 +494,15 @@ async function AbaTemporada({
   const acertoMedio = responderam.length
     ? Math.round((responderam.reduce((s, l) => s + l.acerto, 0) / responderam.length) * 100)
     : null;
-  const semNenhum = jaAbriram.length ? ranking.filter((l) => l.desafiosCompletos === 0) : [];
+  // Quem nem abriu um desafio e quem parou no meio de um que ainda está aberto pedem recados diferentes.
+  const comTentativa = new Set(jaAbriram.flatMap((d) => d.tentativas.map((t) => t.aluno_id)));
+  const pelaMetade = new Set(
+    jaAbriram
+      .filter((d) => situacaoDesafio(d) === "aberto")
+      .flatMap((d) => d.tentativas.filter((t) => !t.concluida_em).map((t) => t.aluno_id)),
+  );
+  const naoComecaram = jaAbriram.length ? ranking.filter((l) => !comTentativa.has(l.alunoId)) : [];
+  const pararam = ranking.filter((l) => pelaMetade.has(l.alunoId));
   const diasProva = Math.round(
     (new Date(`${temporada.data_prova}T12:00:00Z`).getTime() - new Date(`${hojeEmBrasilia()}T12:00:00Z`).getTime()) /
       86_400_000,
@@ -428,11 +528,29 @@ async function AbaTemporada({
             )
           )}
         </p>
-        {faseAtual === "pontos" && (
-          <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
+          {jaAbriram.length > 0 && (
+            <Link
+              href={`/professor/turmas/${temporada.turma_id}/revisao?temporada=${temporada.id}`}
+              className="rounded-xl border border-marca-200 bg-white px-4 py-2 text-sm font-medium text-marca-700 hover:border-marca-400 hover:bg-marca-50"
+              title="As questões em que a turma mais errou, em letras grandes para projetar"
+            >
+              📺 Revisão no quadro
+            </Link>
+          )}
+          {jaAbriram.length > 0 && (
+            <Link
+              href={`/professor/turmas/${temporada.turma_id}/relatorio?temporada=${temporada.id}`}
+              className="rounded-xl border border-marca-200 bg-white px-4 py-2 text-sm font-medium text-marca-700 hover:border-marca-400 hover:bg-marca-50"
+              title="Uma página para imprimir ou salvar em PDF: participação, acerto e uma linha por aluno"
+            >
+              📄 Relatório para o conselho
+            </Link>
+          )}
+          {faseAtual === "pontos" && (
             <BotaoLink href={`/professor/desafios/novo?temporada=${temporada.id}`}>+ Novo desafio</BotaoLink>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {faseAtual !== "encerrada" && (jaAbriram.length > 0 || diasProva >= 0) && (
@@ -447,20 +565,30 @@ async function AbaTemporada({
               <strong className="tabular-nums">{acertoMedio}%</strong> de acerto médio
             </span>
           )}
-          {semNenhum.length > 0 && (
+          {consultaTurma.com !== null && consultaTurma.sem !== null && (
             <span
-              className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-amber-900"
-              title={semNenhum.map((l) => nomes.get(l.alunoId) ?? l.apelido).join(", ")}
+              className="rounded-full border border-slate-200 bg-white px-3 py-1"
+              title="Acerto médio da turma nos desafios com pesquisa liberada e nos de pesquisa bloqueada"
             >
-              <strong className="tabular-nums">{semNenhum.length}</strong>{" "}
-              {semNenhum.length === 1 ? "aluno sem nenhum desafio feito" : "alunos sem nenhum desafio feito"}:{" "}
-              {semNenhum
-                .slice(0, 4)
-                .map((l) => nomes.get(l.alunoId) ?? l.apelido)
-                .join(", ")}
-              {semNenhum.length > 4 && "…"}
+              com consulta <strong className="tabular-nums">{consultaTurma.com}%</strong> · sem consulta{" "}
+              <strong className="tabular-nums">{consultaTurma.sem}%</strong>
             </span>
           )}
+          <AvisoAlunos
+            alunos={naoComecaram.map((l) => nomes.get(l.alunoId) ?? l.apelido)}
+            um="aluno não começou nenhum desafio"
+            varios="alunos não começaram nenhum desafio"
+          />
+          <AvisoAlunos
+            alunos={pararam.map((l) => nomes.get(l.alunoId) ?? l.apelido)}
+            um="aluno parou no meio de um desafio aberto"
+            varios="alunos pararam no meio de um desafio aberto"
+          />
+          <AvisoAlunos
+            alunos={faltaFixar.map((l) => nomes.get(l.alunoId) ?? l.apelido)}
+            um={`aluno acerta bem mais com consulta do que sem (${DIFERENCA_RELEVANTE} pontos ou mais)`}
+            varios={`alunos acertam bem mais com consulta do que sem (${DIFERENCA_RELEVANTE} pontos ou mais)`}
+          />
           {diasProva >= 0 && (
             <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
               Prova{" "}
@@ -539,6 +667,8 @@ async function AbaTemporada({
           )}
         </Cartao>
       </div>
+
+      {disputa && <DisputaTurmas disputa={disputa} turmaId={temporada.turma_id} doProfessor />}
 
       <details className="rounded-2xl border border-slate-200 bg-white p-4">
         <summary className="cursor-pointer text-sm font-semibold text-marca-700">
@@ -683,5 +813,20 @@ function CamposDatasTemporada({
         </span>
       </label>
     </div>
+  );
+}
+
+/** Etiqueta amarela com a contagem e os primeiros nomes; o resto aparece ao passar o cursor. */
+function AvisoAlunos({ alunos, um, varios }: { alunos: string[]; um: string; varios: string }) {
+  if (!alunos.length) return null;
+  return (
+    <span
+      className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-amber-900"
+      title={alunos.join(", ")}
+    >
+      <strong className="tabular-nums">{alunos.length}</strong> {alunos.length === 1 ? um : varios}:{" "}
+      {alunos.slice(0, 4).join(", ")}
+      {alunos.length > 4 && "…"}
+    </span>
   );
 }

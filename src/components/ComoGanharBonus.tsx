@@ -10,7 +10,7 @@ function bonusDoPasso(n: number) {
 const PASSO_MAXIMO = Math.ceil((BONUS_MAXIMO - BONUS_DESAFIO) / BONUS_SEQUENCIA) + 1;
 
 /** Explica ao aluno, em um só lugar, como os pontos e os bônus são contados. */
-export function ComoGanharBonus({ aberto = false }: { aberto?: boolean }) {
+export function ComoGanharBonus({ aberto = false, comLiga = true }: { aberto?: boolean; comLiga?: boolean }) {
   const passos = Array.from({ length: PASSO_MAXIMO }, (_, i) => i + 1);
   return (
     <details open={aberto} className="group rounded-3xl border border-sky-200 bg-sky-50 p-4 shadow-sm">
@@ -64,9 +64,14 @@ export function ComoGanharBonus({ aberto = false }: { aberto?: boolean }) {
           </p>
         </div>
         <p className="rounded-xl bg-white px-3 py-2 text-xs ring-1 ring-sky-200">
-          <b>Onde o bônus aparece:</b> o da ofensiva e o da meta da turma entram só no <b>ranking geral</b>. A{" "}
-          <b>liga da semana</b> conta só os pontos das questões desta semana (com a rapidez, que faz parte da questão).
-          Por isso os dois números podem ser diferentes.
+          <b>Onde o bônus aparece:</b> o da ofensiva e o da meta da turma entram só no <b>ranking geral</b>.
+          {comLiga && (
+            <>
+              {" "}
+              A <b>liga da semana</b> conta só os pontos das questões desta semana (com a rapidez, que faz parte da
+              questão). Por isso os dois números podem ser diferentes.
+            </>
+          )}
         </p>
       </div>
     </details>

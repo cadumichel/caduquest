@@ -76,7 +76,7 @@ export function calcularMissao({
     return {
       tipo: "revisao",
       titulo: "Revise seus erros",
-      texto: `Você tem ${errosParaRevisar} ${errosParaRevisar === 1 ? "questão errada" : "questões erradas"} para revisar. Uma rodada rápida de ${n} já ajuda na prova!`,
+      texto: `Você tem ${errosParaRevisar} ${errosParaRevisar === 1 ? "questão errada" : "questões erradas"} para revisar. Uma rodada rápida de ${n} ${diasAteProva >= 0 ? "já ajuda na prova!" : "mantém o conteúdo em dia."}`,
       href: "/aluno/revisao",
       botao: "Começar a revisão",
     };

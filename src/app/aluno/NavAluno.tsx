@@ -13,7 +13,7 @@ const ITENS = [
 export function NavAluno() {
   const caminho = usePathname();
   return (
-    <nav className="mx-auto grid max-w-2xl grid-cols-3 gap-1 px-2 pb-2">
+    <nav className="fora-do-foco palco-aluno mx-auto grid max-w-2xl grid-cols-3 gap-1 px-2 pb-2">
       {ITENS.map((item) => {
         const ativo =
           item.href === "/aluno"

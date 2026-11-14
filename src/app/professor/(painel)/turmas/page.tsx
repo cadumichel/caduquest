@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { alunosDeTeste, descontarAlunosDeTeste } from "@/lib/aluno-teste";
 import Link from "next/link";
 import { BotaoEnviar } from "@/components/BotaoEnviar";
 import { ExcluirComConfirmacao } from "@/components/ExcluirComConfirmacao";
@@ -6,7 +7,7 @@ import { FormAcao } from "@/components/FormAcao";
 import { Campo, Cartao, Entrada, Etiqueta, Selecao, Titulo, Vazio } from "@/components/ui";
 import { exigirProfessor } from "@/lib/professor";
 import { situacaoDesafio, type Escola, type Turma } from "@/lib/tipos-banco";
-import { criarEscola, criarTurma, excluirEscola } from "../actions";
+import { criarEscola, criarTurma, excluirEscola, juntarEscolas } from "../actions";
 import { COLUNAS_PEDIDO, PedidosEntrada, type PedidoEntrada } from "../PedidosEntrada";
 
 export const metadata: Metadata = { title: "Turmas" };
@@ -27,6 +28,7 @@ export default async function ListaTurmas() {
     supabase.from("alunos").select(COLUNAS_PEDIDO).eq("aprovado", false).order("criado_em"),
   ]);
   const pedidos = (pedidosBrutos ?? []) as unknown as PedidoEntrada[];
+  descontarAlunosDeTeste((turmas ?? []) as unknown as TurmaLista[], await alunosDeTeste(supabase));
   const pedidosPorTurma = new Map<string, number>();
   for (const p of pedidos) pedidosPorTurma.set(p.turma_id, (pedidosPorTurma.get(p.turma_id) ?? 0) + 1);
 
@@ -111,6 +113,27 @@ export default async function ListaTurmas() {
                   </Campo>
                   <BotaoEnviar>Criar turma</BotaoEnviar>
                 </FormAcao>
+                {(escolas ?? []).length > 1 && (
+                  <FormAcao acao={juntarEscolas} className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+                    <input type="hidden" name="origem" value={e.id} />
+                    <Campo
+                      rotulo="Escola repetida? Juntar com…"
+                      dica={`As ${lista.length} turma(s) daqui passam para a escola escolhida e "${e.nome}" some da lista. Nada é apagado.`}
+                    >
+                      <Selecao name="destino" defaultValue="">
+                        <option value="">Escolha a escola que fica</option>
+                        {((escolas ?? []) as Escola[])
+                          .filter((o) => o.id !== e.id)
+                          .map((o) => (
+                            <option key={o.id} value={o.id}>
+                              {o.nome}
+                            </option>
+                          ))}
+                      </Selecao>
+                    </Campo>
+                    <BotaoEnviar variante="secundario">Juntar escolas</BotaoEnviar>
+                  </FormAcao>
+                )}
                 <ExcluirComConfirmacao acao={excluirEscola.bind(null, e.id)} nome={e.nome} rotulo="Excluir escola">
                   <p>
                     Apaga a escola, {lista.length} turma(s) e {lista.reduce((s, t) => s + (t.alunos[0]?.count ?? 0), 0)}{" "}

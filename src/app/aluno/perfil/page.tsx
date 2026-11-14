@@ -53,7 +53,7 @@ export default async function Perfil() {
     visualSalvo(aluno.id),
   ]);
   const medalhas = medalhasTurma.get(aluno.id) ?? 0;
-  const ranking = temporada ? await rankingDaTemporada(db, temporada) : [];
+  const ranking = temporada ? await rankingDaTemporada(db, temporada, aluno.id) : [];
   const { eu, total } = rankingParaAluno(ranking, aluno.id);
 
   const especiaisLiberados = Math.min(medalhas, ORDEM_ESPECIAIS.length);

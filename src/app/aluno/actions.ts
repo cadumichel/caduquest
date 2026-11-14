@@ -24,8 +24,9 @@ import {
 import { corrigirTreino, iniciarTreino, type ItemTreino } from "@/lib/treino";
 import { montarVista } from "@/lib/questoes/apresentacao";
 import { corrigir } from "@/lib/questoes/correcao";
-import { permutacaoAleatoria, permutacaoValida } from "@/lib/questoes/embaralhar";
+import { permutacaoSemRanking, permutacaoValida } from "@/lib/questoes/embaralhar";
 import { schemaResposta, tamanhoPermutacao, type Conteudo, type Vista } from "@/lib/questoes/tipos";
+import { resumoDoDesafio, type ResumoDesafio } from "@/lib/resumo-desafio";
 import { errosParaRevisar, QUESTOES_POR_RODADA, registrarRevisao } from "@/lib/revisao";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { ehMotivoZerada } from "@/lib/tela-protegida";
@@ -39,6 +40,12 @@ export async function carregarJogo(desafioId: string, codigo?: string): Promise<
     desafioId,
     typeof codigo === "string" ? codigo.slice(0, 10) : undefined,
   );
+}
+
+/** Resumo da tela final do desafio: pontos, XP, posição, ofensiva e próximo passo. */
+export async function resumoFinal(desafioId: string): Promise<ResumoDesafio | null> {
+  const aluno = await exigirAluno();
+  return resumoDoDesafio(criarClienteAdmin(), aluno, desafioId);
 }
 
 export async function enviarResposta(
@@ -145,7 +152,7 @@ export async function salvarVisual(fundo: number, titulo: string | null): Promis
   const medalhas = medalhasTurma.get(aluno.id) ?? 0;
   if (!fundoLiberado(fundo, { nivel: progresso.nivel, medalhas })) return { erro: "Esse fundo ainda está bloqueado." };
   if (titulo !== null) {
-    const { eu } = rankingParaAluno(temporada ? await rankingDaTemporada(db, temporada) : [], aluno.id);
+    const { eu } = rankingParaAluno(temporada ? await rankingDaTemporada(db, temporada, aluno.id) : [], aluno.id);
     const conquistas = calcularConquistas(progresso, {
       posicao: eu?.posicao ?? null,
       pontos: eu?.pontos ?? 0,
@@ -196,7 +203,7 @@ export async function proximaRevisao(
     .single();
   if (!q) return null;
   const conteudo = { tipo: q.tipo, conteudo: q.conteudo } as Conteudo;
-  const permutacao = permutacaoAleatoria(tamanhoPermutacao(conteudo));
+  const permutacao = permutacaoSemRanking(conteudo.tipo, tamanhoPermutacao(conteudo));
   return {
     questao: {
       id: q.id,

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { calcularConquistas, calcularNivel, calcularProgresso, dominioCapitulo, xpDoNivel } from "../progresso";
+import {
+  calcularConquistas,
+  calcularNivel,
+  calcularProgresso,
+  dominioCapitulo,
+  xpDeUmDesafio,
+  xpDoNivel,
+} from "../progresso";
 
 describe("calcularNivel", () => {
   it("segue a curva 0, 100, 300, 600", () => {
@@ -85,5 +92,13 @@ describe("dominioCapitulo", () => {
     expect(dominioCapitulo({ nome: "x", acerto: 0.3, questoes: 4 })).toBe("comecando");
     expect(dominioCapitulo({ nome: "x", acerto: 0.6, questoes: 4 })).toBe("avancando");
     expect(dominioCapitulo({ nome: "x", acerto: 0.9, questoes: 4 })).toBe("dominado");
+  });
+});
+
+describe("xpDeUmDesafio", () => {
+  it("soma questões, acertos e o bônus de concluir", () => {
+    expect(xpDeUmDesafio([1, 0.5, 0], true)).toBe(3 * 5 + 15 + 20);
+    expect(xpDeUmDesafio([1, 1], false)).toBe(30);
+    expect(xpDeUmDesafio([], false)).toBe(0);
   });
 });

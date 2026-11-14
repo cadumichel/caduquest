@@ -13,16 +13,21 @@ import { passosDaOfensiva, type PassoOfensiva } from "@/lib/constancia";
 import { Avatar } from "@/components/Avatar";
 import { chaveCapitulo, dominioCapitulo } from "@/lib/progresso";
 import { progressoDoAluno } from "@/lib/progresso-dados";
-import { rankingParaAluno } from "@/lib/ranking";
+import { rankingParaAluno, type LinhaRanking } from "@/lib/ranking";
 import { errosParaRevisar } from "@/lib/revisao";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { situacaoDaTemporada } from "@/lib/temporada-dados";
+import { DisputaTurmas } from "@/components/DisputaTurmas";
 import { MetaTurma } from "@/components/MetaTurma";
+import { disputaDaTurma } from "@/lib/disputa-turmas-dados";
 import { escolherFundo, FUNDOS_TEMPORADA, imagemDoFundo } from "@/lib/fundos-temporada";
 import { faseDaTemporada, situacaoDesafio, treinoLiberado, type Desafio, type Tentativa } from "@/lib/tipos-banco";
 import { formatarPontos } from "@/lib/pontos";
 
 export const metadata: Metadata = { title: "Início" };
+
+/** O plano de estudo aparece no Início a partir de tantos dias antes da prova. */
+const DIAS_DO_PLANO = 10;
 
 export default async function Inicio() {
   const aluno = await exigirAluno();
@@ -52,13 +57,14 @@ export default async function Inicio() {
         .select("*, desafios!inner(temporada_id)")
         .eq("aluno_id", aluno.id)
         .eq("desafios.temporada_id", temporada.id),
-      situacaoDaTemporada(db, temporada),
+      situacaoDaTemporada(db, temporada, aluno.id),
       medalhasDaTurmaDoAluno(aluno.turmaId),
       errosParaRevisar(db, aluno.id, aluno.turmaId),
       curiosidadeDoDia(temporada),
       progressoDoAluno(aluno.id, aluno.turmaId),
     ]);
-  const [cartas, minhaCarta, { count: temporadasAntes }] = await Promise.all([
+  const [disputa, cartas, minhaCarta, { count: temporadasAntes }] = await Promise.all([
+    disputaDaTurma(db, aluno.turmaId),
     cartasParaAProxima(db, aluno.turmaId),
     cartaDoAluno(db, aluno.id, aluno.turmaId),
     db
@@ -74,6 +80,9 @@ export default async function Inicio() {
   const faltam = diasAte(temporada.data_prova);
   // Pontuação encerrada e prova por vir: os alunos estudam com treino e revisão.
   const estudo = faseDaTemporada(temporada) === "estudo";
+  // Depois da prova: a tela vira o fechamento da temporada, sem ofensiva nem meta.
+  const encerrada = faseDaTemporada(temporada) === "encerrada";
+  const forte = progresso.habilidades.filter((h) => h.questoes >= 3).sort((a, b) => b.acerto - a.acerto)[0] ?? null;
   const concluidos = new Set(
     [...tentativas.values()].filter((t) => t.concluida_em || t.indice_atual >= t.ordem.length).map((t) => t.desafio_id),
   );
@@ -93,17 +102,21 @@ export default async function Inicio() {
 
   // Em sala vem primeiro (é feito na hora); depois os especiais.
   const peso = (d: Desafio) => (d.tipo === "relampago" ? 2 : d.especial ? 1 : 0);
-  const abertos = desafios.filter((d) => situacaoDesafio(d) === "aberto").sort((a, b) => peso(b) - peso(a));
+  // Desafio começado e não terminado vem antes de tudo: é o que mais se perde.
+  const parado = (d: Desafio) => Boolean(tentativas.get(d.id)) && !concluidos.has(d.id);
+  const abertos = desafios
+    .filter((d) => situacaoDesafio(d) === "aberto")
+    .sort((a, b) => Number(parado(b)) - Number(parado(a)) || peso(b) - peso(a));
   const outros = desafios.filter((d) => situacaoDesafio(d) !== "aberto").reverse();
 
   return (
-    <div className="space-y-6">
+    <div className="inicio-largo space-y-6">
       <section className="relative overflow-hidden rounded-3xl bg-marca-900 text-white shadow-lg shadow-marca-900/20">
         <Image
           src={imagemDoFundo(fundo)}
           alt={`Cenário da temporada: ${FUNDOS_TEMPORADA[fundo].nome}`}
           fill
-          sizes="(max-width: 672px) 100vw, 672px"
+          sizes="(max-width: 1024px) 100vw, 1024px"
           className="object-cover opacity-80"
           priority
         />
@@ -136,257 +149,365 @@ export default async function Inicio() {
         </div>
       </section>
 
-      {abertos.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="flex items-center gap-2 text-lg font-extrabold text-marca-900">
-            <Image src="/ilustracoes/icone-desafios.png" alt="" width={36} height={28} className="h-7 w-auto" />
-            Desafios abertos
-          </h2>
-          {abertos.map((d) => {
-            const t = tentativas.get(d.id);
-            const concluido = Boolean(t && (t.concluida_em || t.indice_atual >= t.ordem.length));
-            if (d.especial || d.tipo === "relampago") {
-              const emSala = d.tipo === "relampago";
-              return (
-                <div
-                  key={d.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-3xl bg-gradient-to-br from-ouro-claro via-ouro to-ouro-escuro p-5 text-marca-950 shadow-lg ring-2 ring-ouro-claro/60"
-                >
-                  <div>
-                    <p className="text-xs font-bold tracking-widest uppercase">
-                      ★ Desafio especial{emSala && " · em sala"}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
+        {/* O que fazer agora. */}
+        <div className="space-y-6">
+          {abertos.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="flex items-center gap-2 text-lg font-extrabold text-marca-900">
+                <Image src="/ilustracoes/icone-desafios.png" alt="" width={36} height={28} className="h-7 w-auto" />
+                Desafios abertos
+              </h2>
+              {abertos.map((d) => {
+                const t = tentativas.get(d.id);
+                const concluido = Boolean(t && (t.concluida_em || t.indice_atual >= t.ordem.length));
+                if (d.especial || d.tipo === "relampago") {
+                  const emSala = d.tipo === "relampago";
+                  return (
+                    <div
+                      key={d.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-3xl bg-gradient-to-br from-ouro-claro via-ouro to-ouro-escuro p-5 text-marca-950 shadow-lg ring-2 ring-ouro-claro/60"
+                    >
+                      <div>
+                        <p className="text-xs font-bold tracking-widest uppercase">
+                          ★ Desafio especial{emSala && " · em sala"}
+                        </p>
+                        <p className="text-lg font-extrabold">{d.titulo}</p>
+                        <p className="text-sm text-marca-900/90">
+                          {d.especial && d.multiplicador ? `Pontos ${formatarMultiplicador(d.multiplicador)} · ` : ""}
+                          {d.pontos_por_acerto} pts por acerto
+                          {percentualEmVigor(d) ? " · tempo reduzido" : ""} · fecha {formatarDataHora(d.fecha_em)}
+                        </p>
+                        {t && !concluido && <p className="text-sm font-extrabold">{textoParado(t, d.fecha_em)}</p>}
+                      </div>
+                      {concluido ? (
+                        <BotaoLink href={`/aluno/desafio/${d.id}/resultado`} variante="secundario">
+                          ✓ {formatarPontos(t!.pontos)} pts
+                        </BotaoLink>
+                      ) : (
+                        <Link
+                          href={`/aluno/desafio/${d.id}`}
+                          className="rounded-xl bg-marca-900 px-5 py-2.5 font-bold text-ouro-claro shadow hover:bg-marca-800"
+                        >
+                          {t ? "Continuar" : emSala ? "Entrar com o código" : "Começar"}
+                        </Link>
+                      )}
+                    </div>
+                  );
+                }
+                return (
+                  <Cartao
+                    key={d.id}
+                    className={`flex flex-wrap items-center justify-between gap-3 ${t && !concluido ? "border-2 border-amber-400 bg-amber-50" : ""}`}
+                  >
+                    <div>
+                      <p className="font-semibold">{d.titulo}</p>
+                      {t && !concluido ? (
+                        <p className="text-sm font-semibold text-amber-900">{textoParado(t, d.fecha_em)}</p>
+                      ) : (
+                        <p className="text-sm text-slate-500">
+                          {d.desafio_questoes[0]?.count ?? 0} questões · fecha {formatarDataHora(d.fecha_em)}
+                        </p>
+                      )}
+                    </div>
+                    {concluido ? (
+                      <BotaoLink href={`/aluno/desafio/${d.id}/resultado`} variante="secundario">
+                        ✓ {formatarPontos(t!.pontos)} pts
+                      </BotaoLink>
+                    ) : (
+                      <BotaoLink href={`/aluno/desafio/${d.id}`}>▶ {t ? "Continuar" : "Começar desafio"}</BotaoLink>
+                    )}
+                  </Cartao>
+                );
+              })}
+            </section>
+          )}
+
+          {/* Com desafio aberto, a lista acima já é a missão do dia. */}
+          {!(abertos.length > 0 && (missao.tipo === "desafio" || missao.tipo === "cadurush")) && (
+            <CartaoMissao missao={missao} />
+          )}
+
+          {rush && (
+            <p className="rounded-2xl bg-gradient-to-r from-amber-100 to-orange-100 px-4 py-3 text-sm font-semibold text-orange-900">
+              ★ Próximo desafio especial em sala: {rush.titulo}, {formatarDataHora(rush.abre_em)}. Fique atento ao
+              código no quadro!
+            </p>
+          )}
+
+          {minhaCarta?.aberta && minhaCarta.status === "pendente" && (
+            <Link
+              href="/aluno/coringa"
+              className="block rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 ring-1 ring-amber-200"
+            >
+              🃏 Seu tema da carta coringa está com o professor para aprovação. Ele aparece para todos assim que for
+              aprovado.
+            </Link>
+          )}
+
+          {minhaCarta?.aberta && (!minhaCarta.tema || minhaCarta.status === "recusada") && (
+            <Link
+              href="/aluno/coringa"
+              className="block rounded-3xl bg-gradient-to-br from-marca-950 via-marca-900 to-amber-900 p-5 text-white shadow-lg ring-2 ring-amber-300"
+            >
+              <p className="text-xs font-bold tracking-widest text-amber-300 uppercase">
+                ✦ Você ganhou a carta coringa ✦
+              </p>
+              <p className="mt-1 text-lg font-extrabold">Campeão da temporada {minhaCarta.temporada.nome}! 🏆</p>
+              <p className="text-sm text-amber-50">
+                {minhaCarta.status === "recusada"
+                  ? "O professor pediu outro tema. Escolha de novo uma página ou um subtítulo da apostila. ›"
+                  : "Escolha o tema de uma questão da próxima prova: uma página ou um subtítulo da apostila. ›"}
+              </p>
+            </Link>
+          )}
+
+          {cartas.length > 0 && (
+            <CartasCoringa cartas={cartas} prova={faltam >= 0 ? temporada.data_prova : null} meuId={aluno.id} />
+          )}
+
+          {(estudo || (faltam >= 0 && faltam <= DIAS_DO_PLANO)) && outros.length > 0 && (
+            <Link
+              href="/aluno/plano"
+              className="flex items-center gap-3 rounded-3xl border border-amber-200 bg-amber-50 p-4 shadow-sm transition hover:shadow-md"
+            >
+              <span className="text-3xl">🧭</span>
+              <div className="min-w-0 flex-1">
+                <p className="font-extrabold text-marca-900">Plano de estudo para a prova</p>
+                <p className="text-sm text-slate-700">
+                  {faltam === 0 ? "A prova é hoje" : faltam === 1 ? "A prova é amanhã" : `Faltam ${faltam} dias`}. Veja
+                  o que rever primeiro e as páginas da apostila.
+                </p>
+              </div>
+              <span className="font-bold text-marca-700">Ver ›</span>
+            </Link>
+          )}
+
+          {erros.length > 0 && missao.tipo !== "revisao" && (
+            <Link
+              href="/aluno/revisao"
+              className="flex items-center gap-3 rounded-3xl border border-marca-100 bg-white p-4 shadow-sm transition hover:shadow-md"
+            >
+              <span className="text-3xl">📚</span>
+              <div className="min-w-0 flex-1">
+                <p className="font-extrabold text-marca-900">Revisão de erros</p>
+                <p className="text-sm text-slate-600">
+                  {erros.length} {erros.length === 1 ? "questão errada" : "questões erradas"} para revisar. É onde você
+                  mais aprende!
+                </p>
+              </div>
+              <span className="font-bold text-marca-700">Revisar ›</span>
+            </Link>
+          )}
+
+          {outros.length > 0 && (
+            <section id="desafios-anteriores" className="scroll-mt-4 space-y-3">
+              <h2 className="text-lg font-extrabold text-marca-900">
+                {estudo ? "Desafios para treinar até a prova" : "Outros desafios"}
+              </h2>
+              {outros.map((d) => {
+                const situacao = situacaoDesafio(d);
+                const t = tentativas.get(d.id);
+                return (
+                  <Cartao key={d.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
+                    <div>
+                      <p className="font-medium">
+                        {(d.especial || d.tipo === "relampago") && "★ "}
+                        {d.titulo}
+                      </p>
+                      <p className="text-sm text-slate-500">
+                        {situacao === "agendado"
+                          ? `Abre ${formatarDataHora(d.abre_em)}`
+                          : `Fechou ${formatarDataHora(d.fecha_em)}`}
+                      </p>
+                    </div>
+                    {situacao === "agendado" ? (
+                      <Etiqueta cor="azul">Em breve</Etiqueta>
+                    ) : t ? (
+                      <BotaoLink href={`/aluno/desafio/${d.id}/resultado`} variante="secundario">
+                        {formatarPontos(t.pontos)} pts · ver gabarito
+                      </BotaoLink>
+                    ) : treinoLiberado({ ...d, temporadas: temporada }) ? (
+                      <BotaoLink href={`/aluno/desafio/${d.id}/treino`} variante="secundario">
+                        Não feito · treinar
+                      </BotaoLink>
+                    ) : (
+                      <Etiqueta>Não feito</Etiqueta>
+                    )}
+                  </Cartao>
+                );
+              })}
+            </section>
+          )}
+        </div>
+        {/* Como estou. */}
+        <div className="space-y-6">
+          <div className="space-y-3">
+            {encerrada ? (
+              <FechamentoTemporada
+                eu={eu}
+                total={total}
+                feitos={concluidos.size}
+                desafios={desafios.length}
+                forte={forte}
+              />
+            ) : (
+              <section className="rounded-3xl bg-gradient-to-br from-marca-700 to-marca-900 p-4 text-white shadow-md">
+                <div className="flex items-center gap-3">
+                  <Image
+                    src="/ilustracoes/sequencia.png"
+                    alt=""
+                    width={64}
+                    height={76}
+                    className={`h-14 w-auto shrink-0 ${eu?.sequencia ? "" : "opacity-50 grayscale"}`}
+                  />
+                  <div className="min-w-0 text-sm">
+                    <p className="text-base font-extrabold text-ouro-claro">Ofensiva rumo à prova</p>
+                    <p className="font-bold">
+                      {eu?.sequencia
+                        ? `${eu.sequencia} ${eu.sequencia === 1 ? "desafio" : "desafios seguidos"}!`
+                        : "Comece sua ofensiva!"}
+                      {eu && eu.bonus > 0 && (
+                        <span className="font-normal text-marca-100"> · +{eu.bonus} pts de bônus</span>
+                      )}
                     </p>
-                    <p className="text-lg font-extrabold">{d.titulo}</p>
-                    <p className="text-sm text-marca-900/90">
-                      {d.especial && d.multiplicador ? `Pontos ${formatarMultiplicador(d.multiplicador)} · ` : ""}
-                      {d.pontos_por_acerto} pts por acerto
-                      {percentualEmVigor(d) ? " · tempo reduzido" : ""} · fecha {formatarDataHora(d.fecha_em)}
+                    <p className="text-xs text-marca-100">
+                      {passos.filter((p) => p.passo === "feito").length} de {passos.length}{" "}
+                      {passos.length === 1 ? "desafio feito" : "desafios feitos"}
+                      {faltam >= 0 && ` · ${faltam === 0 ? "a prova é hoje" : `faltam ${faltam} dias para a prova`}`}
                     </p>
                   </div>
-                  {concluido ? (
-                    <BotaoLink href={`/aluno/desafio/${d.id}/resultado`} variante="secundario">
-                      ✓ {formatarPontos(t!.pontos)} pts
-                    </BotaoLink>
-                  ) : (
-                    <Link
-                      href={`/aluno/desafio/${d.id}`}
-                      className="rounded-xl bg-marca-900 px-5 py-2.5 font-bold text-ouro-claro shadow hover:bg-marca-800"
-                    >
-                      {t ? "Continuar" : emSala ? "Entrar com o código" : "Começar"}
-                    </Link>
-                  )}
                 </div>
-              );
-            }
-            return (
-              <Cartao key={d.id} className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="font-semibold">{d.titulo}</p>
-                  <p className="text-sm text-slate-500">
-                    {d.desafio_questoes[0]?.count ?? 0} questões · fecha {formatarDataHora(d.fecha_em)}
+                <TrilhaOfensiva passos={passos} />
+                <details className="mt-2 text-xs text-marca-100">
+                  <summary className="cursor-pointer font-semibold text-ouro-claro">Como funciona a ofensiva?</summary>
+                  <p className="mt-1">
+                    A ofensiva vai até a prova. Termine cada desafio da semana antes de ele fechar: o 1º seguido dá +10
+                    pts de bônus, o 2º +12, o 3º +14, e assim por diante até +20. Se um desafio fechar sem você fazer, a
+                    sequência recomeça, mas o bônus já ganho fica. Veja tudo em Ranking › Como funcionam os pontos e os
+                    bônus.
                   </p>
-                </div>
-                {concluido ? (
-                  <BotaoLink href={`/aluno/desafio/${d.id}/resultado`} variante="secundario">
-                    ✓ {formatarPontos(t!.pontos)} pts
-                  </BotaoLink>
-                ) : (
-                  <BotaoLink href={`/aluno/desafio/${d.id}`}>▶ {t ? "Continuar" : "Começar desafio"}</BotaoLink>
-                )}
-              </Cartao>
-            );
-          })}
-        </section>
-      )}
+                </details>
+              </section>
+            )}
 
-      {/* Com desafio aberto, a lista acima já é a missão do dia. */}
-      {!(abertos.length > 0 && (missao.tipo === "desafio" || missao.tipo === "cadurush")) && (
-        <CartaoMissao missao={missao} />
-      )}
-
-      {rush && (
-        <p className="rounded-2xl bg-gradient-to-r from-amber-100 to-orange-100 px-4 py-3 text-sm font-semibold text-orange-900">
-          ★ Próximo desafio especial em sala: {rush.titulo}, {formatarDataHora(rush.abre_em)}. Fique atento ao código no
-          quadro!
-        </p>
-      )}
-
-      {minhaCarta?.aberta && minhaCarta.status === "pendente" && (
-        <Link
-          href="/aluno/coringa"
-          className="block rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 ring-1 ring-amber-200"
-        >
-          🃏 Seu tema da carta coringa está com o professor para aprovação. Ele aparece para todos assim que for
-          aprovado.
-        </Link>
-      )}
-
-      {minhaCarta?.aberta && (!minhaCarta.tema || minhaCarta.status === "recusada") && (
-        <Link
-          href="/aluno/coringa"
-          className="block rounded-3xl bg-gradient-to-br from-marca-950 via-marca-900 to-amber-900 p-5 text-white shadow-lg ring-2 ring-amber-300"
-        >
-          <p className="text-xs font-bold tracking-widest text-amber-300 uppercase">✦ Você ganhou a carta coringa ✦</p>
-          <p className="mt-1 text-lg font-extrabold">Campeão da temporada {minhaCarta.temporada.nome}! 🏆</p>
-          <p className="text-sm text-amber-50">
-            {minhaCarta.status === "recusada"
-              ? "O professor pediu outro tema. Escolha de novo uma página ou um subtítulo da apostila. ›"
-              : "Escolha o tema de uma questão da próxima prova: uma página ou um subtítulo da apostila. ›"}
-          </p>
-        </Link>
-      )}
-
-      {cartas.length > 0 && (
-        <CartasCoringa cartas={cartas} prova={faltam >= 0 ? temporada.data_prova : null} meuId={aluno.id} />
-      )}
-
-      <div className="space-y-3">
-        <section className="rounded-3xl bg-gradient-to-br from-marca-700 to-marca-900 p-4 text-white shadow-md">
-          <div className="flex items-center gap-3">
-            <Image
-              src="/ilustracoes/sequencia.png"
-              alt=""
-              width={64}
-              height={76}
-              className={`h-14 w-auto shrink-0 ${eu?.sequencia ? "" : "opacity-50 grayscale"}`}
-            />
-            <div className="min-w-0 text-sm">
-              <p className="text-base font-extrabold text-ouro-claro">Ofensiva rumo à prova</p>
-              <p className="font-bold">
-                {eu?.sequencia
-                  ? `${eu.sequencia} ${eu.sequencia === 1 ? "desafio" : "desafios seguidos"}!`
-                  : "Comece sua ofensiva!"}
-                {eu && eu.bonus > 0 && <span className="font-normal text-marca-100"> · +{eu.bonus} pts de bônus</span>}
-              </p>
-              <p className="text-xs text-marca-100">
-                {passos.filter((p) => p.passo === "feito").length} de {passos.length}{" "}
-                {passos.length === 1 ? "desafio feito" : "desafios feitos"}
-                {faltam >= 0 && ` · ${faltam === 0 ? "a prova é hoje" : `faltam ${faltam} dias para a prova`}`}
-              </p>
-            </div>
+            <Link
+              href="/aluno/perfil#visual"
+              className="flex items-center gap-3 rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100/70 p-4 shadow-sm transition hover:shadow-md"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-base font-extrabold text-marca-900">Recompensas</p>
+                <p className="text-sm text-marca-900/80">
+                  Suba de nível para liberar personagens e vença desafios para ganhar lendários!
+                </p>
+              </div>
+              <Image src="/ilustracoes/bau.png" alt="" width={120} height={86} className="h-16 w-auto shrink-0" />
+            </Link>
           </div>
-          <TrilhaOfensiva passos={passos} />
-          <p className="mt-2 text-xs text-marca-100">
-            A ofensiva vai até a prova. Termine cada desafio da semana antes de ele fechar: o 1º seguido dá +10 pts de
-            bônus, o 2º +12, o 3º +14, e assim por diante até +20. Se um desafio fechar sem você fazer, a sequência
-            recomeça, mas o bônus já ganho fica. Veja tudo em Ranking › Como funcionam os pontos e os bônus.
-          </p>
-        </section>
 
-        <Link
-          href="/aluno/perfil#visual"
-          className="flex items-center gap-3 rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100/70 p-4 shadow-sm transition hover:shadow-md"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="text-base font-extrabold text-marca-900">Recompensas</p>
-            <p className="text-sm text-marca-900/80">
-              Suba de nível para liberar personagens e vença desafios para ganhar lendários!
-            </p>
-          </div>
-          <Image src="/ilustracoes/bau.png" alt="" width={120} height={86} className="h-16 w-auto shrink-0" />
-        </Link>
-      </div>
+          {!encerrada && <MetaTurma meta={situacao.meta} />}
 
-      {erros.length > 0 && missao.tipo !== "revisao" && (
-        <Link
-          href="/aluno/revisao"
-          className="flex items-center gap-3 rounded-3xl border border-marca-100 bg-white p-4 shadow-sm transition hover:shadow-md"
-        >
-          <span className="text-3xl">📚</span>
-          <div className="min-w-0 flex-1">
-            <p className="font-extrabold text-marca-900">Revisão de erros</p>
-            <p className="text-sm text-slate-600">
-              {erros.length} {erros.length === 1 ? "questão errada" : "questões erradas"} para revisar. É onde você mais
-              aprende!
-            </p>
-          </div>
-          <span className="font-bold text-marca-700">Revisar ›</span>
-        </Link>
-      )}
+          {disputa && <DisputaTurmas disputa={disputa} turmaId={aluno.turmaId} />}
 
-      <section className="rounded-3xl border border-amber-200 bg-amber-50 p-4">
-        <p className="text-xs font-bold tracking-widest text-amber-800 uppercase">🏛️ Curiosidade do dia</p>
-        <p className="mt-1 text-sm text-marca-950">{curiosidade}</p>
-      </section>
+          <MuralRanking top={top} eu={eu} total={total} medalhas={medalhas} alunoId={aluno.id} />
 
-      <MetaTurma meta={situacao.meta} />
-
-      <MuralRanking top={top} eu={eu} total={total} medalhas={medalhas} alunoId={aluno.id} />
-
-      {temporada.capitulos.length > 0 && (
-        <Cartao>
-          <h2 className="mb-4 flex items-center gap-2 font-extrabold text-marca-900">
-            <Image src="/ilustracoes/icone-mapa.png" alt="" width={32} height={24} className="h-6 w-auto" />
-            Trilha da temporada
-          </h2>
-          <ol className="relative ml-3 space-y-4 border-l-2 border-dashed border-marca-300 pl-6">
-            {temporada.capitulos.map((cap, i) => {
-              const d = progresso.capitulos.get(chaveCapitulo(cap));
-              const estilo = DOMINIO[dominioCapitulo(d)];
-              return (
-                <li key={i} className="relative">
-                  <span
-                    className={`absolute -left-[35px] flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ring-2 ${estilo.bola}`}
-                  >
-                    {estilo.marca ?? i + 1}
+          {temporada.capitulos.length > 0 && (
+            <Cartao>
+              <h2 className="mb-4 flex items-center gap-2 font-extrabold text-marca-900">
+                <Image src="/ilustracoes/icone-mapa.png" alt="" width={32} height={24} className="h-6 w-auto" />
+                Trilha da temporada
+              </h2>
+              <ol className="relative ml-3 space-y-4 border-l-2 border-dashed border-marca-300 pl-6">
+                {temporada.capitulos.map((cap, i) => {
+                  const d = progresso.capitulos.get(chaveCapitulo(cap));
+                  const estilo = DOMINIO[dominioCapitulo(d)];
+                  return (
+                    <li key={i} className="relative">
+                      <span
+                        className={`absolute -left-[35px] flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ring-2 ${estilo.bola}`}
+                      >
+                        {estilo.marca ?? i + 1}
+                      </span>
+                      <span className="font-medium">{cap}</span>
+                      <span className={`ml-2 text-xs ${estilo.texto}`}>
+                        {d ? `${estilo.rotulo} · ${Math.round(d.acerto * 100)}%` : estilo.rotulo}
+                      </span>
+                    </li>
+                  );
+                })}
+                <li className="relative font-semibold text-marca-700">
+                  <span className="absolute -left-[35px] flex h-6 w-6 items-center justify-center rounded-full bg-ouro text-xs">
+                    🏁
                   </span>
-                  <span className="font-medium">{cap}</span>
-                  <span className={`ml-2 text-xs ${estilo.texto}`}>
-                    {d ? `${estilo.rotulo} · ${Math.round(d.acerto * 100)}%` : estilo.rotulo}
-                  </span>
+                  Prova · {formatarData(temporada.data_prova)}
                 </li>
-              );
-            })}
-            <li className="relative font-semibold text-marca-700">
-              <span className="absolute -left-[35px] flex h-6 w-6 items-center justify-center rounded-full bg-ouro text-xs">
-                🏁
-              </span>
-              Prova · {formatarData(temporada.data_prova)}
-            </li>
-          </ol>
-        </Cartao>
-      )}
+              </ol>
+            </Cartao>
+          )}
 
-      {outros.length > 0 && (
-        <section id="desafios-anteriores" className="scroll-mt-4 space-y-3">
-          <h2 className="text-lg font-extrabold text-marca-900">
-            {estudo ? "Desafios para treinar até a prova" : "Outros desafios"}
-          </h2>
-          {outros.map((d) => {
-            const situacao = situacaoDesafio(d);
-            const t = tentativas.get(d.id);
-            return (
-              <Cartao key={d.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
-                <div>
-                  <p className="font-medium">
-                    {(d.especial || d.tipo === "relampago") && "★ "}
-                    {d.titulo}
-                  </p>
-                  <p className="text-sm text-slate-500">
-                    {situacao === "agendado"
-                      ? `Abre ${formatarDataHora(d.abre_em)}`
-                      : `Fechou ${formatarDataHora(d.fecha_em)}`}
-                  </p>
-                </div>
-                {situacao === "agendado" ? (
-                  <Etiqueta cor="azul">Em breve</Etiqueta>
-                ) : t ? (
-                  <BotaoLink href={`/aluno/desafio/${d.id}/resultado`} variante="secundario">
-                    {formatarPontos(t.pontos)} pts · ver gabarito
-                  </BotaoLink>
-                ) : treinoLiberado({ ...d, temporadas: temporada }) ? (
-                  <BotaoLink href={`/aluno/desafio/${d.id}/treino`} variante="secundario">
-                    Não feito · treinar
-                  </BotaoLink>
-                ) : (
-                  <Etiqueta>Não feito</Etiqueta>
-                )}
-              </Cartao>
-            );
-          })}
-        </section>
-      )}
+          <section className="rounded-3xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-xs font-bold tracking-widest text-amber-800 uppercase">🏛️ Curiosidade do dia</p>
+            <p className="mt-1 text-sm text-marca-950">{curiosidade}</p>
+          </section>
+        </div>
+      </div>
     </div>
+  );
+}
+
+/** "Você parou na questão 8 de 12. Faltam 5. Fecha 15/11, 23:59." */
+function textoParado(t: Pick<Tentativa, "indice_atual" | "ordem">, fechaEm: string) {
+  const total = t.ordem.length;
+  const faltam = total - t.indice_atual;
+  return `Você parou na questão ${Math.min(t.indice_atual + 1, total)} de ${total}. ${faltam === 1 ? "Falta 1" : `Faltam ${faltam}`}. Fecha ${formatarDataHora(fechaEm)}.`;
+}
+
+/** Depois da prova: como o aluno terminou a temporada. Tudo calculado, nada cadastrado. */
+function FechamentoTemporada({
+  eu,
+  total,
+  feitos,
+  desafios,
+  forte,
+}: {
+  eu: LinhaRanking | null;
+  total: number;
+  feitos: number;
+  desafios: number;
+  forte: { nome: string; acerto: number } | null;
+}) {
+  const itens = [
+    { valor: eu ? `${eu.posicao}º` : "–", rotulo: `de ${total} na turma` },
+    { valor: formatarPontos(eu?.pontos), rotulo: "pontos" },
+    { valor: `${feitos}/${desafios}`, rotulo: "desafios feitos" },
+    { valor: eu && eu.questoes > 0 ? `${Math.round(eu.acerto * 100)}%` : "–", rotulo: "de acerto" },
+  ];
+  return (
+    <section className="rounded-3xl bg-gradient-to-br from-marca-700 to-marca-950 p-4 text-white shadow-md">
+      <p className="text-xs font-bold tracking-widest text-ouro-claro uppercase">🏁 Fechamento da temporada</p>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-center">
+        {itens.map((i) => (
+          <div key={i.rotulo} className="rounded-2xl bg-white/10 p-3 ring-1 ring-white/15">
+            <p className="text-xl font-extrabold tabular-nums">{i.valor}</p>
+            <p className="text-xs text-marca-100">{i.rotulo}</p>
+          </div>
+        ))}
+      </div>
+      <ul className="mt-3 space-y-1 text-sm text-marca-100">
+        {eu && eu.maiorSequencia > 0 && (
+          <li>
+            🔥 Maior ofensiva: {eu.maiorSequencia} {eu.maiorSequencia === 1 ? "desafio" : "desafios seguidos"}
+            {eu.bonus > 0 && ` (+${eu.bonus} pts de bônus)`}.
+          </li>
+        )}
+        {forte && (
+          <li>
+            💪 Sua habilidade mais forte: {forte.nome} ({Math.round(forte.acerto * 100)}%).
+          </li>
+        )}
+        <li>A ofensiva e a meta da turma voltam na próxima temporada.</li>
+      </ul>
+    </section>
   );
 }
 
