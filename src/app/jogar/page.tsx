@@ -3,7 +3,7 @@ import { IconeEra } from "@/components/IconeEra";
 import { BotaoLink, Etiqueta } from "@/components/ui";
 import { formatarPontos } from "@/lib/pontos";
 import { partidasDoJogador, questoesPorEra } from "@/lib/publico/jogo";
-import { ERAS, PONTUACAO_MAXIMA, QUESTOES_FINAIS, QUESTOES_POR_PARTIDA } from "@/lib/publico/regras";
+import { ERAS, eraPorId, PONTUACAO_MAXIMA, QUESTOES_FINAIS, QUESTOES_POR_PARTIDA } from "@/lib/publico/regras";
 import { obterJogador } from "@/lib/publico/sessao";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { BotaoJogar } from "./BotaoJogar";
@@ -118,7 +118,7 @@ export default async function DesafiosPublicos() {
                     className="flex items-center justify-between px-4 py-2.5 hover:bg-slate-50"
                   >
                     <span>
-                      <IconeEra era={p.era} /> {ERAS.find((e) => e.id === p.era)?.nome}{" "}
+                      <IconeEra era={p.era} /> {eraPorId(p.era)?.nome}{" "}
                       {p.vale_ranking ? <Etiqueta cor="azul">ranking</Etiqueta> : <Etiqueta>treino</Etiqueta>}
                     </span>
                     <span className="font-semibold tabular-nums">{formatarPontos(p.pontos)} pts</span>

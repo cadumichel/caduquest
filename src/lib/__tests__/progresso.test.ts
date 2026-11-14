@@ -58,7 +58,8 @@ describe("calcularProgresso", () => {
       ["d1", 0.25],
       ["d2", 1],
     ]);
-  });  it("desafios que abrem juntos ficam na ordem em que o aluno terminou", () => {
+  });
+  it("desafios que abrem juntos ficam na ordem em que o aluno terminou", () => {
     const q = calcularProgresso({
       respostas: [...resp("com", 1, 1), ...resp("sem", 0, 0)],
       desafios: [
