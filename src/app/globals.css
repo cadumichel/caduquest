@@ -32,6 +32,14 @@ body {
   -webkit-touch-callout: none;
 }
 
+/* Modo foco (questão na tela): sem o menu do aluno e com a área útil mais larga. */
+html[data-foco] .fora-do-foco {
+  display: none;
+}
+html[data-foco] .palco-aluno {
+  max-width: 80rem;
+}
+
 /* Barra do popup de clique fora: esvazia em 10 s. */
 @keyframes esvaziar {
   from {

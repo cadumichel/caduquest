@@ -1,6 +1,8 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { Gabarito } from "@/components/Gabarito";
+import { PalcoQuestao, useModoFoco } from "@/components/PalcoQuestao";
 import { QuestaoInterativa } from "@/components/QuestaoInterativa";
 import { Aviso, Botao, BotaoLink } from "@/components/ui";
 import { respostaCompleta, respostaInicial } from "@/lib/questoes/apresentacao";
@@ -19,6 +21,7 @@ export function Revisao({ pendentes }: { pendentes: number }) {
   const [correcao, setCorrecao] = useState<CorrecaoRevisao | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, iniciar] = useTransition();
+  useModoFoco(Boolean(atual && resposta && !fim));
 
   const carregar = (lista: string[]) =>
     iniciar(async () => {
@@ -77,19 +80,23 @@ export function Revisao({ pendentes }: { pendentes: number }) {
 
   const { questao, posicao, total } = atual;
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between text-sm font-medium text-slate-600">
-        <span className="font-bold text-marca-900">📚 Revisão de erros</span>
-        <span>
-          {posicao} de {total}
-        </span>
-      </div>
-      {questao.imagemUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={questao.imagemUrl} alt="" className="mx-auto max-h-80 w-auto rounded-xl border border-slate-200" />
-      )}
-      <p className="whitespace-pre-line text-lg font-medium">{questao.enunciado}</p>
-
+    <PalcoQuestao
+      enunciado={questao.enunciado}
+      imagemUrl={questao.imagemUrl}
+      topo={
+        <>
+          <div className="flex items-center justify-between text-sm font-medium text-slate-600">
+            <span className="font-bold text-marca-900">📚 Revisão de erros</span>
+            <span>
+              {posicao} de {total} ·{" "}
+              <Link href="/aluno" className="text-marca-700 underline">
+                sair
+              </Link>
+            </span>
+          </div>
+        </>
+      }
+    >
       {correcao ? (
         <div className="space-y-3">
           <Aviso tipo={correcao.fracao === 1 ? "ok" : "info"}>
@@ -115,7 +122,7 @@ export function Revisao({ pendentes }: { pendentes: number }) {
           {erro && <Aviso>{erro}</Aviso>}
           <Botao
             variante="sucesso"
-            className="w-full py-4 text-base"
+            className="sticky bottom-4 w-full py-4 text-base shadow-lg"
             disabled={pendente || !respostaCompleta(resposta)}
             onClick={() =>
               iniciar(async () => {
@@ -139,6 +146,6 @@ export function Revisao({ pendentes }: { pendentes: number }) {
           </Botao>
         </>
       )}
-    </div>
+    </PalcoQuestao>
   );
 }

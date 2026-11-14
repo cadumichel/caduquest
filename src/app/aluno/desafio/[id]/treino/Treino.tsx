@@ -1,6 +1,8 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { Gabarito } from "@/components/Gabarito";
+import { PalcoQuestao, useModoFoco } from "@/components/PalcoQuestao";
 import { QuestaoInterativa } from "@/components/QuestaoInterativa";
 import { Aviso, Botao, BotaoLink } from "@/components/ui";
 import { respostaCompleta, respostaInicial } from "@/lib/questoes/apresentacao";
@@ -23,6 +25,7 @@ export function Treino({ desafioId, titulo }: { desafioId: string; titulo: strin
   const [fim, setFim] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, iniciar] = useTransition();
+  useModoFoco(Boolean(questoes && resposta && !fim));
 
   const comecar = () =>
     iniciar(async () => {
@@ -116,22 +119,26 @@ export function Treino({ desafioId, titulo }: { desafioId: string; titulo: strin
   const questao = questoes[indice];
   const completa = respostaCompleta(resposta);
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between text-sm font-medium text-slate-600">
-        <span className="font-bold text-marca-900">🏋️ Treino · {titulo}</span>
-        <span>
-          {indice + 1} de {questoes.length}
-        </span>
-      </div>
-      <p className="rounded-lg bg-slate-100 px-3 py-2 text-center text-xs font-semibold text-slate-600">
-        Sem tempo e sem valer ranking nem XP.
-      </p>
-      {questao.imagemUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={questao.imagemUrl} alt="" className="mx-auto max-h-80 w-auto rounded-xl border border-slate-200" />
-      )}
-      <p className="whitespace-pre-line text-lg font-medium">{questao.enunciado}</p>
-
+    <PalcoQuestao
+      enunciado={questao.enunciado}
+      imagemUrl={questao.imagemUrl}
+      topo={
+        <>
+          <div className="flex items-center justify-between text-sm font-medium text-slate-600">
+            <span className="font-bold text-marca-900">🏋️ Treino · {titulo}</span>
+            <span>
+              {indice + 1} de {questoes.length} ·{" "}
+              <Link href={`/aluno/desafio/${desafioId}/resultado`} className="text-marca-700 underline">
+                sair
+              </Link>
+            </span>
+          </div>
+          <p className="rounded-lg bg-slate-100 px-3 py-2 text-center text-xs font-semibold text-slate-600">
+            Sem tempo e sem valer ranking nem XP.
+          </p>
+        </>
+      }
+    >
       {correcao ? (
         <div className="space-y-3">
           <Aviso tipo={correcao.fracao === 1 ? "ok" : "info"}>
@@ -157,7 +164,7 @@ export function Treino({ desafioId, titulo }: { desafioId: string; titulo: strin
           {erro && <Aviso>{erro}</Aviso>}
           <Botao
             variante="sucesso"
-            className="w-full py-4 text-base"
+            className="sticky bottom-4 w-full py-4 text-base shadow-lg"
             disabled={pendente || (!completa && ESCOLHA_UNICA.includes(resposta.tipo))}
             onClick={() => confirmar(questao, resposta)}
           >
@@ -165,6 +172,6 @@ export function Treino({ desafioId, titulo }: { desafioId: string; titulo: strin
           </Botao>
         </>
       )}
-    </div>
+    </PalcoQuestao>
   );
 }

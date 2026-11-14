@@ -26,6 +26,7 @@ import { montarVista } from "@/lib/questoes/apresentacao";
 import { corrigir } from "@/lib/questoes/correcao";
 import { permutacaoSemRanking, permutacaoValida } from "@/lib/questoes/embaralhar";
 import { schemaResposta, tamanhoPermutacao, type Conteudo, type Vista } from "@/lib/questoes/tipos";
+import { resumoDoDesafio, type ResumoDesafio } from "@/lib/resumo-desafio";
 import { errosParaRevisar, QUESTOES_POR_RODADA, registrarRevisao } from "@/lib/revisao";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { ehMotivoZerada } from "@/lib/tela-protegida";
@@ -39,6 +40,12 @@ export async function carregarJogo(desafioId: string, codigo?: string): Promise<
     desafioId,
     typeof codigo === "string" ? codigo.slice(0, 10) : undefined,
   );
+}
+
+/** Resumo da tela final do desafio: pontos, XP, posição, ofensiva e próximo passo. */
+export async function resumoFinal(desafioId: string): Promise<ResumoDesafio | null> {
+  const aluno = await exigirAluno();
+  return resumoDoDesafio(criarClienteAdmin(), aluno, desafioId);
 }
 
 export async function enviarResposta(

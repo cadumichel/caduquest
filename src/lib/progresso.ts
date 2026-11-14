@@ -10,6 +10,10 @@ export const XP_POR_ACERTO = 10;
 export const XP_POR_DESAFIO = 20;
 export const XP_POR_REVISAO = 5;
 
+/** XP que um desafio rende: cada questão respondida, o que acertou e o bônus de concluir. */
+export const xpDeUmDesafio = (fracoes: number[], concluido: boolean) =>
+  Math.round(fracoes.reduce((s, f) => s + XP_POR_QUESTAO + XP_POR_ACERTO * f, 0) + (concluido ? XP_POR_DESAFIO : 0));
+
 /** XP total para chegar ao nível n: 0, 100, 300, 600, 1000... */
 export const xpDoNivel = (n: number) => 50 * n * (n - 1);
 

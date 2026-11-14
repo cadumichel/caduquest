@@ -12,7 +12,7 @@ export default async function LayoutAluno({ children }: LayoutProps<"/aluno">) {
   return (
     <div className="flex flex-1 flex-col">
       <header className="sticky top-0 z-20 bg-gradient-to-r from-marca-950 via-marca-900 to-marca-800 text-white shadow-lg shadow-marca-950/20">
-        <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-2.5">
+        <div className="palco-aluno mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-2.5">
           <MarcaCabecalho href="/aluno" claro />
           <div className="flex items-center gap-3 text-sm font-medium">
             <Link href="/aluno/perfil" title="Meu perfil" aria-label="Meu perfil">
@@ -27,7 +27,7 @@ export default async function LayoutAluno({ children }: LayoutProps<"/aluno">) {
         </div>
         <NavAluno />
       </header>
-      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-6">{children}</main>
+      <main className="palco-aluno mx-auto w-full max-w-2xl flex-1 px-4 py-6">{children}</main>
     </div>
   );
 }
