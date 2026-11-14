@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Titulo, Vazio } from "@/components/ui";
+import { alunosDeTeste } from "@/lib/aluno-teste";
 import { emPedacos, lerTudo } from "@/lib/paginar";
 import { exigirProfessor } from "@/lib/professor";
 import type { Conteudo } from "@/lib/questoes/tipos";
@@ -70,12 +71,16 @@ export default async function PaginaRevisaoNoQuadro({
   );
 
   const idsDesafios = desafios.map((d) => d.id);
-  const { data: tentativas } = idsDesafios.length
-    ? await supabase.from("tentativas").select("id").in("desafio_id", idsDesafios)
-    : { data: [] };
+  const [{ data: todasTentativas }, deTeste] = await Promise.all([
+    idsDesafios.length
+      ? supabase.from("tentativas").select("id, aluno_id").in("desafio_id", idsDesafios)
+      : { data: [] as { id: string; aluno_id: string }[] },
+    alunosDeTeste(supabase, id),
+  ]);
+  const tentativas = (todasTentativas ?? []).filter((t) => !deTeste.has(t.aluno_id));
   const respostas = (
     await Promise.all(
-      emPedacos((tentativas ?? []).map((t) => t.id as string)).map((ids) =>
+      emPedacos(tentativas.map((t) => t.id as string)).map((ids) =>
         lerTudo<RespostaLida>((de, ate) =>
           supabase
             .from("respostas")

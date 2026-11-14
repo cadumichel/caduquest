@@ -50,7 +50,7 @@ export async function resumoDoDesafio(
   const [{ data: respostas }, situacao, progresso, { data: outrosBrutos }, { data: minhasBrutas }, erros] =
     await Promise.all([
       db.from("respostas").select("fracao").eq("tentativa_id", tentativa.id).not("fracao", "is", null),
-      situacaoDaTemporada(db, desafio.temporadas),
+      situacaoDaTemporada(db, desafio.temporadas, aluno.id),
       progressoDoAluno(aluno.id, aluno.turmaId),
       db.from("desafios").select("*").eq("temporada_id", desafio.temporada_id).neq("id", desafioId).order("fecha_em"),
       db

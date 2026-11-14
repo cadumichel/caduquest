@@ -52,7 +52,7 @@ export default async function Inicio() {
         .select("*, desafios!inner(temporada_id)")
         .eq("aluno_id", aluno.id)
         .eq("desafios.temporada_id", temporada.id),
-      situacaoDaTemporada(db, temporada),
+      situacaoDaTemporada(db, temporada, aluno.id),
       medalhasDaTurmaDoAluno(aluno.turmaId),
       errosParaRevisar(db, aluno.id, aluno.turmaId),
       curiosidadeDoDia(temporada),

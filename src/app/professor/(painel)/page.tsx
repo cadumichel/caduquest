@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { BotaoLink, Cartao, Etiqueta, Titulo, Vazio } from "@/components/ui";
 import { formatarData, formatarDataHora, hojeEmBrasilia } from "@/lib/datas";
+import { alunosDeTeste, descontarAlunosDeTeste } from "@/lib/aluno-teste";
 import { exigirProfessor } from "@/lib/professor";
 import {
   faseDaTemporada,
@@ -103,6 +104,10 @@ export default async function Inicio() {
       .limit(10),
   ]);
 
+  descontarAlunosDeTeste(
+    (turmasBrutas ?? []) as unknown as { id: string; alunos: { count: number }[] }[],
+    await alunosDeTeste(supabase),
+  );
   // O que a temporada já liberou sozinha no encerramento não é mais pendência.
   const gabaritosGuardados = (
     (gabaritosBrutos ?? []) as unknown as (Desafio & {

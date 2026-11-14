@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { alunosDeTeste } from "@/lib/aluno-teste";
 import { hojeEmBrasilia } from "@/lib/datas";
 import { agruparPorSemana, calcularConstancia, segundaDaSemana } from "@/lib/constancia";
 import { calcularMetaTurma, montarLigas } from "@/lib/ligas";
@@ -39,16 +40,30 @@ type TentativaRanking = {
  * Ranking completo de uma temporada. O cliente precisa poder ler alunos,
  * desafios, tentativas e respostas da turma (RLS do professor ou cliente admin).
  */
-export async function rankingDaTemporada(db: SupabaseClient, temporada: Pick<Temporada, "id" | "turma_id">) {
-  return (await situacaoDaTemporada(db, temporada)).ranking;
+export async function rankingDaTemporada(
+  db: SupabaseClient,
+  temporada: Pick<Temporada, "id" | "turma_id">,
+  verComo?: string,
+) {
+  return (await situacaoDaTemporada(db, temporada, verComo)).ranking;
 }
 
 /** Ranking, liga da semana e meta coletiva da turma, com as mesmas consultas. */
-export async function situacaoDaTemporada(db: SupabaseClient, temporada: Pick<Temporada, "id" | "turma_id">) {
-  const [{ data: alunos }, { data: desafios }] = await Promise.all([
+/**
+ * Alunos de teste ficam de fora. `verComo` é o aluno que está olhando: se ele
+ * for de teste, entra na própria visão (só ele se vê no ranking).
+ */
+export async function situacaoDaTemporada(
+  db: SupabaseClient,
+  temporada: Pick<Temporada, "id" | "turma_id">,
+  verComo?: string,
+) {
+  const [{ data: todosAlunos }, { data: desafios }, deTeste] = await Promise.all([
     db.from("alunos").select("id, apelido, avatar, cor").eq("turma_id", temporada.turma_id).eq("aprovado", true),
     db.from("desafios").select("id, tipo, abre_em, fecha_em").eq("temporada_id", temporada.id),
+    alunosDeTeste(db, temporada.turma_id),
   ]);
+  const alunos = (todosAlunos ?? []).filter((a) => !deTeste.has(a.id) || a.id === verComo);
   const idsDesafios = (desafios ?? []).map((d) => d.id);
 
   const { data: tentativas } = idsDesafios.length
@@ -68,7 +83,7 @@ export async function situacaoDaTemporada(db: SupabaseClient, temporada: Pick<Te
     : { data: [] as { tentativa_id: string; fracao: number }[] };
 
   const porAluno = new Map(
-    (alunos ?? []).map((a) => [
+    alunos.map((a) => [
       a.id,
       { alunoId: a.id, apelido: a.apelido, avatar: a.avatar, cor: a.cor, pontos: 0, somaFracoes: 0, questoes: 0 },
     ]),
@@ -77,7 +92,7 @@ export async function situacaoDaTemporada(db: SupabaseClient, temporada: Pick<Te
   const semanaAtual = segundaDaSemana(new Date().toISOString());
   const semanaDoDesafio = new Map((desafios ?? []).map((d) => [d.id as string, segundaDaSemana(d.abre_em)]));
   const liga = new Map(
-    (alunos ?? []).map((a) => [a.id as string, { alunoId: a.id as string, pontosAntes: 0, pontosSemana: 0 }]),
+    alunos.map((a) => [a.id as string, { alunoId: a.id as string, pontosAntes: 0, pontosSemana: 0 }]),
   );
   for (const t of tentativas ?? []) {
     alunoDaTentativa.set(t.id, t.aluno_id);

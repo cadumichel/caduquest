@@ -17,6 +17,8 @@ export type Aluno = {
   criado_em: string;
   /** Acessibilidade: tecla não zera a questão com pesquisa bloqueada. Nem toda consulta traz. */
   teclado_liberado?: boolean;
+  /** Perfil do professor para ver o app como aluno; fora do ranking e das contas (ausente sem o SQL dele). */
+  de_teste?: boolean;
 };
 export type Temporada = {
   id: string;

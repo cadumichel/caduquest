@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { alunosDeTeste } from "@/lib/aluno-teste";
 import type { ResultadoQuestao } from "@/lib/relatorio";
 import type { Tentativa } from "@/lib/tipos-banco";
 
@@ -28,11 +29,14 @@ export type LinhaResultado = {
 
 /** Resultados de um desafio por aluno e acerto médio por questão (cliente com RLS do professor). */
 export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string, turmaId: string) {
-  const [{ data: alunos }, { data: tentativasBrutas }] = await Promise.all([
+  const [{ data: todosAlunos }, { data: tentativasBrutas }, deTeste] = await Promise.all([
     db.from("alunos").select("id, apelido, nome_real").eq("turma_id", turmaId).eq("aprovado", true).order("apelido"),
     db.from("tentativas").select("*").eq("desafio_id", desafioId),
+    alunosDeTeste(db, turmaId),
   ]);
-  const tentativas = (tentativasBrutas ?? []) as Tentativa[];
+  // O aluno de teste do professor não entra nos resultados nem no acerto por questão.
+  const alunos = (todosAlunos ?? []).filter((a) => !deTeste.has(a.id));
+  const tentativas = ((tentativasBrutas ?? []) as Tentativa[]).filter((t) => !deTeste.has(t.aluno_id));
   const { data: respostas } = tentativas.length
     ? await db
         .from("respostas")
@@ -114,7 +118,7 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
   }
 
   const tentativaDoAluno = new Map(tentativas.map((t) => [t.aluno_id, t]));
-  const linhas: LinhaResultado[] = (alunos ?? []).map((a) => {
+  const linhas: LinhaResultado[] = alunos.map((a) => {
     const t = tentativaDoAluno.get(a.id);
     const agg = t ? porTentativa.get(t.id) : undefined;
     return {

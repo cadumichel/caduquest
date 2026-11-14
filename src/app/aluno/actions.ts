@@ -152,7 +152,7 @@ export async function salvarVisual(fundo: number, titulo: string | null): Promis
   const medalhas = medalhasTurma.get(aluno.id) ?? 0;
   if (!fundoLiberado(fundo, { nivel: progresso.nivel, medalhas })) return { erro: "Esse fundo ainda está bloqueado." };
   if (titulo !== null) {
-    const { eu } = rankingParaAluno(temporada ? await rankingDaTemporada(db, temporada) : [], aluno.id);
+    const { eu } = rankingParaAluno(temporada ? await rankingDaTemporada(db, temporada, aluno.id) : [], aluno.id);
     const conquistas = calcularConquistas(progresso, {
       posicao: eu?.posicao ?? null,
       pontos: eu?.pontos ?? 0,

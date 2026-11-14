@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { alunosDeTeste } from "@/lib/aluno-teste";
 import { formatarDataHora } from "@/lib/datas";
 import { exigirProfessor } from "@/lib/professor";
 import { formatarPontos } from "@/lib/pontos";
@@ -95,7 +96,8 @@ export async function GET(_: Request, ctx: RouteContext<"/professor/temporadas/[
       "Pontos",
     ],
   ];
-  for (const a of alunos ?? []) {
+  const deTeste = await alunosDeTeste(supabase, temporada.turma_id);
+  for (const a of (alunos ?? []).filter((a) => !deTeste.has(a.id))) {
     for (const d of desafios) {
       const t = tentativas.get(`${a.id}:${d.id}`);
       const respostas = new Map((t?.respostas ?? []).map((r) => [r.questao_id, r]));

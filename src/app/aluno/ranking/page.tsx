@@ -24,7 +24,7 @@ export default async function Ranking() {
   if (!temporada) return <Vazio>Ainda não há temporada.</Vazio>;
 
   const [{ ranking, meta, ligas }, medalhas] = await Promise.all([
-    situacaoDaTemporada(db, temporada),
+    situacaoDaTemporada(db, temporada, aluno.id),
     medalhasDaTurmaDoAluno(aluno.turmaId),
   ]);
   const { top, eu, total } = rankingParaAluno(ranking, aluno.id);
