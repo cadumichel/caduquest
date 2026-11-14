@@ -40,6 +40,13 @@ html[data-foco] .palco-aluno {
   max-width: 80rem;
 }
 
+/* Início do aluno: em tela larga usa duas colunas, então a página e o cabeçalho alargam. */
+@media (min-width: 1024px) {
+  body:has(.inicio-largo) .palco-aluno {
+    max-width: 64rem;
+  }
+}
+
 /* Barra do popup de clique fora: esvazia em 10 s. */
 @keyframes esvaziar {
   from {
