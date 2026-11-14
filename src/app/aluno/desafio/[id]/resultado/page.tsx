@@ -1,3 +1,4 @@
+import { consultaPorAluno, consultaVazia, resumoConsulta } from "@/lib/consulta";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Gabarito } from "@/components/Gabarito";
@@ -63,6 +64,12 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
     .eq("tentativa_id", tentativa.id)
     .order("posicao");
   const respostas = (respostasBrutas ?? []) as RespostaBanco[];
+  // Recado só no resultado de um desafio sem consulta, que é onde a diferença aparece.
+  const consulta = resumoConsulta(
+    desafio.saida_zera_questao
+      ? ((await consultaPorAluno(db, { temporadaId: desafio.temporada_id }, aluno.id)).get(aluno.id) ?? consultaVazia())
+      : consultaVazia(),
+  );
   const respondidas = respostas.filter((r) => r.fracao !== null);
   const acertos = respondidas.reduce((s, r) => s + Number(r.fracao), 0);
   const total = tentativa.ordem.length;
@@ -93,6 +100,13 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
           <p className="text-sm text-slate-500">acertos</p>
         </Cartao>
       </div>
+
+      {consulta.faltaFixar && (
+        <Aviso tipo="info">
+          📖 Nesta temporada você acertou <b>{consulta.com}%</b> com consulta e <b>{consulta.sem}%</b> sem consulta.
+          Você sabe achar a resposta na apostila; falta fixar. A revisão de erros e o treino ajudam nisso.
+        </Aviso>
+      )}
 
       {desafio.gabarito_nunca ? (
         <Aviso tipo="info">O professor escolheu não mostrar o gabarito deste desafio.</Aviso>

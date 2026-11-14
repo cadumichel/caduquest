@@ -1,3 +1,4 @@
+import { consultaPorAluno, DIFERENCA_RELEVANTE, resumoConsulta, somarConsultas } from "@/lib/consulta";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -379,14 +380,20 @@ async function AbaTemporada({
     );
   }
   const { supabase } = await exigirProfessor();
-  const [{ data: desafiosBrutos }, ranking] = await Promise.all([
+  const [{ data: desafiosBrutos }, ranking, consultas] = await Promise.all([
     supabase
       .from("desafios")
       .select("*, desafio_questoes(count), tentativas(aluno_id, concluida_em)")
       .eq("temporada_id", temporada.id)
       .order("abre_em", { ascending: false }),
     rankingDaTemporada(supabase, temporada),
+    consultaPorAluno(supabase, { temporadaId: temporada.id }),
   ]);
+  const consultaTurma = resumoConsulta(somarConsultas(consultas.values()));
+  const faltaFixar = ranking.filter((l) => {
+    const c = consultas.get(l.alunoId);
+    return c && resumoConsulta(c).faltaFixar;
+  });
   const desafios = (desafiosBrutos ?? []) as DesafioLista[];
   const encerrada = !!temporada.encerrada_em;
   const faseAtual = fase(temporada);
@@ -436,11 +443,20 @@ async function AbaTemporada({
             )
           )}
         </p>
-        {faseAtual === "pontos" && (
-          <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
+          {jaAbriram.length > 0 && (
+            <Link
+              href={`/professor/turmas/${temporada.turma_id}/revisao?temporada=${temporada.id}`}
+              className="rounded-xl border border-marca-200 bg-white px-4 py-2 text-sm font-medium text-marca-700 hover:border-marca-400 hover:bg-marca-50"
+              title="As questões em que a turma mais errou, em letras grandes para projetar"
+            >
+              📺 Revisão no quadro
+            </Link>
+          )}
+          {faseAtual === "pontos" && (
             <BotaoLink href={`/professor/desafios/novo?temporada=${temporada.id}`}>+ Novo desafio</BotaoLink>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {faseAtual !== "encerrada" && (jaAbriram.length > 0 || diasProva >= 0) && (
@@ -455,6 +471,15 @@ async function AbaTemporada({
               <strong className="tabular-nums">{acertoMedio}%</strong> de acerto médio
             </span>
           )}
+          {consultaTurma.com !== null && consultaTurma.sem !== null && (
+            <span
+              className="rounded-full border border-slate-200 bg-white px-3 py-1"
+              title="Acerto médio da turma nos desafios com pesquisa liberada e nos de pesquisa bloqueada"
+            >
+              com consulta <strong className="tabular-nums">{consultaTurma.com}%</strong> · sem consulta{" "}
+              <strong className="tabular-nums">{consultaTurma.sem}%</strong>
+            </span>
+          )}
           <AvisoAlunos
             alunos={naoComecaram.map((l) => nomes.get(l.alunoId) ?? l.apelido)}
             um="aluno não começou nenhum desafio"
@@ -464,6 +489,11 @@ async function AbaTemporada({
             alunos={pararam.map((l) => nomes.get(l.alunoId) ?? l.apelido)}
             um="aluno parou no meio de um desafio aberto"
             varios="alunos pararam no meio de um desafio aberto"
+          />
+          <AvisoAlunos
+            alunos={faltaFixar.map((l) => nomes.get(l.alunoId) ?? l.apelido)}
+            um={`aluno acerta bem mais com consulta do que sem (${DIFERENCA_RELEVANTE} pontos ou mais)`}
+            varios={`alunos acertam bem mais com consulta do que sem (${DIFERENCA_RELEVANTE} pontos ou mais)`}
           />
           {diasProva >= 0 && (
             <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
