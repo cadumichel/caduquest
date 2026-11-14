@@ -28,6 +28,7 @@ import { rankingParaAluno } from "@/lib/ranking";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { rankingDaTemporada } from "@/lib/temporada-dados";
 import { EscolherAvatar } from "./EscolherAvatar";
+import { ComoGanharXp } from "@/components/ComoGanharXp";
 import { PersonalizarPerfil } from "./PersonalizarPerfil";
 import { formatarPontos } from "@/lib/pontos";
 
@@ -125,6 +126,8 @@ export default async function Perfil() {
           <Numero valor={`+${eu?.bonus ?? 0}`} rotulo="pts de bônus da ofensiva" />
         </div>
       </section>
+
+      <ComoGanharXp />
 
       <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="mb-3 font-extrabold text-marca-900">📜 Ficha do historiador</h2>

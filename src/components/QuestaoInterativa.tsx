@@ -675,11 +675,27 @@ function CausaConsequencia({
     const proxima = ligacoes.findIndex((c, i) => c === null && i !== causa);
     setAberta(proxima >= 0 ? proxima : null);
   };
+  const ligadas = resposta.ligacoes.filter((c) => c !== null && c !== undefined).length;
+  const sobram = vista.consequencias.length - vista.causas.length;
   return (
     <div className="space-y-3">
-      <p className="text-sm text-slate-500">
-        Toque em cada causa e escolha a consequência dela. Sobra consequência: nem todas se encaixam.
-      </p>
+      <div className="rounded-xl border border-marca-200 bg-marca-50 p-3 text-sm text-marca-900">
+        <p className="font-bold">Como responder</p>
+        <p>
+          Cada <b>causa</b> abaixo provocou um acontecimento. Embaixo de cada causa, toque em{" "}
+          <b>“Escolher a consequência”</b> e marque o que aquela causa provocou.
+        </p>
+        {sobram > 0 && (
+          <p className="mt-1">
+            Atenção: há {sobram}{" "}
+            {sobram === 1 ? "consequência a mais, que não combina" : "consequências a mais, que não combinam"} com
+            nenhuma causa.
+          </p>
+        )}
+        <p className="mt-1 text-xs font-semibold text-marca-700">
+          {ligadas} de {vista.causas.length} causas com consequência escolhida
+        </p>
+      </div>
       <ol className="space-y-3">
         {vista.causas.map((causa, i) => {
           const escolhida = resposta.ligacoes[i];
@@ -697,22 +713,28 @@ function CausaConsequencia({
                 className="w-full p-3 text-left"
               >
                 <span className="flex items-center gap-1 text-xs font-bold tracking-wide text-amber-700 uppercase">
-                  Causa {travada && <Cadeado />}
+                  Causa {i + 1} {travada && <Cadeado />}
                 </span>
                 <span className="block">{causa}</span>
-                <span className="mt-2 flex items-start gap-2 text-sm">
-                  <span className="text-marca-600">↓</span>
-                  {escolhida !== null && escolhida !== undefined ? (
-                    <span className="flex-1 rounded-lg bg-marca-50 px-2 py-1 text-marca-900">
-                      {vista.consequencias[escolhida]}
-                    </span>
-                  ) : (
-                    <span className="flex-1 text-slate-400">Toque para escolher a consequência</span>
-                  )}
+                <span className="mt-2 block text-xs font-bold tracking-wide text-marca-600 uppercase">
+                  ↓ Consequência
                 </span>
+                {escolhida !== null && escolhida !== undefined ? (
+                  <span className="mt-1 block rounded-lg bg-marca-50 px-2 py-1 text-sm text-marca-900">
+                    {vista.consequencias[escolhida]}
+                    {!travada && <span className="ml-1 text-xs text-marca-600">(toque para trocar)</span>}
+                  </span>
+                ) : (
+                  <span className="mt-1 block rounded-lg border-2 border-dashed border-marca-300 px-2 py-1.5 text-sm font-semibold text-marca-700">
+                    👉 Escolher a consequência
+                  </span>
+                )}
               </button>
               {aberto && (
                 <ul className="space-y-1.5 border-t border-slate-100 p-2">
+                  <li className="px-1 text-xs font-semibold text-slate-500">
+                    O que a causa {i + 1} provocou? Toque em uma opção:
+                  </li>
                   {vista.consequencias.map((texto, c) => {
                     const dona = resposta.ligacoes.indexOf(c);
                     if (removidas.has(c)) {

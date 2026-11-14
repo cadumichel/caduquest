@@ -59,9 +59,13 @@ export function cliquesRestantes(d: ComRegraCliques, usados: number): number | n
 
 /** Aviso ao aluno depois de um clique fora tolerado. Não cita o mouse. */
 export function avisoCliqueTolerado(restantes: number) {
-  return restantes > 0
-    ? `⚠️ Atenção: clique só nas alternativas e nos botões. Mais ${restantes} ${restantes === 1 ? "clique" : "cliques"} fora e a questão em que você estiver vale zero.`
-    : "⚠️ Último aviso: o próximo clique fora das alternativas e dos botões faz a questão valer zero.";
+  return {
+    titulo: "Você clicou fora da questão",
+    texto:
+      restantes > 0
+        ? `Clique só nas alternativas e nos botões. Você ainda tem ${restantes} ${restantes === 1 ? "clique" : "cliques"} fora até a questão ser zerada.`
+        : "Último aviso: o próximo clique fora das alternativas e dos botões zera a questão.",
+  };
 }
 
 /** Resumo da regra para o professor. */
