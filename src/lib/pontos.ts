@@ -9,6 +9,10 @@ export const formatarPontos = (p: number | string | null | undefined) =>
 
 const FORMATO_ACERTOS = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
 
+/** Só o número de acertos, com vírgula e no máximo 1 casa: "9,4". */
+export const formatarNumeroAcertos = (acertos: number | string | null | undefined) =>
+  FORMATO_ACERTOS.format(Number(acertos ?? 0));
+
 /** Acertos com crédito parcial para exibir: "9,4 de 12". */
 export const formatarAcertos = (acertos: number | string | null | undefined, total: number) =>
-  `${FORMATO_ACERTOS.format(Number(acertos ?? 0))} de ${total}`;
+  `${formatarNumeroAcertos(acertos)} de ${total}`;

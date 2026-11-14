@@ -8,13 +8,23 @@ export type ResultadoQuestao = {
   zerada: boolean;
   /** Zerada porque o aluno errou a verificação de leitura. */
   verificacaoErrada?: boolean;
+  /** Por que foi zerada (só o professor vê). */
+  motivo?: string | null;
+};
+
+const ROTULO_ZERADA: Record<string, string> = {
+  saida: "zerada (saiu da tela)",
+  teclado: "zerada (apertou tecla)",
+  clique_fora: "zerada (clique fora)",
+  tela_alterada: "zerada (tela alterada)",
+  sem_mouse: "zerada (sem mexer o mouse)",
 };
 
 /** Rótulo para o relatório: acertou, errou, parcial ou sem resposta. */
 export function rotuloResultado(r: ResultadoQuestao | undefined): string {
   if (!r || r.fracao === null) return r ? "sem resposta" : "não respondeu";
   if (r.verificacaoErrada) return "zerada (errou a verificação)";
-  if (r.zerada) return "zerada (saiu da tela)";
+  if (r.zerada) return ROTULO_ZERADA[r.motivo ?? ""] ?? "zerada (saiu da tela)";
   if (r.esgotada && r.fracao === 0) return "tempo esgotado";
   if (r.fracao >= 1) return "acertou";
   if (r.fracao <= 0) return "errou";

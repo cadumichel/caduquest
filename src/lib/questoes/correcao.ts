@@ -192,3 +192,15 @@ export const JANELA_APOS_FECHAR_S = 180 + FOLGA_SEGUNDOS;
 export function tempoEsgotado(servidaEm: Date, agora: Date, limiteSegundos: number): boolean {
   return agora.getTime() - servidaEm.getTime() > (limiteSegundos + FOLGA_SEGUNDOS) * 1000;
 }
+
+/**
+ * Para registrar "tempo esgotado": além do envio depois da folga, conta o
+ * envio vazio que a tela faz sozinha quando o cronômetro zera (ele chega
+ * dentro da folga). Não muda a nota, só o registro.
+ */
+export function tempoAcabou(servidaEm: Date, agora: Date, limiteSegundos: number, semResposta: boolean): boolean {
+  return (
+    tempoEsgotado(servidaEm, agora, limiteSegundos) ||
+    (semResposta && agora.getTime() - servidaEm.getTime() >= (limiteSegundos - 1) * 1000)
+  );
+}

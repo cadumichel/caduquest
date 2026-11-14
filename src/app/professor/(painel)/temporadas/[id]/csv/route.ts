@@ -32,6 +32,7 @@ type TentativaRelatorio = {
     fracao: number | null;
     pontos: number | null;
     tempo_esgotado: boolean;
+    motivo_zerada?: string | null;
     zerada_por_saida: boolean;
     resposta: unknown;
     permutacao: number[] | null;
@@ -70,7 +71,7 @@ export async function GET(_: Request, ctx: RouteContext<"/professor/temporadas/[
     supabase
       .from("tentativas")
       .select(
-        "aluno_id, desafio_id, respostas(questao_id, fracao, pontos, tempo_esgotado, zerada_por_saida, resposta, permutacao), desafios!inner(temporada_id)",
+        "aluno_id, desafio_id, respostas(questao_id, fracao, pontos, tempo_esgotado, zerada_por_saida, motivo_zerada, resposta, permutacao), desafios!inner(temporada_id)",
       )
       .eq("desafios.temporada_id", id),
   ]);
@@ -108,6 +109,8 @@ export async function GET(_: Request, ctx: RouteContext<"/professor/temporadas/[
           fracao: r.fracao === null ? null : Number(r.fracao),
           esgotada: r.tempo_esgotado,
           zerada: r.zerada_por_saida,
+          verificacaoErrada: r.motivo_zerada === "verificacao",
+          motivo: r.motivo_zerada,
         };
         const escolha = escolhaEmTexto(
           { tipo: q.tipo, conteudo: q.conteudo } as Conteudo,

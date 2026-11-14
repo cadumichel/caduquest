@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { montarVista } from "../questoes/apresentacao";
-import { calcularPontos, corrigir, pontosComRapidez, tempoEsgotado } from "../questoes/correcao";
+import { calcularPontos, corrigir, pontosComRapidez, tempoAcabou, tempoEsgotado } from "../questoes/correcao";
 import { permutacaoAleatoria } from "../questoes/embaralhar";
 import { validarConteudo, type Conteudo } from "../questoes/tipos";
 
@@ -90,6 +90,13 @@ describe("pontos e tempo", () => {
     const servida = new Date("2026-10-24T12:00:00Z");
     expect(tempoEsgotado(servida, new Date("2026-10-24T12:00:42Z"), 40)).toBe(false);
     expect(tempoEsgotado(servida, new Date("2026-10-24T12:00:44Z"), 40)).toBe(true);
+  });
+  it("registra como tempo esgotado o envio vazio da tela quando o cronômetro zera", () => {
+    const servida = new Date("2026-10-24T12:00:00Z");
+    expect(tempoAcabou(servida, new Date("2026-10-24T12:00:41Z"), 40, true)).toBe(true);
+    expect(tempoAcabou(servida, new Date("2026-10-24T12:00:41Z"), 40, false)).toBe(false);
+    expect(tempoAcabou(servida, new Date("2026-10-24T12:00:20Z"), 40, true)).toBe(false);
+    expect(tempoAcabou(servida, new Date("2026-10-24T12:00:44Z"), 40, false)).toBe(true);
   });
   it("permutação aleatória contém todos os índices", () => {
     expect([...permutacaoAleatoria(5)].sort()).toEqual([0, 1, 2, 3, 4]);

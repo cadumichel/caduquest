@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { arredondarPontos } from "@/lib/pontos";
 import { ajudaNaVista, candidatasEliminacao, respostaComAjuda, type AjudaVista } from "@/lib/questoes/ajudas";
 import { montarVista } from "@/lib/questoes/apresentacao";
-import { corrigir, tempoEsgotado } from "@/lib/questoes/correcao";
+import { corrigir, tempoAcabou, tempoEsgotado } from "@/lib/questoes/correcao";
 import { permutacaoAleatoria } from "@/lib/questoes/embaralhar";
 import { tamanhoPermutacao, type Conteudo, type Resposta, type Vista } from "@/lib/questoes/tipos";
 import { AVISO_ZERADA, type MotivoZerada } from "@/lib/tela-protegida";
@@ -242,6 +242,8 @@ async function registrar(
   saidasTela: number,
   motivo: MotivoZerada | null,
 ): Promise<MotivoZerada | null> {
+  // A tela manda a resposta vazia sozinha quando o cronômetro zera.
+  const semResposta = resposta === null && motivo === null;
   // Os itens travados pelas eliminações valem como estão na tela.
   resposta = respostaComAjuda(comoConteudo(questao), linha.permutacao, linha.eliminadas, resposta);
   const agora = new Date();
@@ -257,7 +259,7 @@ async function registrar(
       resposta,
       fracao,
       pontos,
-      tempo_esgotado: esgotado,
+      tempo_esgotado: tempoAcabou(new Date(linha.servida_em), agora, questao.tempo_limite_s, semResposta),
       motivo_zerada: causa,
       saidas_tela: Math.max(0, Math.min(saidasTela, 999)),
     })

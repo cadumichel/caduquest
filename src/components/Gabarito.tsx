@@ -94,8 +94,8 @@ export function Gabarito({
                 </span>
                 <span className="flex-1">{a.texto}</span>
                 {resposta && (
-                  <span className={acertou ? "text-emerald-700" : "text-red-700"}>
-                    {v === undefined || v === null ? "–" : acertou ? "✓" : "✗"}
+                  <span className={`shrink-0 whitespace-nowrap ${acertou ? "text-emerald-700" : "text-red-700"}`}>
+                    {v === undefined || v === null ? "–" : acertou ? "✓" : `✗ (marcou ${v ? "V" : "F"})`}
                   </span>
                 )}
               </li>
@@ -113,9 +113,7 @@ export function Gabarito({
               <span className="w-6 font-bold text-marca-700">{i + 1}º</span>
               <span className="flex-1">
                 {f}
-                {ordem && ordem[i] !== i && (
-                  <ColocadoAqui rotulo={rotulo} texto={conteudo.conteudo.frases[ordem[i]]} />
-                )}
+                {ordem && ordem[i] !== i && <ColocadoAqui rotulo={rotulo} texto={conteudo.conteudo.frases[ordem[i]]} />}
               </span>
               {ordem && (
                 <span className={ordem[i] === i ? "text-emerald-700" : "text-red-700"}>

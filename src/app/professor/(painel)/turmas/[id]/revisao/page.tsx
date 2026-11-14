@@ -141,7 +141,9 @@ export default async function PaginaRevisaoNoQuadro({
 
       {!comAbertos && abertos.length > 0 && (
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          {abertos.length === 1 ? "Há 1 desafio aberto" : `Há ${abertos.length} desafios abertos`} que ficou de fora,
+          {abertos.length === 1
+            ? "Há 1 desafio aberto que ficou de fora,"
+            : `Há ${abertos.length} desafios abertos que ficaram de fora,`}{" "}
           porque a revisão mostra o gabarito.{" "}
           <Link href={aqui("abertos=1")} className="font-medium underline">
             Incluir mesmo assim

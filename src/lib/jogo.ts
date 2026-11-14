@@ -7,6 +7,7 @@ import {
   corrigir,
   JANELA_APOS_FECHAR_S,
   pontosComRapidez,
+  tempoAcabou,
   tempoEsgotado,
 } from "@/lib/questoes/correcao";
 import { codigoConfere, LIMITE_TENTATIVAS_CODIGO } from "@/lib/cadurush";
@@ -248,6 +249,8 @@ async function registrar(
   saidasTela: number,
   motivo: MotivoZerada | null,
 ): Promise<MotivoZerada | null> {
+  // A tela manda a resposta vazia sozinha quando o cronômetro zera.
+  const semResposta = resposta === null && motivo === null;
   // Os itens travados pelas eliminações valem como estão na tela.
   resposta = respostaComAjuda(comoConteudo(questao), linha.permutacao, linha.eliminadas, resposta);
   const agora = new Date();
@@ -269,7 +272,7 @@ async function registrar(
       fracao: verificar ? 0 : fracao,
       pontos: verificar ? 0 : pontosDaResposta(desafio, fracao, new Date(linha.servida_em), agora, questao),
       ...(verificar && { verificacao_fracao: fracao }),
-      tempo_esgotado: esgotado,
+      tempo_esgotado: tempoAcabou(new Date(linha.servida_em), agora, tempoDaQuestao(desafio, questao), semResposta),
       zerada_por_saida: zerada,
       motivo_zerada: causa,
       saidas_tela: Math.max(0, Math.min(saidasTela, 999)),
