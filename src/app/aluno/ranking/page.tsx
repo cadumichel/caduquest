@@ -87,7 +87,7 @@ export default async function Ranking() {
         </Cartao>
       )}
       <p className="text-center text-xs text-slate-500">
-        {total} alunos na turma. Aqui os pontos somam a temporada inteira, com o bônus da ofensiva (🔥) e o da meta da
+        {total} {total === 1 ? "aluno" : "alunos"} na turma. Aqui os pontos somam a temporada inteira, com o bônus da ofensiva (🔥) e o da meta da
         turma (🤝). Desempate pela maior taxa de acerto. Só o top 10 aparece para todos. 🏅 = desafios vencidos.
       </p>
     </div>

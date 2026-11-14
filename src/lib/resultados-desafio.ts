@@ -82,6 +82,7 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
       esgotada: r.tempo_esgotado,
       zerada: r.zerada_por_saida,
       verificacaoErrada: r.motivo_zerada === "verificacao",
+      motivo: r.motivo_zerada,
     });
     detalhe.set(r.tentativa_id, doAluno);
     const agg = porTentativa.get(r.tentativa_id) ?? {

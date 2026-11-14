@@ -55,6 +55,7 @@ export const progressoDoAluno = cache(async (alunoId: string, turmaId: string) =
     abre_em: t.desafios.abre_em,
     questoes: t.ordem.length,
     concluido: Boolean(t.concluida_em || t.indice_atual >= t.ordem.length),
+    concluidoEm: t.concluida_em,
   }));
 
   return calcularProgresso({

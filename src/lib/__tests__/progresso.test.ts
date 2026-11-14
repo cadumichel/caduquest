@@ -58,6 +58,17 @@ describe("calcularProgresso", () => {
       ["d1", 0.25],
       ["d2", 1],
     ]);
+  });  it("desafios que abrem juntos ficam na ordem em que o aluno terminou", () => {
+    const q = calcularProgresso({
+      respostas: [...resp("com", 1, 1), ...resp("sem", 0, 0)],
+      desafios: [
+        { ...desafio("sem", 9), concluidoEm: "2026-11-09T12:30:00Z" },
+        { ...desafio("com", 9), concluidoEm: "2026-11-09T12:00:00Z" },
+      ],
+      questoes,
+      revisoesAcertadas: 0,
+    });
+    expect(q.historico.map((h) => h.id)).toEqual(["com", "sem"]);
   });
 });
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { celulaCsv, escolhaEmTexto, marcaResultado, rotuloResultado } from "../relatorio";
 
-const r = (fracao: number | null, extra: { esgotada?: boolean; zerada?: boolean } = {}) => ({
+const r = (fracao: number | null, extra: { esgotada?: boolean; zerada?: boolean; motivo?: string } = {}) => ({
   fracao,
   esgotada: false,
   zerada: false,
@@ -19,6 +19,8 @@ describe("relatório de desempenho", () => {
   it("explica o zero por tempo ou por sair da tela", () => {
     expect(rotuloResultado(r(0, { esgotada: true }))).toBe("tempo esgotado");
     expect(rotuloResultado(r(0, { zerada: true }))).toBe("zerada (saiu da tela)");
+    expect(rotuloResultado(r(0, { zerada: true, motivo: "teclado" }))).toBe("zerada (apertou tecla)");
+    expect(rotuloResultado(r(0, { zerada: true, motivo: "clique_fora" }))).toBe("zerada (clique fora)");
   });
 
   it("marca a grade da tela", () => {

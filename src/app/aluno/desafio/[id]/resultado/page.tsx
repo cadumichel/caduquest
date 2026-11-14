@@ -21,7 +21,7 @@ import {
   type Tentativa,
   ultimoDiaComPontos,
 } from "@/lib/tipos-banco";
-import { formatarPontos } from "@/lib/pontos";
+import { formatarNumeroAcertos, formatarPontos } from "@/lib/pontos";
 
 export const metadata: Metadata = { title: "Resultado" };
 
@@ -94,8 +94,8 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
         </Cartao>
         <Cartao>
           <p className="text-3xl font-extrabold">
-            {Math.round(acertos * 10) / 10}
-            <span className="text-lg text-slate-400">/{total}</span>
+            {formatarNumeroAcertos(acertos)}
+            <span className="text-lg text-slate-400"> de {total}</span>
           </p>
           <p className="text-sm text-slate-500">acertos</p>
         </Cartao>

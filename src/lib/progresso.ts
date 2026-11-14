@@ -39,6 +39,8 @@ export type DesafioProgresso = {
   /** Total de questões do desafio. */
   questoes: number;
   concluido: boolean;
+  /** Quando o aluno terminou: desempata desafios que abrem no mesmo horário. */
+  concluidoEm?: string | null;
 };
 export type QuestaoProgresso = { habilidades: string[]; capitulo: string | null };
 
@@ -94,7 +96,7 @@ export function calcularProgresso({
   for (const r of respostas) somaPorDesafio.set(r.desafioId, (somaPorDesafio.get(r.desafioId) ?? 0) + r.fracao);
   const historico = concluidos
     .filter((d) => d.questoes > 0)
-    .sort((a, b) => a.abre_em.localeCompare(b.abre_em))
+    .sort((a, b) => a.abre_em.localeCompare(b.abre_em) || (a.concluidoEm ?? "").localeCompare(b.concluidoEm ?? ""))
     .map((d) => ({
       id: d.id,
       titulo: d.titulo,

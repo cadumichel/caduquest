@@ -97,6 +97,7 @@ export default async function RespostasDoAluno({ params }: PageProps<"/professor
                           esgotada: r.tempo_esgotado,
                           zerada: r.zerada_por_saida,
                           verificacaoErrada: r.motivo_zerada === "verificacao",
+                          motivo: r.motivo_zerada,
                         },
                       )}
                     </Etiqueta>

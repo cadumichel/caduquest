@@ -294,7 +294,7 @@ export function MontarDesafio({
                 {regras.verificacoes === "0"
                   ? " · sem questões teste"
                   : regras.verificacoes
-                    ? ` · ${regras.verificacoes} questões teste`
+                    ? ` · ${regras.verificacoes} ${regras.verificacoes === "1" ? "questão teste" : "questões teste"}`
                     : ""}
               </span>{" "}
               <span className="text-marca-700">Alterar só neste desafio</span>

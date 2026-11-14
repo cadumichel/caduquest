@@ -70,7 +70,7 @@ export function MuralRanking({
             </ol>
           )}
           <p className="bg-white px-5 pb-3 pt-1 text-center text-xs text-slate-500">
-            {total} alunos na turma · só o top 10 aparece para todos
+            {total} {total === 1 ? "aluno" : "alunos"} na turma · só o top 10 aparece para todos
           </p>
         </>
       )}

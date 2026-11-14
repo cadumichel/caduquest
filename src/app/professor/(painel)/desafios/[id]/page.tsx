@@ -79,10 +79,11 @@ export default async function PaginaDesafioProfessor({ params, searchParams }: P
   const comecaram = linhas.filter((l) => l.situacao !== "não fez").length;
   const padroes = await padroesDoProfessor(supabase);
   const verificacoes = desafio.verificacoes ?? null;
+  const nVerificacoes = verificacoes ?? verificacoesAutomaticas(questoes.length);
   const textoVerificacoes =
     verificacoes === 0
       ? "sem questões teste"
-      : `${verificacoes ?? verificacoesAutomaticas(questoes.length)} ${verificacoes === 1 ? "questão teste" : "questões teste"}${verificacoes === null ? " (automático)" : ""}`;
+      : `${nVerificacoes} ${nVerificacoes === 1 ? "questão teste" : "questões teste"}${verificacoes === null ? " (automático)" : ""}`;
 
   const feitas = linhas.filter((l) => l.situacao !== "não fez");
   const mediaAcerto =
