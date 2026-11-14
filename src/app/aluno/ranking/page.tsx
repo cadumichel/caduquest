@@ -9,8 +9,9 @@ import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { situacaoDaTemporada } from "@/lib/temporada-dados";
 import { MetaTurma } from "@/components/MetaTurma";
 import { ComoGanharBonus } from "@/components/ComoGanharBonus";
-import type { Divisao } from "@/lib/ligas";
+import { ligaFazSentido, type Divisao } from "@/lib/ligas";
 import { formatarPontos } from "@/lib/pontos";
+import { ultimoDiaComPontos } from "@/lib/tipos-banco";
 
 export const metadata: Metadata = { title: "Ranking" };
 
@@ -28,7 +29,10 @@ export default async function Ranking() {
   ]);
   const { top, eu, total } = rankingParaAluno(ranking, aluno.id);
   const euNoTop = eu && top.some((l) => l.alunoId === eu.alunoId);
-  const minhaLiga = ligas.find((l) => l.membros.some((m) => m.alunoId === aluno.id));
+  const ligaDoAluno = ligas.find((l) => l.membros.some((m) => m.alunoId === aluno.id));
+  // Em temporada curta ou semana sem pontos, a liga só repetiria o ranking geral.
+  const minhaLiga =
+    ligaDoAluno && ligaFazSentido(temporada.inicio, ultimoDiaComPontos(temporada), ligaDoAluno) ? ligaDoAluno : null;
   const linhaDe = new Map(ranking.map((l) => [l.alunoId, l]));
 
   return (
@@ -53,7 +57,7 @@ export default async function Ranking() {
 
       <MetaTurma meta={meta} />
 
-      <ComoGanharBonus />
+      <ComoGanharBonus comLiga={Boolean(minhaLiga)} />
 
       <h2 className="text-lg font-extrabold text-marca-900">Ranking geral da temporada</h2>
       <Cartao className="p-0">

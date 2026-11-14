@@ -25,3 +25,16 @@ export function permutacaoValida(permutacao: unknown, n: number): permutacao is 
     permutacao.every((i) => Number.isInteger(i) && i >= 0 && i < n)
   );
 }
+
+/** Formatos em que a explicação cita as alternativas pela letra ("B) ..."). */
+const TIPOS_COM_LETRAS = ["multipla_escolha", "interpretacao", "quem_disse"];
+
+/**
+ * Permutação para o treino e a revisão, que não valem ranking: nos formatos
+ * com letras as alternativas ficam na ordem original, para as letras da
+ * questão baterem com as do gabarito e da explicação. Os outros formatos
+ * (ordenar, ligar pares...) continuam embaralhados, senão a resposta apareceria pronta.
+ */
+export function permutacaoSemRanking(tipo: string, n: number, aleatorio: () => number = Math.random): number[] {
+  return TIPOS_COM_LETRAS.includes(tipo) ? Array.from({ length: n }, (_, i) => i) : permutacaoAleatoria(n, aleatorio);
+}

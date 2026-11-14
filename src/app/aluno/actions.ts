@@ -24,7 +24,7 @@ import {
 import { corrigirTreino, iniciarTreino, type ItemTreino } from "@/lib/treino";
 import { montarVista } from "@/lib/questoes/apresentacao";
 import { corrigir } from "@/lib/questoes/correcao";
-import { permutacaoAleatoria, permutacaoValida } from "@/lib/questoes/embaralhar";
+import { permutacaoSemRanking, permutacaoValida } from "@/lib/questoes/embaralhar";
 import { schemaResposta, tamanhoPermutacao, type Conteudo, type Vista } from "@/lib/questoes/tipos";
 import { errosParaRevisar, QUESTOES_POR_RODADA, registrarRevisao } from "@/lib/revisao";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
@@ -196,7 +196,7 @@ export async function proximaRevisao(
     .single();
   if (!q) return null;
   const conteudo = { tipo: q.tipo, conteudo: q.conteudo } as Conteudo;
-  const permutacao = permutacaoAleatoria(tamanhoPermutacao(conteudo));
+  const permutacao = permutacaoSemRanking(conteudo.tipo, tamanhoPermutacao(conteudo));
   return {
     questao: {
       id: q.id,

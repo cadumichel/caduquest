@@ -13,8 +13,15 @@ export type ContagemAlertas = {
 
 const n = (q: number, um: string, varios: string) => `${q} ${q === 1 ? um : varios}`;
 
-/** graves = tiraram pontos; avisos = só registrados. */
-export function descreverAlertas(l: ContagemAlertas): { graves: string[]; avisos: string[] } {
+/**
+ * graves = tiraram pontos; avisos = só registrados.
+ * Com pesquisa liberada, sair da tela é o esperado: as saídas ficam só na página
+ * de respostas do aluno e não entram na lista.
+ */
+export function descreverAlertas(
+  l: ContagemAlertas,
+  { pesquisaLiberada = false }: { pesquisaLiberada?: boolean } = {},
+): { graves: string[]; avisos: string[] } {
   const porSaida = l.zeradasPorSaida - l.zeradasTeclado - l.zeradasClique - l.zeradasSemMouse - l.zeradasTela;
   const graves = [
     l.zeradasTeclado > 0 && n(l.zeradasTeclado, "zerada por tecla", "zeradas por tecla"),
@@ -25,7 +32,7 @@ export function descreverAlertas(l: ContagemAlertas): { graves: string[]; avisos
     l.verificacoesErradas > 0 && n(l.verificacoesErradas, "questão teste errada", "questões teste erradas"),
   ].filter((x): x is string => Boolean(x));
   const avisos = [
-    l.saidasTela > 0 && porSaida <= 0 && `saiu da tela ${l.saidasTela}×`,
+    !pesquisaLiberada && l.saidasTela > 0 && porSaida <= 0 && `saiu da tela ${l.saidasTela}×`,
     l.esgotadas > 0 && n(l.esgotadas, "com tempo esgotado", "com tempo esgotado"),
   ].filter((x): x is string => Boolean(x));
   return { graves, avisos };

@@ -53,7 +53,7 @@ const COR_SITUACAO = { agendado: "azul", aberto: "verde", encerrado: "cinza" } a
 
 type DesafioLista = Desafio & {
   desafio_questoes: { count: number }[];
-  tentativas: { concluida_em: string | null }[];
+  tentativas: { aluno_id: string; concluida_em: string | null }[];
 };
 
 const RANKING_VISIVEL = 10;
@@ -382,7 +382,7 @@ async function AbaTemporada({
   const [{ data: desafiosBrutos }, ranking] = await Promise.all([
     supabase
       .from("desafios")
-      .select("*, desafio_questoes(count), tentativas(concluida_em)")
+      .select("*, desafio_questoes(count), tentativas(aluno_id, concluida_em)")
       .eq("temporada_id", temporada.id)
       .order("abre_em", { ascending: false }),
     rankingDaTemporada(supabase, temporada),
@@ -402,7 +402,15 @@ async function AbaTemporada({
   const acertoMedio = responderam.length
     ? Math.round((responderam.reduce((s, l) => s + l.acerto, 0) / responderam.length) * 100)
     : null;
-  const semNenhum = jaAbriram.length ? ranking.filter((l) => l.desafiosCompletos === 0) : [];
+  // Quem nem abriu um desafio e quem parou no meio de um que ainda está aberto pedem recados diferentes.
+  const comTentativa = new Set(jaAbriram.flatMap((d) => d.tentativas.map((t) => t.aluno_id)));
+  const pelaMetade = new Set(
+    jaAbriram
+      .filter((d) => situacaoDesafio(d) === "aberto")
+      .flatMap((d) => d.tentativas.filter((t) => !t.concluida_em).map((t) => t.aluno_id)),
+  );
+  const naoComecaram = jaAbriram.length ? ranking.filter((l) => !comTentativa.has(l.alunoId)) : [];
+  const pararam = ranking.filter((l) => pelaMetade.has(l.alunoId));
   const diasProva = Math.round(
     (new Date(`${temporada.data_prova}T12:00:00Z`).getTime() - new Date(`${hojeEmBrasilia()}T12:00:00Z`).getTime()) /
       86_400_000,
@@ -447,20 +455,16 @@ async function AbaTemporada({
               <strong className="tabular-nums">{acertoMedio}%</strong> de acerto médio
             </span>
           )}
-          {semNenhum.length > 0 && (
-            <span
-              className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-amber-900"
-              title={semNenhum.map((l) => nomes.get(l.alunoId) ?? l.apelido).join(", ")}
-            >
-              <strong className="tabular-nums">{semNenhum.length}</strong>{" "}
-              {semNenhum.length === 1 ? "aluno sem nenhum desafio feito" : "alunos sem nenhum desafio feito"}:{" "}
-              {semNenhum
-                .slice(0, 4)
-                .map((l) => nomes.get(l.alunoId) ?? l.apelido)
-                .join(", ")}
-              {semNenhum.length > 4 && "…"}
-            </span>
-          )}
+          <AvisoAlunos
+            alunos={naoComecaram.map((l) => nomes.get(l.alunoId) ?? l.apelido)}
+            um="aluno não começou nenhum desafio"
+            varios="alunos não começaram nenhum desafio"
+          />
+          <AvisoAlunos
+            alunos={pararam.map((l) => nomes.get(l.alunoId) ?? l.apelido)}
+            um="aluno parou no meio de um desafio aberto"
+            varios="alunos pararam no meio de um desafio aberto"
+          />
           {diasProva >= 0 && (
             <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
               Prova{" "}
@@ -683,5 +687,20 @@ function CamposDatasTemporada({
         </span>
       </label>
     </div>
+  );
+}
+
+/** Etiqueta amarela com a contagem e os primeiros nomes; o resto aparece ao passar o cursor. */
+function AvisoAlunos({ alunos, um, varios }: { alunos: string[]; um: string; varios: string }) {
+  if (!alunos.length) return null;
+  return (
+    <span
+      className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-amber-900"
+      title={alunos.join(", ")}
+    >
+      <strong className="tabular-nums">{alunos.length}</strong> {alunos.length === 1 ? um : varios}:{" "}
+      {alunos.slice(0, 4).join(", ")}
+      {alunos.length > 4 && "…"}
+    </span>
   );
 }

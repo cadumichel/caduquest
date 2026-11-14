@@ -37,6 +37,21 @@ export function montarLigas(entradas: EntradaLiga[]): Liga[] {
     });
 }
 
+/** Temporadas de até 2 semanas: a liga da semana só repetiria o ranking geral. */
+export const DIAS_MINIMOS_PARA_LIGA = 15;
+
+/**
+ * A liga da semana só aparece quando acrescenta algo: temporada com mais de
+ * 2 semanas (do início ao último dia com pontos) e alguém pontuando na semana.
+ */
+export function ligaFazSentido(inicio: string, ultimoDia: string, liga: Pick<Liga, "membros">): boolean {
+  const dias =
+    Math.round(
+      (new Date(`${ultimoDia}T12:00:00Z`).getTime() - new Date(`${inicio}T12:00:00Z`).getTime()) / 86_400_000,
+    ) + 1;
+  return dias >= DIAS_MINIMOS_PARA_LIGA && liga.membros.some((m) => m.pontosSemana > 0);
+}
+
 /**
  * Meta coletiva: se 80% da turma concluir todos os desafios semanais da semana,
  * todos ganham +10 pontos. O CaduRush não conta.

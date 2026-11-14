@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calcularMetaTurma, montarLigas } from "../ligas";
+import { calcularMetaTurma, ligaFazSentido, montarLigas } from "../ligas";
 
 describe("montarLigas", () => {
   it("com poucos alunos pontuando, joga uma liga só", () => {
@@ -42,5 +42,21 @@ describe("calcularMetaTurma", () => {
     expect(meta.semanasBatidas).toBe(1);
     expect(meta.bonus).toBe(10);
     expect(meta.atual).toMatchObject({ participantes: 2, total: 5, batida: false, faltam: 2 });
+  });
+});
+
+describe("ligaFazSentido", () => {
+  const liga = (pontos: number[]) => ({
+    membros: pontos.map((p, i) => ({ alunoId: `a${i}`, pontosAntes: 0, pontosSemana: p, posicao: 1 })),
+  });
+  it("esconde a liga em temporada de até 2 semanas", () => {
+    expect(ligaFazSentido("2026-11-09", "2026-11-16", liga([10, 5]))).toBe(false);
+    expect(ligaFazSentido("2026-11-02", "2026-11-15", liga([10, 5]))).toBe(false);
+  });
+  it("esconde a liga em semana sem pontos", () => {
+    expect(ligaFazSentido("2026-10-01", "2026-11-16", liga([0, 0]))).toBe(false);
+  });
+  it("mostra a liga em temporada longa com pontos na semana", () => {
+    expect(ligaFazSentido("2026-10-01", "2026-11-16", liga([0, 12]))).toBe(true);
   });
 });

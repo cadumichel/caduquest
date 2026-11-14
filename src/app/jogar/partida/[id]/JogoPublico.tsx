@@ -39,7 +39,7 @@ function RegrasFinal() {
   return (
     <ul className="space-y-2 text-sm">
       <li>🚫 Sem consulta: não saia desta tela nem troque de aba ou de app.</li>
-      <li>⌨️ Não use o teclado: responda só com o mouse ou tocando na tela.</li>
+      <li>⌨️ Não use o teclado: responda só clicando ou tocando nas alternativas.</li>
       <li>🖱️ No computador, clique só nas alternativas e nos botões.</li>
       <li>🧰 Sem ajudas: eliminações e dicas não valem na rodada final.</li>
       <li>❗ Se alguma dessas regras for quebrada, aquela questão vale zero.</li>

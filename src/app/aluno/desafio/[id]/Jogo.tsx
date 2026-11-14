@@ -229,7 +229,7 @@ export function Jogo({
               ) : (
                 <li className="font-semibold text-red-700">
                   ⌨️ Não use o teclado: apertar qualquer tecla durante uma questão, mesmo sem querer, faz ela valer
-                  zero. Responda só com o mouse ou tocando na tela.
+                  zero. Responda só clicando nas alternativas.
                 </li>
               )}
               {textoRegraCliques(regraCliques, toleranciaCliques) && (
