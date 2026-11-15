@@ -3,7 +3,7 @@ import {
   closestCenter,
   DndContext,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   useSensor,
   useSensors,
@@ -17,7 +17,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { mapaFixas, type AjudaVista } from "@/lib/questoes/ajudas";
 import type { Resposta, Vista } from "@/lib/questoes/tipos";
 
@@ -159,7 +159,7 @@ export function QuestaoInterativa({
         <Ordenar
           itens={vista.frases}
           ordem={(resposta as Extract<Resposta, { tipo: "ordenar_frases" }>).ordem}
-          dica="Arraste ou use as setas até as frases ficarem na ordem certa."
+          dica="Segure uma caixa e arraste, ou use as setas, até as frases ficarem na ordem certa."
           onOrdem={(ordem) => onChange({ tipo: "ordenar_frases", ordem })}
           desabilitada={desabilitada}
           fixas={mapaFixas(ajuda)}
@@ -403,28 +403,37 @@ function ItemOrdenavel({
       </li>
     );
   }
+  // A caixa inteira é a alça de arrastar (o papel de botão que ela recebe
+  // também faz o clique nela não contar como clique fora na pesquisa bloqueada).
+  // touch-manipulation deixa rolar a página com o dedo; segurar um instante arrasta.
   return (
     <li
       ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      aria-label={`${posicao + 1}º: ${texto}. Arraste para mudar de lugar.`}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`flex items-center gap-2 rounded-xl border-2 p-2 ${cor(id).caixa} ${isDragging ? "relative z-10 shadow-lg ring-2 ring-marca-500" : ""}`}
+      className={`flex touch-manipulation items-center gap-2 rounded-xl border-2 p-2 select-none ${cor(id).caixa} ${
+        desabilitada ? "" : isDragging ? "relative z-10 cursor-grabbing shadow-lg ring-2 ring-marca-500" : "cursor-grab"
+      }`}
     >
-      <span
-        {...attributes}
-        {...listeners}
-        className="flex h-10 w-8 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg bg-white/70 text-slate-500"
-        aria-label="Arrastar"
-      >
+      <span aria-hidden className="flex w-5 shrink-0 items-center justify-center text-lg text-slate-500">
         ⋮⋮
       </span>
       <span className="w-6 shrink-0 text-center text-sm font-bold text-marca-700">{posicao + 1}º</span>
       <span className="flex-1">{texto}</span>
-      <span className="flex shrink-0 flex-col">
+      {/* As setas não começam um arraste. */}
+      <span
+        className="flex shrink-0 flex-col gap-1"
+        onPointerDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+      >
         <button
           type="button"
           disabled={desabilitada || acima === null}
           onClick={() => acima !== null && mover(posicao, acima)}
-          className="px-2 text-slate-600 disabled:opacity-30"
+          className="flex h-8 w-11 cursor-pointer items-center justify-center rounded-lg border-2 border-slate-300 bg-white text-base text-slate-700 shadow-sm transition hover:border-marca-400 hover:bg-marca-50 disabled:cursor-default disabled:opacity-30 disabled:hover:border-slate-300 disabled:hover:bg-white"
           aria-label="Subir"
         >
           ▲
@@ -433,7 +442,7 @@ function ItemOrdenavel({
           type="button"
           disabled={desabilitada || abaixo === null}
           onClick={() => abaixo !== null && mover(posicao, abaixo)}
-          className="px-2 text-slate-600 disabled:opacity-30"
+          className="flex h-8 w-11 cursor-pointer items-center justify-center rounded-lg border-2 border-slate-300 bg-white text-base text-slate-700 shadow-sm transition hover:border-marca-400 hover:bg-marca-50 disabled:cursor-default disabled:opacity-30 disabled:hover:border-slate-300 disabled:hover:bg-white"
           aria-label="Descer"
         >
           ▼
@@ -478,11 +487,15 @@ function Ordenar({
   /** Itens (na tela) travados na posição certa pela eliminação. */
   fixas?: Map<number, number>;
 }) {
+  // Mouse: arrasta ao mover um pouco com o botão apertado. Toque: segura um
+  // instante e arrasta (deslizar direto continua rolando a página).
   const sensores = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 120, tolerance: 5 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+  // Id estável entre o servidor e a tela (senão a hidratação acusa diferença).
+  const idArraste = useId();
   const travado = (posicao: number) => Boolean(fixas?.has(ordem[posicao]));
   const livres = ordem.map((_, p) => p).filter((p) => !travado(p));
   // Só os itens livres trocam de lugar; os travados ficam onde estão.
@@ -504,7 +517,7 @@ function Ordenar({
   return (
     <div className="space-y-2">
       <p className="text-sm text-slate-500">{dica}</p>
-      <DndContext sensors={sensores} collisionDetection={closestCenter} onDragEnd={aoSoltar}>
+      <DndContext id={idArraste} sensors={sensores} collisionDetection={closestCenter} onDragEnd={aoSoltar}>
         <SortableContext items={ordem} strategy={verticalListSortingStrategy}>
           <ol className="space-y-2">
             {ordem.map((exibido, posicao) => (
@@ -592,9 +605,7 @@ function Pares({ vista, resposta, onChange, desabilitada, ajuda }: Props<Extract
                         : "border-slate-200 bg-white"
                   }`}
                 >
-                  <span
-                    className={`h-3 w-3 shrink-0 rounded-full ${dono >= 0 ? cor(dono).ponto : "bg-slate-200"}`}
-                  />
+                  <span className={`h-3 w-3 shrink-0 rounded-full ${dono >= 0 ? cor(dono).ponto : "bg-slate-200"}`} />
                   {texto}
                 </button>
               </li>

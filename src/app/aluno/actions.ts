@@ -14,7 +14,8 @@ import { fundoLiberado, FUNDOS } from "@/lib/visual-perfil";
 import {
   abrirDica,
   eliminarAlternativa,
-  estadoAtual,
+  entrarNoJogo,
+  sairDoJogo,
   responderQuestao,
   registrarAvisoTolerado,
   responderVerificacao,
@@ -34,12 +35,18 @@ import { urlImagem } from "@/lib/tipos-banco";
 
 export async function carregarJogo(desafioId: string, codigo?: string): Promise<EstadoJogo> {
   const aluno = await exigirAluno();
-  return estadoAtual(
+  return entrarNoJogo(
     criarClienteAdmin(),
     aluno,
     desafioId,
     typeof codigo === "string" ? codigo.slice(0, 10) : undefined,
   );
+}
+
+/** Sair do desafio no meio. No sem consulta, encerra: as questões que faltam valem zero. */
+export async function sairDoDesafio(desafioId: string): Promise<EstadoJogo> {
+  const aluno = await exigirAluno();
+  return sairDoJogo(criarClienteAdmin(), aluno, desafioId);
 }
 
 /** Resumo da tela final do desafio: pontos, XP, posição, ofensiva e próximo passo. */

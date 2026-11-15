@@ -20,7 +20,15 @@ import {
   type RegraCliques,
 } from "@/lib/tela-protegida";
 import { FimDoDesafio } from "./FimDoDesafio";
-import { avisoTolerado, carregarJogo, eliminar, enviarResposta, enviarVerificacao, pedirDica } from "../../actions";
+import {
+  avisoTolerado,
+  carregarJogo,
+  eliminar,
+  enviarResposta,
+  enviarVerificacao,
+  pedirDica,
+  sairDoDesafio,
+} from "../../actions";
 
 type QuestaoEmJogo = Extract<EstadoJogo, { fase: "questao" }>;
 type VerificacaoEmJogo = Extract<EstadoJogo, { fase: "verificacao" }>;
@@ -255,7 +263,7 @@ export function Jogo({
             !saidaZera && "Consultar a apostila e sair da tela",
             !semAjudas && "Usar eliminações e dicas",
             saidaZera && tecladoLiberado && "Usar o teclado",
-            "Parar e continuar depois, enquanto o desafio estiver aberto",
+            !saidaZera && "Parar e continuar depois, enquanto o desafio estiver aberto",
           ]}
           naoPode={[
             saidaZera && `Sair desta tela ou trocar de aba${avisos(toleranciaSaidas ?? 0)}`,
@@ -268,6 +276,7 @@ export function Jogo({
             `${totalQuestoes} questões · ${pontosPorAcerto} pts por acerto`,
             tempoFixo ? `${tempoFixo} segundos por questão` : "Tempo limite em cada questão",
             "Uma questão por vez, sem voltar",
+            saidaZera && "Sem pausa: se sair do desafio, ele termina e as questões que faltam valem zero",
             bonusRapidez && "Responder rápido vale até 50% a mais",
             temVerificacao && "Às vezes você marca o tema da questão: errou, ela vale zero",
             "Só a primeira tentativa conta",
@@ -306,6 +315,14 @@ export function Jogo({
               </li>
             )}
             <li>↩️ Não dá para voltar à questão anterior.</li>
+            {saidaZera ? (
+              <li className="font-semibold text-red-700">
+                ⏸️ Sem pausa: este desafio é feito de uma vez só. Se sair do desafio no meio, ele termina e as questões
+                que faltam valem zero.
+              </li>
+            ) : (
+              <li>⏸️ Pode parar e continuar depois, enquanto o desafio estiver aberto.</li>
+            )}
             {temVerificacao && (
               <li>
                 📖 Verificação de leitura: em algumas questões, logo depois de responder, você marca qual era o tema
@@ -340,17 +357,23 @@ export function Jogo({
             />
           </label>
         )}
+        {saidaZera && jaComecou && (
+          <Aviso>
+            Você saiu deste desafio. Como ele é sem consulta, não dá para continuar depois: as questões que faltavam
+            valem zero.
+          </Aviso>
+        )}
         {estado?.fase === "codigo" && estado.mensagem && <Aviso>{estado.mensagem}</Aviso>}
         {erroRede && <Aviso>Falha de conexão. Tente de novo.</Aviso>}
         <Botao
           className={`w-full py-4 text-base ${relampago ? "bg-orange-600 hover:bg-orange-700" : ""}`}
           disabled={pendente || (pedirCodigo && codigo.trim().length < 4)}
           onClick={() => {
-            if (saidaZera) entrarEmTelaCheia();
+            if (saidaZera && !jaComecou) entrarEmTelaCheia();
             executar(() => carregarJogo(desafioId, pedirCodigo ? codigo : undefined));
           }}
         >
-          {pendente ? "Carregando…" : jaComecou ? "Continuar" : "Começar"}
+          {pendente ? "Carregando…" : jaComecou ? (saidaZera ? "Ver meu resultado" : "Continuar") : "Começar"}
         </Botao>
       </div>
     );
@@ -401,6 +424,7 @@ export function Jogo({
       enviar={(resposta, saidas, motivo) =>
         executar(() => enviarResposta(desafioId, estado.questao.id, resposta, saidas, motivo))
       }
+      sair={() => executar(() => sairDoDesafio(desafioId))}
     />
   );
 }
@@ -414,6 +438,7 @@ function TelaQuestao({
   identificacao,
   cliquesLiberados,
   enviar,
+  sair,
 }: {
   desafioId: string;
   estado: QuestaoEmJogo;
@@ -423,6 +448,8 @@ function TelaQuestao({
   identificacao: string;
   cliquesLiberados: boolean;
   enviar: (resposta: Resposta | null, saidas: number, motivo: MotivoZerada | null) => void;
+  /** Sair do desafio sem consulta: encerra a tentativa no servidor. */
+  sair: () => void;
 }) {
   const { questao, posicao, total, aviso } = estado;
   useModoFoco();
@@ -648,9 +675,34 @@ function TelaQuestao({
           {pendente ? "Enviando…" : "Confirmar resposta"}
         </Botao>
         {marca && <p className="text-right text-[11px] text-slate-400">{marca}</p>}
-        <p className="text-center text-xs text-slate-400">
-          <Link href="/aluno">Sair</Link> · o tempo continua correndo
-        </p>
+        {questao.saidaZera ? (
+          <p className="text-center text-xs text-slate-400">
+            <button
+              type="button"
+              disabled={pendente}
+              className="underline"
+              onClick={() => {
+                // O diálogo do navegador tira o foco da página: não conta como saída.
+                dialogoProprio.current = true;
+                const ok = confirm(
+                  "Este desafio é sem consulta: se sair agora, ele termina e as questões que faltam valem zero. Sair mesmo assim?",
+                );
+                dialogoProprio.current = false;
+                fora.current = false;
+                if (!ok) return;
+                enviado.current = true;
+                sair();
+              }}
+            >
+              Sair do desafio
+            </button>{" "}
+            · sem pausa: sair encerra o desafio
+          </p>
+        ) : (
+          <p className="text-center text-xs text-slate-400">
+            <Link href="/aluno">Sair</Link> · o tempo continua correndo
+          </p>
+        )}
       </PalcoQuestao>
     </div>
   );
