@@ -31,7 +31,8 @@ const schema = z.object({
 
 const sorteio = <T>(lista: readonly T[]) => lista[Math.floor(Math.random() * lista.length)];
 
-export type EstadoEntrar = { erro?: string };
+/** oferecerCadastro: apelido não existe na turma; a tela troca para "Primeira vez aqui". */
+export type EstadoEntrar = { erro?: string; oferecerCadastro?: boolean };
 
 export async function entrar(_: EstadoEntrar, form: FormData): Promise<EstadoEntrar> {
   const dados = schema.safeParse(Object.fromEntries(form));
@@ -64,9 +65,14 @@ export async function entrar(_: EstadoEntrar, form: FormData): Promise<EstadoEnt
 
   if (!aluno) {
     if (modo === "entrar") {
-      return { erro: 'Não achamos esse apelido na turma. Se é seu primeiro acesso, escolha "Primeiro acesso".' };
+      // Não revela nada além do que a mensagem antiga já dizia (o apelido não
+      // existe nesta turma); PINs continuam protegidos pelo limite de tentativas.
+      return { oferecerCadastro: true };
     }
     if (apelidoImproprio(apelido)) return { erro: "Esse apelido não é permitido. Escolha outro." };
+    if (form.get("anotei") !== "sim") {
+      return { erro: "Anote seu apelido e seu PIN e marque a caixa confirmando que anotou." };
+    }
     if (!nome_real || nome_real.split(/\s+/).length < 2) {
       return { erro: "Informe seu nome completo (nome e sobrenome). Só o professor vê." };
     }

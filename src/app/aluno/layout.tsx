@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { sair } from "@/app/entrar/actions";
 import { Avatar } from "@/components/Avatar";
+import { MARCA_TURMA, MarcaAparelho } from "@/components/MarcaAparelho";
 import { MarcaCabecalho } from "@/components/Marca";
 import { exigirAluno } from "@/lib/aluno-sessao";
 import { medalhasDaTurmaDoAluno } from "@/lib/aluno-dados";
@@ -16,6 +17,7 @@ export default async function LayoutAluno({ children }: LayoutProps<"/aluno">) {
   ]);
   return (
     <div className="flex flex-1 flex-col">
+      <MarcaAparelho chave={MARCA_TURMA} />
       <header className="sticky top-0 z-20 bg-gradient-to-r from-marca-950 via-marca-900 to-marca-800 text-white shadow-lg shadow-marca-950/20">
         <div className="palco-aluno mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-2.5">
           <MarcaCabecalho href="/aluno" claro />
