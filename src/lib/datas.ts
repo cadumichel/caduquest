@@ -40,3 +40,7 @@ export function diasAte(data: string): number {
   const hoje = new Date(`${hojeEmBrasilia()}T00:00:00Z`).getTime();
   return Math.round((new Date(`${data}T00:00:00Z`).getTime() - hoje) / 86_400_000);
 }
+
+/** O valor veio mesmo de um <input type="datetime-local">? (campo vazio ou data impossível quebrariam a conversão) */
+export const dataHoraLocalValida = (valor: string) =>
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(valor) && !Number.isNaN(new Date(`${valor}:00-03:00`).getTime());

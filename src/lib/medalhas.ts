@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { lerPorIds } from "./paginar";
 
 type TentativaPontos = { desafio_id: string; aluno_id: string; pontos: number };
 
@@ -26,6 +27,8 @@ export async function medalhasDaTurma(db: SupabaseClient, turmaId: string): Prom
     .lt("fecha_em", new Date().toISOString());
   const ids = (desafios ?? []).map((d) => d.id as string);
   if (!ids.length) return new Map();
-  const { data: tentativas } = await db.from("tentativas").select("desafio_id, aluno_id, pontos").in("desafio_id", ids);
-  return contarVitorias((tentativas ?? []) as TentativaPontos[]);
+  // Página a página: a turma passa de 1000 tentativas ao longo do ano.
+  return contarVitorias(
+    await lerPorIds<TentativaPontos>(db, "tentativas", "desafio_id, aluno_id, pontos", "desafio_id", ids),
+  );
 }

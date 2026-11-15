@@ -108,6 +108,8 @@ type QuestaoBanco = {
   tempo_limite_s: number;
   /** Ausente se o SQL do relâmpago ainda não rodou. */
   relampago?: boolean;
+  /** Ausente se o SQL das ajudas ainda não rodou. */
+  dica?: string | null;
   conteudo: Conteudo["conteudo"];
   /** Tempo escrito para esta questão no desafio (null = automático). */
   tempo_no_desafio?: number | null;
@@ -141,12 +143,8 @@ async function carregarQuestao(db: SupabaseClient, id: string, desafioId: string
   return { ...(data as QuestaoBanco), tempo_no_desafio: tempo };
 }
 
-/** Lida à parte: se o SQL das ajudas ainda não rodou, a questão carrega sem dica. */
-async function dicaDaQuestao(db: SupabaseClient, id: string): Promise<string | null> {
-  const { data } = await db.from("questoes").select("dica").eq("id", id).maybeSingle();
-  const dica = (data as { dica?: string | null } | null)?.dica?.trim();
-  return dica || null;
-}
+/** A dica vem com a própria questão ("*"); sem o SQL das ajudas, a coluna não existe e fica sem dica. */
+const dicaDaQuestao = (q: QuestaoBanco): string | null => q.dica?.trim() || null;
 
 /**
  * Cota da temporada menos o que o aluno já usou nos desafios dela. Se o
@@ -495,8 +493,10 @@ export async function estadoAtual(
   aluno: AlunoSessao,
   desafioId: string,
   codigo?: string,
+  /** Desafio já lido nesta mesma requisição (ao responder), para não ler de novo. */
+  jaLido?: Awaited<ReturnType<typeof desafioDoAluno>>,
 ): Promise<EstadoJogo> {
-  const desafio = await desafioDoAluno(db, aluno, desafioId);
+  const desafio = jaLido ?? (await desafioDoAluno(db, aluno, desafioId));
   if (!desafio) return { fase: "erro", mensagem: "Desafio não encontrado." };
 
   // CaduRush: só começa com o código do dia mostrado pelo professor.
@@ -532,13 +532,10 @@ export async function estadoAtual(
     if (tentativa.indice_atual >= tentativa.ordem.length || tentativa.concluida_em) return { fase: "fim" };
 
     const questaoId = tentativa.ordem[tentativa.indice_atual];
-    const questao = await carregarQuestao(db, questaoId, desafio.id);
-    const { data: linhaExistente } = await db
-      .from("respostas")
-      .select("*")
-      .eq("tentativa_id", tentativa.id)
-      .eq("questao_id", questaoId)
-      .maybeSingle();
+    const [questao, { data: linhaExistente }] = await Promise.all([
+      carregarQuestao(db, questaoId, desafio.id),
+      db.from("respostas").select("*").eq("tentativa_id", tentativa.id).eq("questao_id", questaoId).maybeSingle(),
+    ]);
 
     let linha = linhaExistente as RespostaBanco | null;
     if (linha?.respondida_em && verificacaoPendente(linha)) {
@@ -583,7 +580,8 @@ export async function estadoAtual(
     const decorrido = agora.getTime() - new Date(linha.servida_em).getTime();
     const conteudo = comoConteudo(questao);
     const eliminadas = linha.eliminadas ?? [];
-    const [dica, ajudas] = await Promise.all([dicaDaQuestao(db, questao.id), ajudasRestantes(db, aluno.id, desafio)]);
+    const dica = dicaDaQuestao(questao);
+    const ajudas = await ajudasRestantes(db, aluno.id, desafio);
     return {
       fase: "questao",
       posicao: tentativa.indice_atual + 1,
@@ -656,7 +654,7 @@ export async function responderQuestao(
       zerada = await registrar(db, desafio, t, linha as RespostaBanco, questao, resposta, saidasTela, motivo);
     }
   }
-  const estado = await estadoAtual(db, aluno, desafioId);
+  const estado = await estadoAtual(db, aluno, desafioId, undefined, desafio);
   if (zerada && estado.fase !== "erro") {
     estado.aviso = AVISO_ZERADA[zerada];
   }
@@ -741,8 +739,8 @@ export async function abrirDica(
 ): Promise<ResultadoAjuda> {
   const atual = await questaoEmAndamento(db, aluno, desafioId, questaoId);
   if ("erro" in atual) return { erro: atual.erro };
-  const { desafio, linha } = atual;
-  const dica = await dicaDaQuestao(db, questaoId);
+  const { desafio, linha, questao } = atual;
+  const dica = dicaDaQuestao(questao);
   if (!dica) return { erro: "Esta questão não tem dica." };
   const ajudas = await ajudasRestantes(db, aluno.id, desafio);
   if (!ajudas) return { erro: "Ajudas indisponíveis. Peça ao professor para atualizar o app." };
@@ -827,7 +825,7 @@ export async function responderVerificacao(
       }
     }
   }
-  const estado = await estadoAtual(db, aluno, desafioId);
+  const estado = await estadoAtual(db, aluno, desafioId, undefined, desafio);
   if (aviso && estado.fase !== "erro") estado.aviso = aviso;
   return estado;
 }

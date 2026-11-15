@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { gerarCodigoDia, janelaLiberadaAgora } from "@/lib/cadurush";
 import { gerarCodigoTurma } from "@/lib/codigo";
-import { dataHoraLocalParaIso } from "@/lib/datas";
+import { dataHoraLocalParaIso, dataHoraLocalValida } from "@/lib/datas";
 import { ehMultiplicador, ehPercentual, pontosBase, pontosDoEspecial } from "@/lib/especial";
 import { conferirPadroes } from "@/lib/padroes";
 import { exigirProfessor } from "@/lib/professor";
@@ -618,6 +618,8 @@ export async function criarDesafio(dados: z.input<typeof schemaDesafio>): Promis
   const { supabase } = await exigirProfessor();
   const r = schemaDesafio.safeParse(dados);
   if (!r.success) return { erro: r.error.issues[0].message };
+  if (!dataHoraLocalValida(r.data.abre_em) || !dataHoraLocalValida(r.data.fecha_em))
+    return { erro: "Informe a data e a hora de abertura e de fechamento." };
   const abre = dataHoraLocalParaIso(r.data.abre_em);
   const fecha = dataHoraLocalParaIso(r.data.fecha_em);
   if (fecha <= abre) return { erro: "O fechamento deve ser depois da abertura." };
@@ -698,6 +700,8 @@ export async function criarDesafio(dados: z.input<typeof schemaDesafio>): Promis
 export async function atualizarJanelaDesafio(_: EstadoForm, form: FormData): Promise<EstadoForm> {
   const { supabase } = await exigirProfessor();
   const id = texto(form, "id");
+  if (!dataHoraLocalValida(texto(form, "abre_em")) || !dataHoraLocalValida(texto(form, "fecha_em")))
+    return { erro: "Informe a data e a hora de abertura e de fechamento." };
   const abre = dataHoraLocalParaIso(texto(form, "abre_em"));
   const fecha = dataHoraLocalParaIso(texto(form, "fecha_em"));
   if (fecha <= abre) return { erro: "O fechamento deve ser depois da abertura." };

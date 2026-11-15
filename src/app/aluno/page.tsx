@@ -44,26 +44,35 @@ export default async function Inicio() {
   }
 
   // Tudo em paralelo: as tentativas do aluno vêm filtradas pela temporada via join.
-  const [{ data: desafiosBrutos }, { data: tentativasBrutas }, situacao, medalhas, erros, curiosidade, progresso] =
-    await Promise.all([
-      db
-        .from("desafios")
-        // "*" traz também as colunas do especial, quando o SQL dele já rodou.
-        .select("*, desafio_questoes(count)")
-        .eq("temporada_id", temporada.id)
-        .order("abre_em"),
-      db
-        .from("tentativas")
-        .select("*, desafios!inner(temporada_id)")
-        .eq("aluno_id", aluno.id)
-        .eq("desafios.temporada_id", temporada.id),
-      situacaoDaTemporada(db, temporada, aluno.id),
-      medalhasDaTurmaDoAluno(aluno.turmaId),
-      errosParaRevisar(db, aluno.id, aluno.turmaId),
-      curiosidadeDoDia(temporada),
-      progressoDoAluno(aluno.id, aluno.turmaId),
-    ]);
-  const [disputa, cartas, minhaCarta, { count: temporadasAntes }] = await Promise.all([
+  const [
+    { data: desafiosBrutos },
+    { data: tentativasBrutas },
+    situacao,
+    medalhas,
+    erros,
+    curiosidade,
+    progresso,
+    disputa,
+    cartas,
+    minhaCarta,
+    { count: temporadasAntes },
+  ] = await Promise.all([
+    db
+      .from("desafios")
+      // "*" traz também as colunas do especial, quando o SQL dele já rodou.
+      .select("*, desafio_questoes(count)")
+      .eq("temporada_id", temporada.id)
+      .order("abre_em"),
+    db
+      .from("tentativas")
+      .select("*, desafios!inner(temporada_id)")
+      .eq("aluno_id", aluno.id)
+      .eq("desafios.temporada_id", temporada.id),
+    situacaoDaTemporada(db, temporada, aluno.id),
+    medalhasDaTurmaDoAluno(aluno.turmaId),
+    errosParaRevisar(db, aluno.id, aluno.turmaId),
+    curiosidadeDoDia(temporada),
+    progressoDoAluno(aluno.id, aluno.turmaId),
     disputaDaTurma(db, aluno.turmaId),
     cartasParaAProxima(db, aluno.turmaId),
     cartaDoAluno(db, aluno.id, aluno.turmaId),

@@ -1,9 +1,11 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { cache } from "react";
 import { alunosDeTeste } from "@/lib/aluno-teste";
 import { hojeEmBrasilia } from "@/lib/datas";
 import { agruparPorSemana, calcularConstancia, segundaDaSemana } from "@/lib/constancia";
 import { calcularMetaTurma, montarLigas } from "@/lib/ligas";
+import { lerPorIds, respostasCorrigidas } from "@/lib/paginar";
 import { arredondarPontos } from "@/lib/pontos";
 import { montarRanking } from "@/lib/ranking";
 import type { Temporada } from "@/lib/tipos-banco";
@@ -36,6 +38,42 @@ type TentativaRanking = {
   ordem: string[];
 };
 
+type AlunoRanking = { id: string; apelido: string; avatar: number; cor: number };
+type DesafioRanking = { id: string; tipo: string; abre_em: string; fecha_em: string };
+
+/**
+ * O que o ranking lê do banco. Em cache durante a requisição: o Início pede a
+ * mesma temporada mais de uma vez (ranking, disputa entre turmas, carta coringa).
+ * Tentativas e respostas são lidas página a página (o banco devolve no máximo
+ * 1000 linhas por consulta, e uma temporada passa disso).
+ */
+const dadosDaTemporada = cache(async (db: SupabaseClient, temporadaId: string, turmaId: string) => {
+  const [{ data: todosAlunos }, { data: desafios }, deTeste] = await Promise.all([
+    db.from("alunos").select("id, apelido, avatar, cor").eq("turma_id", turmaId).eq("aprovado", true),
+    db.from("desafios").select("id, tipo, abre_em, fecha_em").eq("temporada_id", temporadaId),
+    alunosDeTeste(db, turmaId),
+  ]);
+  const tentativas = await lerPorIds<TentativaRanking>(
+    db,
+    "tentativas",
+    "id, aluno_id, desafio_id, pontos, concluida_em, indice_atual, ordem",
+    "desafio_id",
+    (desafios ?? []).map((d) => d.id as string),
+  );
+  const respostas = await respostasCorrigidas<{ tentativa_id: string; fracao: number }>(
+    db,
+    "tentativa_id, fracao",
+    tentativas.map((t) => t.id),
+  );
+  return {
+    todosAlunos: (todosAlunos ?? []) as AlunoRanking[],
+    desafios: (desafios ?? []) as DesafioRanking[],
+    deTeste,
+    tentativas,
+    respostas,
+  };
+});
+
 /**
  * Ranking completo de uma temporada. O cliente precisa poder ler alunos,
  * desafios, tentativas e respostas da turma (RLS do professor ou cliente admin).
@@ -58,29 +96,12 @@ export async function situacaoDaTemporada(
   temporada: Pick<Temporada, "id" | "turma_id">,
   verComo?: string,
 ) {
-  const [{ data: todosAlunos }, { data: desafios }, deTeste] = await Promise.all([
-    db.from("alunos").select("id, apelido, avatar, cor").eq("turma_id", temporada.turma_id).eq("aprovado", true),
-    db.from("desafios").select("id, tipo, abre_em, fecha_em").eq("temporada_id", temporada.id),
-    alunosDeTeste(db, temporada.turma_id),
-  ]);
-  const alunos = (todosAlunos ?? []).filter((a) => !deTeste.has(a.id) || a.id === verComo);
-  const idsDesafios = (desafios ?? []).map((d) => d.id);
-
-  const { data: tentativas } = idsDesafios.length
-    ? await db
-        .from("tentativas")
-        .select("id, aluno_id, desafio_id, pontos, concluida_em, indice_atual, ordem")
-        .in("desafio_id", idsDesafios)
-    : { data: [] as TentativaRanking[] };
-  const idsTentativas = (tentativas ?? []).map((t) => t.id);
-
-  const { data: respostas } = idsTentativas.length
-    ? await db
-        .from("respostas")
-        .select("tentativa_id, fracao")
-        .in("tentativa_id", idsTentativas)
-        .not("fracao", "is", null)
-    : { data: [] as { tentativa_id: string; fracao: number }[] };
+  const { todosAlunos, desafios, deTeste, tentativas, respostas } = await dadosDaTemporada(
+    db,
+    temporada.id,
+    temporada.turma_id,
+  );
+  const alunos = todosAlunos.filter((a) => !deTeste.has(a.id) || a.id === verComo);
 
   const porAluno = new Map(
     alunos.map((a) => [
@@ -90,7 +111,7 @@ export async function situacaoDaTemporada(
   );
   const alunoDaTentativa = new Map<string, string>();
   const semanaAtual = segundaDaSemana(new Date().toISOString());
-  const semanaDoDesafio = new Map((desafios ?? []).map((d) => [d.id as string, segundaDaSemana(d.abre_em)]));
+  const semanaDoDesafio = new Map(desafios.map((d) => [d.id as string, segundaDaSemana(d.abre_em)]));
   const liga = new Map(
     alunos.map((a) => [a.id as string, { alunoId: a.id as string, pontosAntes: 0, pontosSemana: 0 }]),
   );
@@ -112,10 +133,10 @@ export async function situacaoDaTemporada(
   }
 
   // Ofensiva e meta da turma: só os desafios semanais contam.
-  const semanais = (desafios ?? []).filter((d) => d.tipo !== "relampago");
+  const semanais = desafios.filter((d) => d.tipo !== "relampago");
   const semanas = agruparPorSemana(semanais);
   const concluidosPorAluno = new Map<string, Set<string>>();
-  for (const t of (tentativas ?? []) as TentativaRanking[]) {
+  for (const t of tentativas) {
     if (!(t.concluida_em || t.indice_atual >= t.ordem.length)) continue;
     const set = concluidosPorAluno.get(t.aluno_id) ?? new Set<string>();
     set.add(t.desafio_id);

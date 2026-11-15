@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { emPedacos, lerTudo } from "./paginar";
+import { lerPorIds, respostasCorrigidas } from "./paginar";
 
 /**
  * Com consulta × sem consulta: o acerto do aluno nos desafios em que podia
@@ -81,30 +81,20 @@ export async function consultaPorAluno(
   const semConsulta = new Map((desafios ?? []).map((d) => [d.id as string, Boolean(d.saida_zera_questao)]));
   if (!semConsulta.size) return new Map();
 
-  let consultaTentativas = db
-    .from("tentativas")
-    .select("id, aluno_id, desafio_id")
-    .in("desafio_id", [...semConsulta.keys()]);
-  if (alunoId) consultaTentativas = consultaTentativas.eq("aluno_id", alunoId);
-  const { data: tentativas } = await consultaTentativas;
-  const daTentativa = new Map((tentativas ?? []).map((t) => [t.id as string, t]));
+  const tentativas = await lerPorIds<{ id: string; aluno_id: string; desafio_id: string }>(
+    db,
+    "tentativas",
+    "id, aluno_id, desafio_id",
+    "desafio_id",
+    [...semConsulta.keys()],
+    (c) => (alunoId ? c.eq("aluno_id", alunoId) : c),
+  );
+  const daTentativa = new Map(tentativas.map((t) => [t.id, t]));
   if (!daTentativa.size) return new Map();
 
-  const respostas = (
-    await Promise.all(
-      emPedacos([...daTentativa.keys()]).map((ids) =>
-        lerTudo<{ tentativa_id: string; fracao: number }>((de, ate) =>
-          db
-            .from("respostas")
-            .select("tentativa_id, fracao")
-            .in("tentativa_id", ids)
-            .not("fracao", "is", null)
-            .order("id")
-            .range(de, ate),
-        ),
-      ),
-    )
-  ).flat();
+  const respostas = await respostasCorrigidas<{ tentativa_id: string; fracao: number }>(db, "tentativa_id, fracao", [
+    ...daTentativa.keys(),
+  ]);
   return agruparConsulta(
     respostas.flatMap((r) => {
       const t = daTentativa.get(r.tentativa_id);
