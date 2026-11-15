@@ -4,10 +4,10 @@ import { describe, expect, it } from "vitest";
 import { BASICOS, medalhasNecessarias, ORDEM_ESPECIAIS, PERSONAGENS, TOTAL_PERSONAGENS } from "../personagens";
 
 describe("personagens", () => {
-  it("tem 30 básicos e 15 especiais, sem repetição", () => {
-    expect(TOTAL_PERSONAGENS).toBe(45);
-    expect(new Set(PERSONAGENS.map((p) => p.nome)).size).toBe(45);
-    expect(new Set(BASICOS).size).toBe(30);
+  it("tem 34 básicos e 15 especiais, sem repetição", () => {
+    expect(TOTAL_PERSONAGENS).toBe(49);
+    expect(new Set(PERSONAGENS.map((p) => p.nome)).size).toBe(49);
+    expect(new Set(BASICOS).size).toBe(34);
     expect(new Set(ORDEM_ESPECIAIS).size).toBe(15);
     expect(ORDEM_ESPECIAIS).not.toContain(-1);
     expect([...BASICOS, ...ORDEM_ESPECIAIS].sort((a, b) => a - b)).toEqual(PERSONAGENS.map((_, i) => i));
@@ -17,6 +17,8 @@ describe("personagens", () => {
     expect(PERSONAGENS[7].nome).toBe("Samurai");
     expect(PERSONAGENS[20].nome).toBe("Cleópatra");
     expect(PERSONAGENS[29].nome).toBe("Albert Einstein");
+    expect(PERSONAGENS[44].nome).toBe("Malala");
+    expect(PERSONAGENS[45].nome).toBe("Antonieta de Barros");
   });
 
   it("libera um especial por desafio vencido", () => {
@@ -41,17 +43,23 @@ describe("curiosidades dos personagens", () => {
 
 describe("desbloqueio dos personagens", async () => {
   const { INICIAIS, ORDEM_BASICOS, nivelNecessario, personagemLiberado } = await import("../personagens");
-  it("começa com 8 básicos e libera 2 por nível até todos", () => {
-    expect(INICIAIS).toHaveLength(8);
-    expect(new Set(ORDEM_BASICOS).size).toBe(30);
-    expect(ORDEM_BASICOS.filter((i) => nivelNecessario(i) === 1)).toHaveLength(8);
+  it("começa com 10 básicos e libera 2 por nível até todos", () => {
+    expect(INICIAIS).toHaveLength(10);
+    expect(INICIAIS).not.toContain(-1);
+    expect(new Set(ORDEM_BASICOS).size).toBe(34);
+    expect(ORDEM_BASICOS.filter((i) => nivelNecessario(i) === 1)).toHaveLength(10);
     expect(ORDEM_BASICOS.filter((i) => nivelNecessario(i) === 2)).toHaveLength(2);
-    expect(Math.max(...ORDEM_BASICOS.map(nivelNecessario))).toBe(12);
+    expect(Math.max(...ORDEM_BASICOS.map(nivelNecessario))).toBe(13);
+  });
+  it("lista inicial diversa: metade meninas e Antonieta de Barros no lugar da Baiana", () => {
+    const nomes = INICIAIS.map((i) => PERSONAGENS[i].nome);
+    expect(nomes).toContain("Antonieta de Barros");
+    expect(nomes).not.toContain("Baiana do acarajé");
   });
   it("lendários só com desafios vencidos, básicos só com nível", () => {
     expect(personagemLiberado(ORDEM_ESPECIAIS[0], { nivel: 50, medalhas: 0 })).toBe(false);
     expect(personagemLiberado(ORDEM_ESPECIAIS[0], { nivel: 1, medalhas: 1 })).toBe(true);
-    expect(personagemLiberado(ORDEM_BASICOS[8], { nivel: 1, medalhas: 10 })).toBe(false);
-    expect(personagemLiberado(ORDEM_BASICOS[8], { nivel: 2, medalhas: 0 })).toBe(true);
+    expect(personagemLiberado(ORDEM_BASICOS[10], { nivel: 1, medalhas: 10 })).toBe(false);
+    expect(personagemLiberado(ORDEM_BASICOS[10], { nivel: 2, medalhas: 0 })).toBe(true);
   });
 });

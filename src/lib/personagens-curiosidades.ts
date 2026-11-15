@@ -62,4 +62,12 @@ export const CURIOSIDADE_PERSONAGEM: Record<string, string> = {
   "Rosa Parks":
     "Em 1955, Rosa Parks se recusou a ceder seu lugar no ônibus a um passageiro branco e virou símbolo dos direitos civis.",
   Malala: "Malala ganhou o Nobel da Paz aos 17 anos, por defender o direito das meninas de estudar.",
+  "Antonieta de Barros":
+    "Em 1934, Antonieta de Barros foi eleita em Santa Catarina a primeira deputada negra do Brasil. Foi ela quem criou o Dia do Professor no estado.",
+  "Griô do Mali":
+    "Os griôs guardavam de memória a história do Império do Mali e a contavam com música. Foi assim que a epopeia de Sundiata, fundador do império, chegou até nós.",
+  Capoeirista:
+    "A capoeira chegou a ser crime no Código Penal de 1890. Em 2014, a roda de capoeira virou Patrimônio Cultural Imaterial da Humanidade.",
+  "Chasqui inca":
+    "Os chasquis corriam em revezamento pelas estradas incas e levavam mensagens por centenas de quilômetros em um só dia, guardadas em quipos, cordões com nós.",
 };

@@ -52,6 +52,10 @@ const TODOS: Personagem[] = [
   { nome: "Maria Quitéria", epoca: "Brasil, Independência", imagem: "/personagens/maria-quiteria.webp" },
   { nome: "Rosa Parks", epoca: "EUA, direitos civis", imagem: "/personagens/rosa-parks.webp" },
   { nome: "Malala", epoca: "Paquistão, séc. XXI", imagem: "/personagens/malala.webp" },
+  { nome: "Antonieta de Barros", epoca: "Santa Catarina, séc. XX", imagem: "/personagens/antonieta-de-barros.webp" },
+  { nome: "Griô do Mali", epoca: "Império do Mali, séc. XIV", imagem: "/personagens/grio-do-mali.webp" },
+  { nome: "Capoeirista", epoca: "Brasil, séc. XIX", imagem: "/personagens/capoeirista.webp" },
+  { nome: "Chasqui inca", epoca: "Império Inca", imagem: "/personagens/chasqui-inca.webp" },
 ];
 
 const porNome = (nomes: string[]) =>
@@ -115,6 +119,11 @@ export const PERSONAGENS = porNome([
   "Maria Quitéria",
   "Rosa Parks",
   "Malala",
+  // 45–48: básicos (diversidade, 2026-11)
+  "Antonieta de Barros",
+  "Griô do Mali",
+  "Capoeirista",
+  "Chasqui inca",
 ]);
 export const TOTAL_PERSONAGENS = PERSONAGENS.length;
 
@@ -139,21 +148,35 @@ export const ORDEM_ESPECIAIS = [
   "Malala",
 ].map(indice);
 
-/** Liberados para todos, na ordem da tela de escolha (dois do 1º lote, um do 2º, intercalados). */
-export const BASICOS = Array.from({ length: 10 }, (_, k) => [2 * k, 2 * k + 1, 30 + k]).flat();
+/** Básicos acrescentados depois (índices 45 em diante), na ordem da tela. */
+const BASICOS_NOVOS = ["Antonieta de Barros", "Griô do Mali", "Capoeirista", "Chasqui inca"].map(indice);
+
+/**
+ * Liberados para todos, na ordem da tela de escolha (dois do 1º lote, um do 2º, intercalados),
+ * seguidos dos básicos novos.
+ */
+export const BASICOS = [
+  ...Array.from({ length: 10 }, (_, k) => [2 * k, 2 * k + 1, 30 + k]).flat(),
+  ...BASICOS_NOVOS,
+];
 
 export const ehEspecial = (avatar: number) => ORDEM_ESPECIAIS.includes(avatar);
 
-/** Personagens com que todo aluno começa (4 e 4, um de cada época). */
+/**
+ * Personagens com que todo aluno começa e que aparecem no cadastro: 5 meninos e 5 meninas,
+ * de povos e épocas diferentes (pedido do Cadu: lista inicial diversa).
+ */
 export const INICIAIS = [
   "Caçador pré-histórico",
   "Faraó",
-  "Hoplita grego",
-  "Viking",
-  "Escudeira viking",
+  "Guerreiro tupi",
+  "Samurai",
+  "Griô do Mali",
   "Mulher ateniense",
-  "Camponesa medieval",
-  "Operária",
+  "Escudeira viking",
+  "Dandara",
+  "Antonieta de Barros",
+  "Frida Kahlo",
 ].map(indice);
 
 /** Básicos na ordem de desbloqueio: os iniciais e depois os demais, na ordem da tela. */
