@@ -7,7 +7,15 @@ import { situacaoDesafio, type TipoDesafio } from "./tipos-banco";
  * precisa cadastrar nada.
  */
 
-export type DesafioMissao = { id: string; tipo?: TipoDesafio; titulo: string; abre_em: string; fecha_em: string };
+export type DesafioMissao = {
+  id: string;
+  tipo?: TipoDesafio;
+  titulo: string;
+  abre_em: string;
+  fecha_em: string;
+  /** Sem consulta: não tem pausa (ausente = com consulta). */
+  saida_zera_questao?: boolean;
+};
 
 export type Missao = {
   tipo: "cadurush" | "desafio" | "revisao" | "aguardar" | "estudo" | "prova" | "encerrada";
@@ -56,18 +64,25 @@ export function calcularMissao({
       titulo: "O desafio especial em sala está aberto!",
       texto: `${rush.titulo}: peça o código do dia ao professor (${prazo(rush.fecha_em, agora)}).`,
       href: `/aluno/desafio/${rush.id}`,
-      botao: iniciados.has(rush.id) ? "Continuar" : "Entrar com o código",
+      botao: iniciados.has(rush.id)
+        ? rush.saida_zera_questao
+          ? "Ver meu resultado"
+          : "Continuar"
+        : "Entrar com o código",
     };
   }
 
   const semanal = pendentes[0];
   if (semanal) {
+    const comecou = iniciados.has(semanal.id);
+    // Sem consulta não tem pausa: quem saiu no meio só vê como foi.
+    const semPausa = comecou && semanal.saida_zera_questao;
     return {
       tipo: "desafio",
-      titulo: iniciados.has(semanal.id) ? "Termine o seu desafio" : "Faça o desafio da semana",
+      titulo: semPausa ? "Veja como foi o seu desafio" : comecou ? "Termine o seu desafio" : "Faça o desafio da semana",
       texto: `${semanal.titulo} (${prazo(semanal.fecha_em, agora)}).`,
       href: `/aluno/desafio/${semanal.id}`,
-      botao: iniciados.has(semanal.id) ? "Continuar" : "Começar agora",
+      botao: semPausa ? "Ver meu resultado" : comecou ? "Continuar" : "Começar agora",
     };
   }
 

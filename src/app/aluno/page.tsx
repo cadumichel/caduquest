@@ -187,7 +187,7 @@ export default async function Inicio() {
                           {d.pontos_por_acerto} pts por acerto
                           {percentualEmVigor(d) ? " · tempo reduzido" : ""} · fecha {formatarDataHora(d.fecha_em)}
                         </p>
-                        {t && !concluido && <p className="text-sm font-extrabold">{textoParado(t, d.fecha_em)}</p>}
+                        {t && !concluido && <p className="text-sm font-extrabold">{textoParado(t, d)}</p>}
                       </div>
                       {concluido ? (
                         <BotaoLink href={`/aluno/desafio/${d.id}/resultado`} variante="secundario">
@@ -198,7 +198,7 @@ export default async function Inicio() {
                           href={`/aluno/desafio/${d.id}`}
                           className="rounded-xl bg-marca-900 px-5 py-2.5 font-bold text-ouro-claro shadow hover:bg-marca-800"
                         >
-                          {t ? "Continuar" : emSala ? "Entrar com o código" : "Começar"}
+                          {t ? botaoParado(d) : emSala ? "Entrar com o código" : "Começar"}
                         </Link>
                       )}
                     </div>
@@ -212,7 +212,7 @@ export default async function Inicio() {
                     <div>
                       <p className="font-semibold">{d.titulo}</p>
                       {t && !concluido ? (
-                        <p className="text-sm font-semibold text-amber-900">{textoParado(t, d.fecha_em)}</p>
+                        <p className="text-sm font-semibold text-amber-900">{textoParado(t, d)}</p>
                       ) : (
                         <p className="text-sm text-slate-500">
                           {d.desafio_questoes[0]?.count ?? 0} questões · fecha {formatarDataHora(d.fecha_em)}
@@ -224,7 +224,7 @@ export default async function Inicio() {
                         ✓ {formatarPontos(t!.pontos)} pts
                       </BotaoLink>
                     ) : (
-                      <BotaoLink href={`/aluno/desafio/${d.id}`}>▶ {t ? "Continuar" : "Começar desafio"}</BotaoLink>
+                      <BotaoLink href={`/aluno/desafio/${d.id}`}>▶ {t ? botaoParado(d) : "Começar desafio"}</BotaoLink>
                     )}
                   </Cartao>
                 );
@@ -464,8 +464,16 @@ export default async function Inicio() {
   );
 }
 
+const botaoParado = (d: { saida_zera_questao: boolean }) => (d.saida_zera_questao ? "Ver meu resultado" : "Continuar");
+
 /** "Você parou na questão 8 de 12. Faltam 5. Fecha 15/11, 23:59." */
-function textoParado(t: Pick<Tentativa, "indice_atual" | "ordem">, fechaEm: string) {
+function textoParado(
+  t: Pick<Tentativa, "indice_atual" | "ordem">,
+  d: { fecha_em: string; saida_zera_questao: boolean },
+) {
+  // Sem consulta não tem pausa: saiu no meio, o desafio termina.
+  if (d.saida_zera_questao) return "Você saiu deste desafio sem consulta: as questões que faltavam valem zero.";
+  const fechaEm = d.fecha_em;
   const total = t.ordem.length;
   const faltam = total - t.indice_atual;
   return `Você parou na questão ${Math.min(t.indice_atual + 1, total)} de ${total}. ${faltam === 1 ? "Falta 1" : `Faltam ${faltam}`}. Fecha ${formatarDataHora(fechaEm)}.`;

@@ -871,3 +871,117 @@ export async function registrarAvisoTolerado(
   }
   return { zerar: true, restantes: 0 };
 }
+
+/**
+ * Desafio sem consulta não tem pausa: quem sai e volta encontra o desafio
+ * encerrado. A questão em tela (ou a verificação pendente) vale zero como
+ * saída da tela, e as que faltavam ficam sem resposta, valendo zero.
+ */
+export const AVISO_ENCERRADO_AO_SAIR =
+  "Você saiu do desafio. Como ele é sem consulta, não dá para continuar depois: as questões que faltavam valem zero.";
+
+/**
+ * Tolerância para o "Começar" repetido (resposta perdida na rede, duplo
+ * clique): ainda na primeira questão, sem nada respondido e servida há pouco.
+ */
+const TOLERANCIA_RECOMECO_MS = 10_000;
+
+async function encerrarTentativa(db: SupabaseClient, tentativa: Tentativa) {
+  const agora = new Date().toISOString();
+  const questaoId = tentativa.ordem[tentativa.indice_atual];
+  if (questaoId) {
+    const { data: linha } = await db
+      .from("respostas")
+      .select("*")
+      .eq("tentativa_id", tentativa.id)
+      .eq("questao_id", questaoId)
+      .maybeSingle();
+    const l = linha as RespostaBanco | null;
+    if (l && !l.respondida_em) {
+      await db
+        .from("respostas")
+        .update({
+          respondida_em: agora,
+          resposta: null,
+          fracao: 0,
+          pontos: 0,
+          tempo_esgotado: false,
+          zerada_por_saida: true,
+          motivo_zerada: "saida",
+        })
+        .eq("id", l.id)
+        .is("respondida_em", null);
+    } else if (l && verificacaoPendente(l)) {
+      await db
+        .from("respostas")
+        .update({
+          verificacao_respondida_em: agora,
+          verificacao_acertou: false,
+          zerada_por_saida: true,
+          motivo_zerada: "saida",
+        })
+        .eq("id", l.id)
+        .is("verificacao_respondida_em", null);
+    }
+  }
+  const { data: respostas } = await db.from("respostas").select("pontos").eq("tentativa_id", tentativa.id);
+  const pontos = arredondarPontos((respostas ?? []).reduce((s, r) => s + Number(r.pontos ?? 0), 0));
+  await db
+    .from("tentativas")
+    .update({ indice_atual: tentativa.ordem.length, pontos, concluida_em: agora })
+    .eq("id", tentativa.id)
+    .eq("indice_atual", tentativa.indice_atual);
+}
+
+/** Tentativa começada e não terminada do aluno no desafio sem consulta aberto. */
+async function tentativaSemConsultaEmAndamento(db: SupabaseClient, desafio: Desafio, alunoId: string) {
+  if (!desafio.saida_zera_questao || situacaoDesafio(desafio) !== "aberto") return null;
+  const { data } = await db
+    .from("tentativas")
+    .select("*")
+    .eq("desafio_id", desafio.id)
+    .eq("aluno_id", alunoId)
+    .maybeSingle();
+  const t = data as Tentativa | null;
+  if (!t || t.concluida_em || t.indice_atual >= t.ordem.length) return null;
+  return t;
+}
+
+/**
+ * Entrada no jogo (botão Começar ou Continuar). No desafio sem consulta, uma
+ * tentativa já começada é uma volta depois de sair: encerra o desafio. A
+ * regra fica no servidor, então recarregar a página ou abrir outra aba não
+ * dá uma pausa.
+ */
+export async function entrarNoJogo(
+  db: SupabaseClient,
+  aluno: AlunoSessao,
+  desafioId: string,
+  codigo?: string,
+): Promise<EstadoJogo> {
+  const desafio = await desafioDoAluno(db, aluno, desafioId);
+  if (!desafio) return { fase: "erro", mensagem: "Desafio não encontrado." };
+  const t = await tentativaSemConsultaEmAndamento(db, desafio, aluno.id);
+  if (t) {
+    const { data } = await db.from("respostas").select("servida_em, respondida_em").eq("tentativa_id", t.id);
+    const linhas = data ?? [];
+    const recomeco =
+      t.indice_atual === 0 &&
+      linhas.every((l) => !l.respondida_em) &&
+      linhas.every((l) => Date.now() - new Date(l.servida_em).getTime() < TOLERANCIA_RECOMECO_MS);
+    if (linhas.length > 0 && !recomeco) {
+      await encerrarTentativa(db, t);
+      return { fase: "fim", aviso: AVISO_ENCERRADO_AO_SAIR };
+    }
+  }
+  return estadoAtual(db, aluno, desafioId, codigo, desafio);
+}
+
+/** Botão "Sair" do desafio sem consulta: encerra na hora (com consulta, só sai). */
+export async function sairDoJogo(db: SupabaseClient, aluno: AlunoSessao, desafioId: string): Promise<EstadoJogo> {
+  const desafio = await desafioDoAluno(db, aluno, desafioId);
+  if (!desafio) return { fase: "erro", mensagem: "Desafio não encontrado." };
+  const t = await tentativaSemConsultaEmAndamento(db, desafio, aluno.id);
+  if (t) await encerrarTentativa(db, t);
+  return { fase: "fim", aviso: AVISO_ENCERRADO_AO_SAIR };
+}

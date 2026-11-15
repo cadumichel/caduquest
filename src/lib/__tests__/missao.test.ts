@@ -40,6 +40,14 @@ describe("prazo", () => {
 });
 
 describe("calcularMissao", () => {
+  it("sem consulta começado não oferece continuar", () => {
+    const iniciados = new Set(["s1"]);
+    const comConsulta = calcularMissao({ ...base, iniciados, desafios: [aberto] });
+    expect(comConsulta.botao).toBe("Continuar");
+    const semConsulta = calcularMissao({ ...base, iniciados, desafios: [{ ...aberto, saida_zera_questao: true }] });
+    expect(semConsulta.botao).toBe("Ver meu resultado");
+    expect(semConsulta.titulo).toBe("Veja como foi o seu desafio");
+  });
   it("CaduRush aberto vem primeiro", () => {
     expect(calcularMissao({ ...base, desafios: [aberto, rush] }).tipo).toBe("cadurush");
   });
