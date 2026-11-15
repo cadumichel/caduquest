@@ -138,6 +138,20 @@ const TODOS: Personagem[] = [
   { nome: "Harriet Tubman", epoca: "EUA, abolição", imagem: "/personagens/harriet-tubman.webp" },
   { nome: "Carolina Maria de Jesus", epoca: "Literatura, Brasil", imagem: "/personagens/carolina-maria-de-jesus.webp" },
   { nome: "Nelson Mandela", epoca: "África do Sul, séc. XX", imagem: "/personagens/nelson-mandela.webp" },
+  { nome: "Sócrates", epoca: "Grécia Antiga", imagem: "/personagens/socrates.webp" },
+  { nome: "Hipátia", epoca: "Alexandria, séc. IV–V", imagem: "/personagens/hipatia.webp" },
+  { nome: "Carlos Magno", epoca: "Império Carolíngio, séc. VIII–IX", imagem: "/personagens/carlos-magno.webp" },
+  { nome: "Avicena", epoca: "Pérsia, séc. X–XI", imagem: "/personagens/avicena.webp" },
+  { nome: "Gengis Khan", epoca: "Mongólia, séc. XIII", imagem: "/personagens/gengis-khan.webp" },
+  { nome: "Martinho Lutero", epoca: "Alemanha, séc. XVI", imagem: "/personagens/martinho-lutero.webp" },
+  { nome: "José de San Martín", epoca: "América do Sul, séc. XIX", imagem: "/personagens/jose-de-san-martin.webp" },
+  { nome: "Emmeline Pankhurst", epoca: "Inglaterra, séc. XIX–XX", imagem: "/personagens/emmeline-pankhurst.webp" },
+  {
+    nome: "Tereza de Benguela",
+    epoca: "Quilombo do Quariterê, séc. XVIII",
+    imagem: "/personagens/tereza-de-benguela.webp",
+  },
+  { nome: "Murasaki Shikibu", epoca: "Japão, séc. XI", imagem: "/personagens/murasaki-shikibu.webp" },
 ];
 
 const porNome = (nomes: string[]) =>
@@ -285,6 +299,16 @@ export const PERSONAGENS = porNome([
   "Harriet Tubman",
   "Carolina Maria de Jesus",
   "Nelson Mandela",
+  "Sócrates",
+  "Hipátia",
+  "Carlos Magno",
+  "Avicena",
+  "Gengis Khan",
+  "Martinho Lutero",
+  "José de San Martín",
+  "Emmeline Pankhurst",
+  "Tereza de Benguela",
+  "Murasaki Shikibu",
 ]);
 export const TOTAL_PERSONAGENS = PERSONAGENS.length;
 
@@ -314,6 +338,8 @@ export const ORDEM_ESPECIAIS = [
   "Harriet Tubman",
   "Carolina Maria de Jesus",
   "Nelson Mandela",
+  "Tereza de Benguela",
+  "Murasaki Shikibu",
 ].map(indice);
 
 /** Básicos acrescentados depois (índices 45 em diante), na ordem da tela. */
@@ -393,6 +419,14 @@ const BASICOS_NOVOS = [
   "Desmond Tutu",
   "Ayrton Senna",
   "Steve Jobs",
+  "Sócrates",
+  "Hipátia",
+  "Carlos Magno",
+  "Avicena",
+  "Gengis Khan",
+  "Martinho Lutero",
+  "José de San Martín",
+  "Emmeline Pankhurst",
 ].map(indice);
 
 /**

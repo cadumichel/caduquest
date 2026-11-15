@@ -205,4 +205,22 @@ export const CURIOSIDADE_PERSONAGEM: Record<string, string> = {
     'Carolina Maria de Jesus escrevia em cadernos achados no lixo. "Quarto de Despejo", de 1960, foi traduzido para mais de 10 línguas.',
   "Nelson Mandela":
     "Nelson Mandela passou 27 anos preso por lutar contra o apartheid e depois foi eleito o primeiro presidente negro da África do Sul.",
+  Sócrates: "Sócrates não deixou nada escrito: conhecemos suas ideias pelos textos de seu aluno Platão.",
+  Hipátia:
+    "Hipátia de Alexandria foi matemática, astrônoma e filósofa, uma das primeiras mulheres cientistas de que se tem registro.",
+  "Carlos Magno":
+    "Carlos Magno foi coroado imperador pelo papa no Natal do ano 800 e incentivou escolas e a cópia de livros.",
+  Avicena:
+    'O "Cânone da Medicina", escrito por Avicena, foi usado como livro-texto nas universidades da Europa por séculos.',
+  "Gengis Khan": "Gengis Khan uniu as tribos mongóis e fundou o maior império de terras contínuas da história.",
+  "Martinho Lutero":
+    "Em 1517, Martinho Lutero publicou suas 95 teses contra a venda de indulgências, o começo da Reforma Protestante.",
+  "José de San Martín":
+    "José de San Martín atravessou a Cordilheira dos Andes com seu exército para lutar pela independência do Chile e do Peru.",
+  "Emmeline Pankhurst":
+    "Emmeline Pankhurst liderou as sufragistas britânicas na luta pelo direito das mulheres ao voto.",
+  "Tereza de Benguela":
+    "Tereza de Benguela liderou o Quilombo do Quariterê, em Mato Grosso, e o dia 25 de julho é o Dia Nacional de Tereza de Benguela e da Mulher Negra.",
+  "Murasaki Shikibu":
+    'Murasaki Shikibu escreveu "O Conto de Genji", considerado por muitos o primeiro romance da história.',
 };

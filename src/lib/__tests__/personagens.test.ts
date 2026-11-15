@@ -4,11 +4,11 @@ import { describe, expect, it } from "vitest";
 import { BASICOS, medalhasNecessarias, ORDEM_ESPECIAIS, PERSONAGENS, TOTAL_PERSONAGENS } from "../personagens";
 
 describe("personagens", () => {
-  it("tem 105 básicos e 22 especiais, sem repetição", () => {
-    expect(TOTAL_PERSONAGENS).toBe(127);
-    expect(new Set(PERSONAGENS.map((p) => p.nome)).size).toBe(127);
-    expect(new Set(BASICOS).size).toBe(105);
-    expect(new Set(ORDEM_ESPECIAIS).size).toBe(22);
+  it("tem 113 básicos e 24 especiais, sem repetição", () => {
+    expect(TOTAL_PERSONAGENS).toBe(137);
+    expect(new Set(PERSONAGENS.map((p) => p.nome)).size).toBe(137);
+    expect(new Set(BASICOS).size).toBe(113);
+    expect(new Set(ORDEM_ESPECIAIS).size).toBe(24);
     expect(ORDEM_ESPECIAIS).not.toContain(-1);
     expect([...BASICOS, ...ORDEM_ESPECIAIS].sort((a, b) => a - b)).toEqual(PERSONAGENS.map((_, i) => i));
   });
@@ -47,10 +47,10 @@ describe("desbloqueio dos personagens", async () => {
   it("começa com 10 básicos e libera 3 por nível até todos", () => {
     expect(INICIAIS).toHaveLength(10);
     expect(INICIAIS).not.toContain(-1);
-    expect(new Set(ORDEM_BASICOS).size).toBe(105);
+    expect(new Set(ORDEM_BASICOS).size).toBe(113);
     expect(ORDEM_BASICOS.filter((i) => nivelNecessario(i) === 1)).toHaveLength(10);
     expect(ORDEM_BASICOS.filter((i) => nivelNecessario(i) === 2)).toHaveLength(3);
-    expect(Math.max(...ORDEM_BASICOS.map(nivelNecessario))).toBe(33);
+    expect(Math.max(...ORDEM_BASICOS.map(nivelNecessario))).toBe(36);
   });
   it("lista inicial diversa: metade meninas e Antonieta de Barros no lugar da Baiana", () => {
     const nomes = INICIAIS.map((i) => PERSONAGENS[i].nome);
