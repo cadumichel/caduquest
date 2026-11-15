@@ -160,7 +160,13 @@ export function Treino({ desafioId, titulo }: { desafioId: string; titulo: strin
         </div>
       ) : (
         <>
-          <QuestaoInterativa vista={questao.vista} resposta={resposta} onChange={setResposta} desabilitada={pendente} />
+          <QuestaoInterativa
+            vista={questao.vista}
+            resposta={resposta}
+            onChange={setResposta}
+            desabilitada={pendente}
+            certas={questao.certas}
+          />
           {erro && <Aviso>{erro}</Aviso>}
           <Botao
             variante="sucesso"

@@ -107,3 +107,16 @@ describe("retrato do peão", () => {
     expect(montarVista(c, perm)).toMatchObject({ avatar: "/personagens/abraham-lincoln.webp" });
   });
 });
+
+describe("certas do tabuleiro (treino e revisão)", () => {
+  it("dá a posição da opção certa de cada casa", async () => {
+    const { certasDoTabuleiro } = await import("../questoes/apresentacao");
+    expect(certasDoTabuleiro(lincoln, perm)).toEqual([0, 1, 0, 1, 0]);
+    expect(
+      certasDoTabuleiro(
+        { tipo: "multipla_escolha", conteudo: { alternativas: ["a", "b", "c", "d"], correta: 0 } },
+        [0, 1, 2, 3],
+      ),
+    ).toBeUndefined();
+  });
+});

@@ -24,7 +24,7 @@ import {
   type ResultadoAjuda,
 } from "@/lib/jogo";
 import { corrigirTreino, iniciarTreino, type ItemTreino } from "@/lib/treino";
-import { montarVista } from "@/lib/questoes/apresentacao";
+import { certasDoTabuleiro, montarVista } from "@/lib/questoes/apresentacao";
 import { corrigir } from "@/lib/questoes/correcao";
 import { permutacaoSemRanking, permutacaoValida } from "@/lib/questoes/embaralhar";
 import { schemaResposta, tamanhoPermutacao, type Conteudo, type Vista } from "@/lib/questoes/tipos";
@@ -177,6 +177,8 @@ export type QuestaoRevisao = {
   imagemUrl: string | null;
   vista: Vista;
   permutacao: number[];
+  /** Tabuleiro: opção certa de cada casa (o gabarito da revisão já é público). */
+  certas?: number[];
 };
 
 export type CorrecaoRevisao = {
@@ -215,6 +217,7 @@ export async function proximaRevisao(
       imagemUrl: urlImagem(q.imagem_path),
       vista: montarVista(conteudo, permutacao),
       permutacao,
+      certas: certasDoTabuleiro(conteudo, permutacao),
     },
     posicao: jaFeitas.size + 1,
     total,

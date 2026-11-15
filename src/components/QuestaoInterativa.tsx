@@ -68,12 +68,15 @@ export function QuestaoInterativa({
   onChange,
   desabilitada,
   ajuda,
+  certas,
 }: {
   vista: Vista;
   resposta: Resposta;
   onChange: (r: Resposta) => void;
   desabilitada?: boolean;
   ajuda?: AjudaVista;
+  /** Tabuleiro no treino e na revisão (gabarito público): opção certa de cada casa. */
+  certas?: number[];
 }) {
   if (vista.tipo !== resposta.tipo) return null;
   switch (vista.tipo) {
@@ -252,6 +255,7 @@ export function QuestaoInterativa({
           onChange={onChange}
           desabilitada={desabilitada}
           ajuda={ajuda}
+          certas={certas}
         />
       );
   }
@@ -1409,7 +1413,14 @@ function Mapa({ vista, resposta, onChange, desabilitada, ajuda }: Props<Extract<
  * aparecem depois da escolha e não dá para voltar. Nada mostra se a escolha foi
  * certa: isso fica para a correção.
  */
-function Tabuleiro({ vista, resposta, onChange, desabilitada, ajuda }: Props<Extract<Vista, { tipo: "tabuleiro" }>>) {
+function Tabuleiro({
+  vista,
+  resposta,
+  onChange,
+  desabilitada,
+  ajuda,
+  certas,
+}: Props<Extract<Vista, { tipo: "tabuleiro" }>> & { certas?: number[] }) {
   const fixas = mapaFixas(ajuda);
   const n = vista.casas.length;
   // Casas já passadas: as do começo que têm escolha (vale também ao voltar para a tela).
@@ -1433,7 +1444,19 @@ function Tabuleiro({ vista, resposta, onChange, desabilitada, ajuda }: Props<Ext
   };
 
   const estados: EstadoCasa[] = vista.casas.map((_, k) =>
-    k < atual ? (fixas.has(k) ? "revelada" : "feita") : k === atual ? "atual" : fixas.has(k) ? "revelada" : "oculta",
+    k < atual
+      ? fixas.has(k)
+        ? "revelada"
+        : certas
+          ? resposta.escolhas[k] === certas[k]
+            ? "certa"
+            : "errada"
+          : "feita"
+      : k === atual
+        ? "atual"
+        : fixas.has(k)
+          ? "revelada"
+          : "oculta",
   );
   const legendas = vista.casas.map((casa, k) => {
     const e = fixas.get(k) ?? resposta.escolhas[k];
