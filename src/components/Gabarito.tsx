@@ -465,6 +465,7 @@ export function Gabarito({
             estados={acertos.map((a) => (!comResposta ? "neutra" : a ? "certa" : "errada"))}
             peao={casas.length + 1}
             legendas={casas.map((c) => c.certa)}
+            emojis={casas.map((c) => c.emoji?.trim() || null)}
           />
           {comResposta && (
             <p className="font-semibold text-marca-800">
@@ -480,6 +481,7 @@ export function Gabarito({
                   className={`flex gap-2 rounded-lg px-3 py-1.5 ${!comResposta ? "" : a ? "bg-emerald-50" : "bg-red-50"}`}
                 >
                   <span className="w-5 font-bold text-marca-700">{k + 1}</span>
+                  {c.emoji?.trim() && <span aria-hidden>{c.emoji}</span>}
                   <span className="flex-1">
                     <span className="font-medium text-emerald-800">{c.certa}</span>
                     {comResposta && !a ? (

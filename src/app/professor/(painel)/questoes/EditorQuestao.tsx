@@ -1314,12 +1314,21 @@ function EditorConteudo({
               itens={c.casas}
               min={3}
               max={6}
-              novo={() => ({ certa: "", errada: "" })}
+              novo={() => ({ certa: "", errada: "", emoji: "" })}
               bloqueado={bloqueado}
               onChange={(casas) => mudar({ casas })}
               render={(casa, i, atualizar) => (
                 <>
                   <span className="w-5 shrink-0 text-sm font-bold text-marca-700">{i + 1}</span>
+                  <input
+                    className={`${classeInput} w-14 shrink-0 text-center`}
+                    placeholder="🙂"
+                    aria-label="Emoji da casa"
+                    title="Emoji do assunto da casa (opcional)"
+                    value={casa.emoji ?? ""}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...casa, emoji: e.target.value })}
+                  />
                   <input
                     className={classeInput}
                     placeholder="Fez (certa)"

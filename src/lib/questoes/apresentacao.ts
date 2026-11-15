@@ -102,6 +102,7 @@ export function montarVista(c: Conteudo, permutacao: number[]): Vista {
           const [a, b] = ordemDaCasa(permutacao, k);
           return [opcoes[a], opcoes[b]] as [string, string];
         }),
+        emojis: c.conteudo.casas.map((casa) => casa.emoji?.trim() || null),
       };
   }
 }

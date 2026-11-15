@@ -10,7 +10,7 @@ const lincoln: Conteudo = {
   conteudo: {
     personagem: "Abraham Lincoln",
     casas: [
-      { certa: "Presidente", errada: "Senado" },
+      { certa: "Presidente", errada: "Senado", emoji: "🗳️" },
       { certa: "Fim da escravidão", errada: "Manutenção" },
       { certa: "Liderou a União", errada: "Liderou os Confederados" },
       { certa: "Durante a guerra", errada: "Após a guerra" },
@@ -41,6 +41,7 @@ describe("tabuleiro", () => {
         ["Após a guerra", "Durante a guerra"],
         ["Teatro", "Tuberculose"],
       ],
+      emojis: ["🗳️", null, null, null, null],
     });
     expect(respostaInicial(vista)).toEqual({ tipo: "tabuleiro", escolhas: [null, null, null, null, null] });
   });

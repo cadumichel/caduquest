@@ -71,6 +71,7 @@ export function CaminhoTabuleiro({
   estados,
   peao,
   legendas,
+  emojis,
 }: {
   personagem: string;
   avatar: string | null;
@@ -78,6 +79,8 @@ export function CaminhoTabuleiro({
   peao: number;
   /** Texto que aparece ao tocar numa casa (null = nada a mostrar). */
   legendas?: (string | null)[];
+  /** Emoji do assunto de cada casa: aparece no lugar do número quando a casa não está oculta. */
+  emojis?: (string | null)[];
 }) {
   const n = estados.length;
   const pontos = posicoes(n);
@@ -144,7 +147,20 @@ export function CaminhoTabuleiro({
               className={`absolute flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-4 text-lg font-black transition sm:h-14 sm:w-14 sm:text-xl ${ESTILO[estado]} ${vendo === k ? "ring-4 ring-white/70" : ""}`}
               style={{ left: `${x}%`, top: `${y}%` }}
             >
-              {SIMBOLO[estado] ?? k + 1}
+              {emojis?.[k] && estado !== "oculta" ? (
+                <>
+                  <span aria-hidden className="text-xl leading-none sm:text-2xl">
+                    {emojis[k]}
+                  </span>
+                  <span
+                    className={`absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white px-1 text-[10px] font-black text-white ${estado === "certa" ? "bg-emerald-600" : estado === "errada" ? "bg-red-600" : estado === "revelada" ? "bg-ouro" : "bg-marca-700"}`}
+                  >
+                    {SIMBOLO[estado] ?? k + 1}
+                  </span>
+                </>
+              ) : (
+                (SIMBOLO[estado] ?? k + 1)
+              )}
             </button>
           );
         })}

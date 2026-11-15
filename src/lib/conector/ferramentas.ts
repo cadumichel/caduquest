@@ -501,6 +501,12 @@ const schemaQuestao = z.object({
             .describe(
               "Distrator do mesmo assunto, parecido no tamanho e na forma, que ele NÃO fez (ex.: 'aboliu a escravidão após o fim da guerra' contra 'em meio à guerra').",
             ),
+          emoji: z
+            .string()
+            .optional()
+            .describe(
+              "Um emoji do ASSUNTO da casa, comum às duas opções, que não entregue a resposta (ex.: 🗳️ eleição, ⛓️ escravidão, ⚔️ guerra, 📜 lei, ⚰️ morte). Nunca um emoji que combine com só uma das opções: em 'assassinado em um teatro' ou 'morreu de tuberculose', 🎭 entregaria a resposta; use ⚰️. Sempre preencha.",
+            ),
         }),
       ),
     })

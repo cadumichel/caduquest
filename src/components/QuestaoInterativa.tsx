@@ -1448,11 +1448,13 @@ function Tabuleiro({ vista, resposta, onChange, desabilitada, ajuda }: Props<Ext
         estados={estados}
         peao={atual >= n ? n + 1 : atual + 1}
         legendas={legendas}
+        emojis={vista.emojis}
       />
       {atual < n ? (
         <section className="rounded-2xl border-2 border-marca-200 bg-marca-50 p-3 sm:p-4">
           <h3 className="mb-3 font-bold">
             <span className="text-ouro-escuro">
+              {vista.emojis?.[atual] && <span className="mr-1">{vista.emojis[atual]}</span>}
               Casa {atual + 1} de {n}
             </span>{" "}
             · O que {vista.personagem} fez?

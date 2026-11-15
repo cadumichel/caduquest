@@ -265,6 +265,8 @@ export const conteudoTabuleiro = z.object({
       z.object({
         certa: texto.max(200, "Opção longa demais (máx. 200 caracteres)."),
         errada: texto.max(200, "Opção longa demais (máx. 200 caracteres)."),
+        // Emoji do assunto da casa (ex.: ⚔️ numa casa sobre guerra); aparece quando o peão chega.
+        emoji: z.string().trim().max(16, "Use um emoji só por casa.").optional(),
       }),
     )
     .min(3, "Use de 3 a 6 casas.")
@@ -476,7 +478,10 @@ export function conteudoVazio(tipo: TipoQuestao): Conteudo {
     case "mapa":
       return { tipo, conteudo: { imagem: "", marcadores: [] } };
     case "tabuleiro":
-      return { tipo, conteudo: { personagem: "", casas: [0, 1, 2, 3, 4].map(() => ({ certa: "", errada: "" })) } };
+      return {
+        tipo,
+        conteudo: { personagem: "", casas: [0, 1, 2, 3, 4].map(() => ({ certa: "", errada: "", emoji: "" })) },
+      };
   }
 }
 
@@ -499,7 +504,14 @@ export type Vista =
   | { tipo: "linha_do_tempo_datas"; faixas: string[]; eventos: string[] }
   | { tipo: "mapa"; imagem: string; pinos: { x: number; y: number }[]; nomes: string[] }
   /** Cada casa traz as duas opções na ordem da tela; avatar = retrato do personagem, se o app tiver. */
-  | { tipo: "tabuleiro"; personagem: string; avatar: string | null; casas: [string, string][] };
+  | {
+      tipo: "tabuleiro";
+      personagem: string;
+      avatar: string | null;
+      casas: [string, string][];
+      /** Emoji do assunto de cada casa (null = sem emoji). */
+      emojis: (string | null)[];
+    };
 
 /** Resposta do aluno, sempre em índices da ordem exibida. */
 export type Resposta =
