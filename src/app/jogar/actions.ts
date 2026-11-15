@@ -20,8 +20,7 @@ import { schemaResposta } from "@/lib/questoes/tipos";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { ehMotivoZerada } from "@/lib/tela-protegida";
 
-const LIMITE_TENTATIVAS = 5;
-const BLOQUEIO_MINUTOS = 15;
+import { BLOQUEIO_MINUTOS, ERRO_SIMULTANEO, reservarTentativa } from "@/lib/pin";
 
 const schema = z.object({
   modo: z.enum(["entrar", "cadastrar"]),
@@ -86,18 +85,8 @@ export async function entrarPublico(_: EstadoEntrarPublico, form: FormData): Pro
     if (jogador.bloqueado_ate && new Date(jogador.bloqueado_ate) > new Date()) {
       return { erro: `Muitas tentativas erradas. Tente de novo em ${BLOQUEIO_MINUTOS} minutos.` };
     }
-    if (!(await bcrypt.compare(pin, jogador.pin_hash))) {
-      const falhas = jogador.tentativas_falhas + 1;
-      await db
-        .from("jogadores_publicos")
-        .update({
-          tentativas_falhas: falhas >= LIMITE_TENTATIVAS ? 0 : falhas,
-          bloqueado_ate:
-            falhas >= LIMITE_TENTATIVAS ? new Date(Date.now() + BLOQUEIO_MINUTOS * 60_000).toISOString() : null,
-        })
-        .eq("id", jogador.id);
-      return { erro: "PIN incorreto." };
-    }
+    if (!(await reservarTentativa(db, "jogadores_publicos", jogador))) return { erro: ERRO_SIMULTANEO };
+    if (!(await bcrypt.compare(pin, jogador.pin_hash))) return { erro: "PIN incorreto." };
     versao = jogador.versao_sessao + 1;
     await db
       .from("jogadores_publicos")

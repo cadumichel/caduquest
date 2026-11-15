@@ -46,6 +46,8 @@ export async function resumoDoDesafio(
     .maybeSingle();
   const tentativa = tentativaBruta as Tentativa | null;
   if (!tentativa) return null;
+  // No meio do desafio não há resumo: os pontos parciais entregariam os acertos.
+  if (!terminou(tentativa) && situacaoDesafio(desafio) === "aberto") return null;
 
   const [{ data: respostas }, situacao, progresso, { data: outrosBrutos }, { data: minhasBrutas }, erros] =
     await Promise.all([

@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { arredondarPontos } from "@/lib/pontos";
+import { idsProfessoresAutorizados } from "@/lib/professores-autorizados";
 import { ajudaNaVista, candidatasEliminacao, respostaComAjuda, type AjudaVista } from "@/lib/questoes/ajudas";
 import { montarVista } from "@/lib/questoes/apresentacao";
 import { corrigir, tempoAcabou, tempoEsgotado } from "@/lib/questoes/correcao";
@@ -114,11 +115,10 @@ const comoConteudo = (q: QuestaoBanco) => ({ tipo: q.tipo, conteudo: q.conteudo 
 /** Questões publicadas de cada era, para saber quais desafios já podem abrir. */
 export async function questoesPorEra(db: SupabaseClient): Promise<Record<EraId, number>> {
   const contagem = Object.fromEntries(ERAS.map((e) => [e.id, 0])) as Record<EraId, number>;
-  const { data } = await db
-    .from("questoes")
-    .select("era_publica")
-    .eq("status", "publicada")
-    .not("era_publica", "is", null);
+  let consulta = db.from("questoes").select("era_publica").eq("status", "publicada").not("era_publica", "is", null);
+  const autorizados = await idsProfessoresAutorizados();
+  if (autorizados) consulta = consulta.in("professor_id", autorizados);
+  const { data } = await consulta;
   for (const q of data ?? []) {
     const era = q.era_publica as EraId;
     if (era in contagem) contagem[era]++;
@@ -170,7 +170,11 @@ export async function comecarPartida(
   const andamento = await partidaEmAndamento(db, jogador.id, era);
   if (andamento) return { partidaId: andamento.id };
 
-  const { data: banco } = await db.from("questoes").select("id, tipo").eq("era_publica", era).eq("status", "publicada");
+  let consulta = db.from("questoes").select("id, tipo").eq("era_publica", era).eq("status", "publicada");
+  // Só questões dos professores autorizados entram no desafio aberto a todos.
+  const autorizados = await idsProfessoresAutorizados();
+  if (autorizados) consulta = consulta.in("professor_id", autorizados);
+  const { data: banco } = await consulta;
   if ((banco ?? []).length < QUESTOES_POR_PARTIDA)
     return { erro: "Este desafio ainda está sendo preparado. Volte em breve!" };
 
