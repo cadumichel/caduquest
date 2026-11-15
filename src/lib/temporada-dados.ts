@@ -8,7 +8,7 @@ import { calcularMetaTurma, montarLigas } from "@/lib/ligas";
 import { lerPorIds, respostasCorrigidas } from "@/lib/paginar";
 import { arredondarPontos } from "@/lib/pontos";
 import { montarRanking } from "@/lib/ranking";
-import type { Temporada } from "@/lib/tipos-banco";
+import { situacaoDesafio, type Temporada } from "@/lib/tipos-banco";
 
 /** Temporada em curso da turma; se não houver, a próxima; senão, a última. */
 export async function temporadaAtual(db: SupabaseClient, turmaId: string): Promise<Temporada | null> {
@@ -96,12 +96,22 @@ export async function situacaoDaTemporada(
   temporada: Pick<Temporada, "id" | "turma_id">,
   verComo?: string,
 ) {
-  const { todosAlunos, desafios, deTeste, tentativas, respostas } = await dadosDaTemporada(
-    db,
-    temporada.id,
-    temporada.turma_id,
-  );
+  const {
+    todosAlunos,
+    desafios,
+    deTeste,
+    tentativas: todasTentativas,
+    respostas,
+  } = await dadosDaTemporada(db, temporada.id, temporada.turma_id);
   const alunos = todosAlunos.filter((a) => !deTeste.has(a.id) || a.id === verComo);
+  // Na visão do aluno, o desafio que alguém ainda está respondendo só entra nos
+  // pontos quando termina (ou quando o desafio fecha). Senão, bastaria olhar o
+  // ranking depois de cada questão para saber se a resposta estava certa.
+  // As respostas dessas tentativas também ficam de fora: só contam as das tentativas mantidas.
+  const abertos = new Set(desafios.filter((d) => situacaoDesafio(d) === "aberto").map((d) => d.id));
+  const tentativas = todasTentativas.filter(
+    (t) => !verComo || !abertos.has(t.desafio_id) || Boolean(t.concluida_em) || t.indice_atual >= t.ordem.length,
+  );
 
   const porAluno = new Map(
     alunos.map((a) => [

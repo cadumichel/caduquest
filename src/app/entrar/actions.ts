@@ -8,8 +8,7 @@ import { CORES_AVATAR } from "@/components/Avatar";
 import { INICIAIS } from "@/lib/personagens";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 
-const LIMITE_TENTATIVAS = 5;
-const BLOQUEIO_MINUTOS = 15;
+import { BLOQUEIO_MINUTOS, ERRO_SIMULTANEO, reservarTentativa } from "@/lib/pin";
 
 const schema = z.object({
   modo: z.enum(["entrar", "cadastrar"]),
@@ -102,18 +101,12 @@ export async function entrar(_: EstadoEntrar, form: FormData): Promise<EstadoEnt
         .from("alunos")
         .update({ pin_hash: await bcrypt.hash(pin, 10) })
         .eq("id", aluno.id);
-    } else if (!(await bcrypt.compare(pin, aluno.pin_hash))) {
-      const falhas = aluno.tentativas_falhas + 1;
-      await db
-        .from("alunos")
-        .update({
-          tentativas_falhas: falhas >= LIMITE_TENTATIVAS ? 0 : falhas,
-          bloqueado_ate:
-            falhas >= LIMITE_TENTATIVAS ? new Date(Date.now() + BLOQUEIO_MINUTOS * 60_000).toISOString() : null,
-        })
-        .eq("id", aluno.id);
-      if (modo === "cadastrar") return { erro: "Esse apelido já está em uso na turma. Escolha outro." };
-      return { erro: "PIN incorreto." };
+    } else {
+      if (!(await reservarTentativa(db, "alunos", aluno))) return { erro: ERRO_SIMULTANEO };
+      if (!(await bcrypt.compare(pin, aluno.pin_hash))) {
+        if (modo === "cadastrar") return { erro: "Esse apelido já está em uso na turma. Escolha outro." };
+        return { erro: "PIN incorreto." };
+      }
     }
     // Nova sessão invalida a anterior: um aparelho por vez.
     versao = aluno.versao_sessao + 1;

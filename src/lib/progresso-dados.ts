@@ -4,6 +4,7 @@ import { calcularProgresso, type DesafioProgresso, type RespostaProgresso } from
 import { lerPorIds, respostasCorrigidas } from "@/lib/paginar";
 import { revisoesAcertadas } from "@/lib/revisao";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
+import { situacaoDesafio } from "@/lib/tipos-banco";
 
 type TentativaComDesafio = {
   id: string;
@@ -11,7 +12,7 @@ type TentativaComDesafio = {
   concluida_em: string | null;
   indice_atual: number;
   ordem: string[];
-  desafios: { titulo: string; tipo: string; abre_em: string };
+  desafios: { titulo: string; tipo: string; abre_em: string; fecha_em: string };
 };
 
 /** Progresso do aluno em todas as temporadas da turma (uma ida ao banco por tabela). */
@@ -21,13 +22,17 @@ export const progressoDoAluno = cache(async (alunoId: string, turmaId: string) =
     db
       .from("tentativas")
       .select(
-        "id, desafio_id, concluida_em, indice_atual, ordem, desafios!inner(titulo, tipo, abre_em, temporadas!inner(turma_id))",
+        "id, desafio_id, concluida_em, indice_atual, ordem, desafios!inner(titulo, tipo, abre_em, fecha_em, temporadas!inner(turma_id))",
       )
       .eq("aluno_id", alunoId)
       .eq("desafios.temporadas.turma_id", turmaId),
     revisoesAcertadas(db, alunoId),
   ]);
-  const tentativas = (tentativasBrutas ?? []) as unknown as TentativaComDesafio[];
+  // O desafio que o aluno ainda está respondendo só conta (XP, habilidades) quando
+  // ele termina ou o desafio fecha: o XP subindo a cada questão entregaria os acertos.
+  const tentativas = ((tentativasBrutas ?? []) as unknown as TentativaComDesafio[]).filter(
+    (t) => Boolean(t.concluida_em) || t.indice_atual >= t.ordem.length || situacaoDesafio(t.desafios) !== "aberto",
+  );
   const ids = tentativas.map((t) => t.id);
 
   const respostasBrutas = await respostasCorrigidas<{ tentativa_id: string; questao_id: string; fracao: number }>(
