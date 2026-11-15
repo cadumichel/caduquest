@@ -17,13 +17,11 @@ export function useModoFoco(ativo = true) {
   }, [ativo]);
 }
 
-/** A partir deste tamanho de enunciado (ou com imagem), a tela larga divide em duas colunas. */
-const ENUNCIADO_LONGO = 180;
-
 /**
- * Disposição da questão no desafio, no treino e na revisão. Em tela larga, o
- * enunciado e a imagem ficam à esquerda (fixos ao rolar) e as alternativas à
- * direita, para caber sem rolagem. Questão curta e sem imagem fica numa coluna só.
+ * Disposição da questão no desafio, no treino e na revisão. Com imagem, em tela
+ * larga, a imagem e o enunciado ficam à esquerda (fixos ao rolar) e as
+ * alternativas à direita, para caber sem rolagem. Sem imagem, tudo fica numa
+ * coluna só e centralizada: o texto à esquerda deixava um vazio grande embaixo.
  */
 export function PalcoQuestao({
   topo,
@@ -37,7 +35,7 @@ export function PalcoQuestao({
   imagemUrl?: string | null;
   children: ReactNode;
 }) {
-  const duasColunas = Boolean(imagemUrl) || enunciado.length > ENUNCIADO_LONGO;
+  const duasColunas = Boolean(imagemUrl);
   return (
     <div className={`space-y-4 ${duasColunas ? "" : "mx-auto max-w-3xl"}`}>
       {topo}
