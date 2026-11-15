@@ -120,3 +120,45 @@ describe("certas do tabuleiro (treino e revisão)", () => {
     ).toBeUndefined();
   });
 });
+
+describe("vidas e casa a casa", () => {
+  it("vidas pelo número de casas", async () => {
+    const { vidasDoTabuleiro } = await import("../questoes/tabuleiro");
+    expect([3, 4, 5, 6, 7, 10].map(vidasDoTabuleiro)).toEqual([1, 1, 2, 2, 3, 3]);
+  });
+
+  it("cada erro gasta uma vida; sem vidas, o próximo erro encerra", async () => {
+    const { andarNoTabuleiro, respostaDoTabuleiro } = await import("../questoes/tabuleiro");
+    // 5 casas = 2 vidas. Certas na tela: [0, 1, 0, 1, 0].
+    let p = andarNoTabuleiro(lincoln, perm, [], [], 1)!; // erro 1
+    expect(p).toMatchObject({ erros: 1, encerrado: false, certas: [0] });
+    p = andarNoTabuleiro(lincoln, perm, [], p.escolhas, 0)!; // erro 2
+    expect(p).toMatchObject({ erros: 2, encerrado: false });
+    p = andarNoTabuleiro(lincoln, perm, [], p.escolhas, 0)!; // certa
+    expect(p.encerrado).toBe(false);
+    p = andarNoTabuleiro(lincoln, perm, [], p.escolhas, 0)!; // erro 3: sem vidas, encerra
+    expect(p).toMatchObject({ erros: 3, encerrado: true, escolhas: [1, 0, 0, 0] });
+    expect(andarNoTabuleiro(lincoln, perm, [], p.escolhas, 0)).toBeNull();
+    const r = respostaDoTabuleiro(lincoln.tipo === "tabuleiro" ? lincoln.conteudo : (null as never), p.escolhas);
+    expect(r.escolhas).toEqual([1, 0, 0, 0, null]);
+    expect(corrigir(lincoln, perm, r)).toBe(0.2);
+  });
+
+  it("casa revelada vale a certa, seja qual for a escolha", async () => {
+    const { andarNoTabuleiro } = await import("../questoes/tabuleiro");
+    expect(andarNoTabuleiro(lincoln, perm, [0], [], 1)).toMatchObject({ escolhas: [0], erros: 0 });
+  });
+
+  it("a correção do tabuleiro usa o andamento gravado, não o que a tela mandou", async () => {
+    const { respostaParaCorrigir } = await import("../questoes/tabuleiro");
+    const gravada = { tipo: "tabuleiro", escolhas: [0, 1] };
+    const enviada = { tipo: "tabuleiro" as const, escolhas: [0, 1, 0, 1, 0] };
+    const r = respostaParaCorrigir(lincoln, perm, [], gravada, enviada);
+    expect(corrigir(lincoln, perm, r)).toBe(0.4);
+  });
+
+  it("eliminar só revela casas à frente", async () => {
+    const { candidatasAFrente } = await import("../questoes/tabuleiro");
+    expect(candidatasAFrente(lincoln, [0, 1, 2, 3, 4], { tipo: "tabuleiro", escolhas: [0, 1] })).toEqual([2, 3, 4]);
+  });
+});

@@ -8,6 +8,7 @@ import { INICIAIS } from "@/lib/personagens";
 import {
   comecarPartida,
   dicaPublica,
+  andarTabuleiroPublico,
   eliminarPublica,
   estadoPartida,
   responderPartida,
@@ -148,6 +149,12 @@ export async function responderPublico(
 export async function eliminarNaPartida(partidaId: string, questaoId: string): Promise<ResultadoAjudaPublica> {
   const jogador = await exigirJogador();
   return eliminarPublica(criarClienteAdmin(), jogador, String(partidaId), String(questaoId));
+}
+
+/** Tabuleiro: responde a próxima casa (o servidor confere e devolve a cor e as vidas). */
+export async function andarNoTabuleiroPartida(partidaId: string, questaoId: string, escolha: number) {
+  const jogador = await exigirJogador();
+  return andarTabuleiroPublico(criarClienteAdmin(), jogador, String(partidaId), String(questaoId), Number(escolha));
 }
 
 /** Ajuda da partida: mostra a dica da questão atual. */

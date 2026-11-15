@@ -14,6 +14,7 @@ import { rankingDaTemporada, temporadaAtual } from "@/lib/temporada-dados";
 import { fundoLiberado, FUNDOS } from "@/lib/visual-perfil";
 import {
   abrirDica,
+  andarTabuleiro,
   eliminarAlternativa,
   entrarNoJogo,
   sairDoJogo,
@@ -107,6 +108,12 @@ export async function avisoTolerado(
 export async function eliminar(desafioId: string, questaoId: string): Promise<ResultadoAjuda> {
   const aluno = await exigirAluno();
   return eliminarAlternativa(criarClienteAdmin(), aluno, String(desafioId), String(questaoId));
+}
+
+/** Tabuleiro: responde a próxima casa (o servidor confere e devolve a cor e as vidas). */
+export async function andarNoTabuleiroDesafio(desafioId: string, questaoId: string, escolha: number) {
+  const aluno = await exigirAluno();
+  return andarTabuleiro(criarClienteAdmin(), aluno, String(desafioId), String(questaoId), Number(escolha));
 }
 
 /** Ajuda da temporada: mostra a dica da questão atual. */

@@ -6,6 +6,17 @@ export type EstadoCasa = "feita" | "atual" | "oculta" | "certa" | "errada" | "re
 
 /** Posições (em % da largura e da altura) do início, das casas e da chegada, em zigue-zague. */
 function posicoes(n: number): { x: number; y: number }[] {
+  if (n > 6) {
+    // Duas fileiras em "S": a de cima vai para a direita, a de baixo volta para a esquerda.
+    const total = n + 2;
+    const emCima = Math.ceil(total / 2);
+    const emBaixo = total - emCima;
+    return Array.from({ length: total }, (_, i) => {
+      if (i < emCima) return { x: 10 + (i * 80) / (emCima - 1), y: i % 2 ? 30 : 38 };
+      const j = i - emCima;
+      return { x: 90 - (j * 80) / Math.max(1, emBaixo - 1), y: j % 2 ? 76 : 84 };
+    });
+  }
   const ondas = [72, 52, 40, 60, 76, 48, 40, 62];
   return Array.from({ length: n + 2 }, (_, i) => ({
     x: 9 + (i * 82) / (n + 1),
@@ -90,7 +101,9 @@ export function CaminhoTabuleiro({
 
   return (
     <div className="space-y-2">
-      <div className="relative h-56 overflow-hidden rounded-2xl bg-gradient-to-br from-marca-800 via-marca-700 to-marca-950 shadow-inner sm:h-64">
+      <div
+        className={`relative overflow-hidden rounded-2xl ${n > 6 ? "h-80 sm:h-96" : "h-56 sm:h-64"} bg-gradient-to-br from-marca-800 via-marca-700 to-marca-950 shadow-inner`}
+      >
         <div
           aria-hidden
           className="absolute inset-0 opacity-30"

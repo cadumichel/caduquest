@@ -3,6 +3,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AlunoSessao } from "@/lib/aluno-sessao";
 import { montarVista } from "@/lib/questoes/apresentacao";
 import {
+  candidatasAFrente,
+  escolhasGravadas,
+  progressoTabuleiro,
+  respostaParaCorrigir,
+  type ProgressoTabuleiro,
+} from "@/lib/questoes/tabuleiro";
+import { gravarPassoTabuleiro } from "@/lib/tabuleiro-jogo";
+import {
   calcularPontos,
   corrigir,
   JANELA_APOS_FECHAR_S,
@@ -16,7 +24,6 @@ import {
   candidatasEliminacao,
   DICAS_POR_TEMPORADA,
   ELIMINACOES_POR_TEMPORADA,
-  respostaComAjuda,
   type AjudaVista,
 } from "@/lib/questoes/ajudas";
 import { embaralhar, permutacaoAleatoria } from "@/lib/questoes/embaralhar";
@@ -63,6 +70,8 @@ export type QuestaoServida = {
   temDica: boolean;
   /** Texto da dica, se o aluno já abriu nesta questão. */
   dica: string | null;
+  /** Tabuleiro: andamento casa a casa (cores e vidas). */
+  tabuleiro?: ProgressoTabuleiro;
 };
 
 /** Ajudas que ainda restam ao aluno na temporada. null = indisponível (banco sem as colunas). */
@@ -250,7 +259,8 @@ async function registrar(
   // A tela manda a resposta vazia sozinha quando o cronômetro zera.
   const semResposta = resposta === null && motivo === null;
   // Os itens travados pelas eliminações valem como estão na tela.
-  resposta = respostaComAjuda(comoConteudo(questao), linha.permutacao, linha.eliminadas, resposta);
+  // No tabuleiro, vale o andamento gravado casa a casa.
+  resposta = respostaParaCorrigir(comoConteudo(questao), linha.permutacao, linha.eliminadas, linha.resposta, resposta);
   const agora = new Date();
   const esgotado = tempoEsgotado(new Date(linha.servida_em), agora, tempoDaQuestao(desafio, questao));
   // Com tolerância de saídas, quem decide que a saída zerou é o aviso esgotado (motivo "saida").
@@ -599,9 +609,14 @@ export async function estadoAtual(
         cliquesRestantes: cliquesRestantes(desafio, tentativa.cliques_fora ?? 0),
         saidasRestantes: saidasRestantes(desafio, tentativa.saidas_toleradas ?? 0),
         ajuda: ajudaNaVista(conteudo, linha.permutacao, eliminadas),
-        podeEliminar: desafio.eliminacoes_max !== 0 && candidatasEliminacao(conteudo, eliminadas).length > 0,
+        podeEliminar:
+          desafio.eliminacoes_max !== 0 &&
+          candidatasAFrente(conteudo, candidatasEliminacao(conteudo, eliminadas), linha.resposta).length > 0,
         temDica: Boolean(dica) && desafio.dicas_max !== 0,
         dica: linha.dica_usada ? dica : null,
+        ...(conteudo.tipo === "tabuleiro" && {
+          tabuleiro: progressoTabuleiro(conteudo.conteudo, linha.permutacao, escolhasGravadas(linha.resposta)),
+        }),
       },
     };
   }
@@ -711,7 +726,7 @@ export async function eliminarAlternativa(
     };
   const conteudo = comoConteudo(questao);
   const antes = linha.eliminadas ?? [];
-  const candidatas = candidatasEliminacao(conteudo, antes);
+  const candidatas = candidatasAFrente(conteudo, candidatasEliminacao(conteudo, antes), linha.resposta);
   if (!candidatas.length) return { erro: "Não dá para usar mais eliminações nesta questão.", ajudas };
   const eliminadas = [...antes, candidatas[Math.floor(Math.random() * candidatas.length)]];
   const { data: gravada } = await db
@@ -725,9 +740,22 @@ export async function eliminarAlternativa(
   if (!gravada?.length) return { erro: "Não foi possível eliminar agora. Tente de novo." };
   return {
     ajuda: ajudaNaVista(conteudo, linha.permutacao, eliminadas),
-    podeEliminar: candidatasEliminacao(conteudo, eliminadas).length > 0,
+    podeEliminar: candidatasAFrente(conteudo, candidatasEliminacao(conteudo, eliminadas), linha.resposta).length > 0,
     ajudas: { ...ajudas, eliminacoes: ajudas.eliminacoes - 1 },
   };
+}
+
+/** Tabuleiro: responde a próxima casa e devolve a cor dela e as vidas. */
+export async function andarTabuleiro(
+  db: SupabaseClient,
+  aluno: AlunoSessao,
+  desafioId: string,
+  questaoId: string,
+  escolha: number,
+): Promise<{ progresso: ProgressoTabuleiro } | { erro: string }> {
+  const atual = await questaoEmAndamento(db, aluno, desafioId, questaoId);
+  if ("erro" in atual) return { erro: atual.erro ?? "Esta questão já passou." };
+  return gravarPassoTabuleiro(db, "respostas", atual.linha, comoConteudo(atual.questao), escolha);
 }
 
 /** Mostra a dica da questão atual. Gasta 1 da cota só na primeira vez em cada questão. */

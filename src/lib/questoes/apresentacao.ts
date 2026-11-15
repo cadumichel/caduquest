@@ -170,7 +170,7 @@ export function respostaCompleta(r: Resposta): boolean {
     case "mapa":
       return r.pinos.every((v) => v !== null);
     case "tabuleiro":
-      return r.escolhas.every((v) => v !== null);
+      return Boolean(r.fim) || r.escolhas.every((v) => v !== null);
     case "vf_bloco":
       return r.valores.every((v) => v !== null);
     case "linha_do_tempo":

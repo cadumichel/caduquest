@@ -22,6 +22,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useId, useRef, useState, type ReactNode } from "react";
 import { mapaFixas, type AjudaVista } from "@/lib/questoes/ajudas";
 import type { Resposta, Vista } from "@/lib/questoes/tipos";
+import { vidasDoTabuleiro, type ProgressoTabuleiro } from "@/lib/questoes/tabuleiro";
 import { CaminhoTabuleiro, type EstadoCasa } from "./Tabuleiro";
 
 const LETRAS = "ABCDEF";
@@ -69,6 +70,8 @@ export function QuestaoInterativa({
   desabilitada,
   ajuda,
   certas,
+  progressoTabuleiro,
+  andarTabuleiro,
 }: {
   vista: Vista;
   resposta: Resposta;
@@ -77,6 +80,10 @@ export function QuestaoInterativa({
   ajuda?: AjudaVista;
   /** Tabuleiro no treino e na revisão (gabarito público): opção certa de cada casa. */
   certas?: number[];
+  /** Tabuleiro no desafio: andamento gravado no servidor (volta à tela já colorido). */
+  progressoTabuleiro?: ProgressoTabuleiro;
+  /** Tabuleiro no desafio: o servidor confere cada casa e devolve a cor e as vidas. */
+  andarTabuleiro?: (escolha: number) => Promise<ResultadoPasso>;
 }) {
   if (vista.tipo !== resposta.tipo) return null;
   switch (vista.tipo) {
@@ -256,6 +263,8 @@ export function QuestaoInterativa({
           desabilitada={desabilitada}
           ajuda={ajuda}
           certas={certas}
+          progresso={progressoTabuleiro}
+          andar={andarTabuleiro}
         />
       );
   }
@@ -1408,10 +1417,13 @@ function Mapa({ vista, resposta, onChange, desabilitada, ajuda }: Props<Extract<
   );
 }
 
+type ResultadoPasso = { progresso: ProgressoTabuleiro } | { erro: string };
+
 /**
- * Tabuleiro: o personagem anda uma casa a cada escolha. As casas seguintes só
- * aparecem depois da escolha e não dá para voltar. Nada mostra se a escolha foi
- * certa: isso fica para a correção.
+ * Tabuleiro: o personagem anda uma casa a cada escolha, sem voltar. Com o gabarito
+ * à mão (servidor no desafio, certas no treino e na revisão), cada casa fica verde ou
+ * vermelha na hora; cada erro gasta uma vida e, sem vidas, o próximo erro encerra a
+ * questão onde o aluno parou. Na prévia do professor, só anda.
  */
 function Tabuleiro({
   vista,
@@ -1420,22 +1432,41 @@ function Tabuleiro({
   desabilitada,
   ajuda,
   certas,
-}: Props<Extract<Vista, { tipo: "tabuleiro" }>> & { certas?: number[] }) {
+  progresso,
+  andar,
+}: Props<Extract<Vista, { tipo: "tabuleiro" }>> & {
+  certas?: number[];
+  progresso?: ProgressoTabuleiro;
+  andar?: (escolha: number) => Promise<ResultadoPasso>;
+}) {
   const fixas = mapaFixas(ajuda);
   const n = vista.casas.length;
-  // Casas já passadas: as do começo que têm escolha (vale também ao voltar para a tela).
-  const inicio = () => {
+  const vidas = vidasDoTabuleiro(n);
+
+  type Caminho = { chave: string; feitas: number[]; certasFeitas: (number | null)[] };
+  const inicial = (): Omit<Caminho, "chave"> => {
+    if (progresso) return { feitas: progresso.escolhas, certasFeitas: progresso.certas as (number | null)[] };
     const k = resposta.escolhas.findIndex((e) => e === null);
-    return k === -1 ? n : k;
+    const feitas = resposta.escolhas.slice(0, k === -1 ? n : k) as number[];
+    return { feitas, certasFeitas: feitas.map((_, j) => certas?.[j] ?? null) };
   };
   // A tela reaproveita o componente entre questões: outra questão volta ao início do caminho.
   const chave = `${vista.personagem}|${vista.casas.flat().join("|")}`;
-  const [caminho, setCaminho] = useState(() => ({ chave, passo: inicio() }));
-  if (caminho.chave !== chave) setCaminho({ chave, passo: inicio() });
-  const setPasso = (passo: number) => setCaminho({ chave, passo });
-  const atual = Math.min(caminho.chave === chave ? caminho.passo : inicio(), n);
-  const escolha = atual < n ? (fixas.get(atual) ?? resposta.escolhas[atual]) : null;
+  const [caminho, setCaminho] = useState<Caminho>(() => ({ chave, ...inicial() }));
+  if (caminho.chave !== chave) setCaminho({ chave, ...inicial() });
+  const { feitas, certasFeitas }: Caminho = caminho.chave === chave ? caminho : { chave, ...inicial() };
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const erros = feitas.filter(
+    (e, k) => certasFeitas[k] !== null && certasFeitas[k] !== undefined && e !== certasFeitas[k],
+  ).length;
+  const semVidas = erros > vidas;
+  const encerrado = feitas.length >= n || semVidas;
+  const atual = feitas.length;
+  const escolha = !encerrado ? (fixas.get(atual) ?? resposta.escolhas[atual]) : null;
   const travada = fixas.has(atual);
+  const certasNoCaminho = feitas.filter((e, k) => e === certasFeitas[k]).length;
 
   const escolher = (i: number) => {
     const escolhas = [...resposta.escolhas];
@@ -1443,25 +1474,47 @@ function Tabuleiro({
     onChange({ tipo: "tabuleiro", escolhas });
   };
 
-  const estados: EstadoCasa[] = vista.casas.map((_, k) =>
-    k < atual
-      ? fixas.has(k)
-        ? "revelada"
-        : certas
-          ? resposta.escolhas[k] === certas[k]
-            ? "certa"
-            : "errada"
-          : "feita"
-      : k === atual
-        ? "atual"
-        : fixas.has(k)
-          ? "revelada"
-          : "oculta",
-  );
-  const legendas = vista.casas.map((casa, k) => {
-    const e = fixas.get(k) ?? resposta.escolhas[k];
-    return k < atual && e !== null && e !== undefined ? casa[e] : null;
+  const registrar = (novasFeitas: number[], novasCertas: (number | null)[]) => {
+    setCaminho({ chave, feitas: novasFeitas, certasFeitas: novasCertas });
+    const novosErros = novasFeitas.filter((e, k) => novasCertas[k] !== null && e !== novasCertas[k]).length;
+    onChange({
+      tipo: "tabuleiro",
+      escolhas: vista.casas.map((_, k) => (k < novasFeitas.length ? novasFeitas[k] : null)),
+      fim: novasFeitas.length >= n || novosErros > vidas,
+    });
+  };
+
+  const avancar = async () => {
+    if (escolha === null || escolha === undefined || encerrado) return;
+    setErro(null);
+    if (andar) {
+      setEnviando(true);
+      try {
+        const r = await andar(escolha);
+        if ("erro" in r) return setErro(r.erro);
+        registrar(r.progresso.escolhas, r.progresso.certas);
+      } catch {
+        setErro("Falha de conexão. Toque em avançar de novo.");
+      } finally {
+        setEnviando(false);
+      }
+      return;
+    }
+    registrar([...feitas, escolha], [...certasFeitas, certas?.[atual] ?? null]);
+  };
+
+  const estados: EstadoCasa[] = vista.casas.map((_, k) => {
+    if (k < feitas.length) {
+      if (fixas.has(k)) return "revelada";
+      const c = certasFeitas[k];
+      return c === null || c === undefined ? "feita" : feitas[k] === c ? "certa" : "errada";
+    }
+    if (k === atual && !encerrado) return "atual";
+    return fixas.has(k) && !semVidas ? "revelada" : "oculta";
   });
+  const legendas = vista.casas.map((casa, k) => (k < feitas.length ? casa[feitas[k]] : null));
+  const ultima = feitas.length - 1;
+  const ultimaCerta = ultima >= 0 ? certasFeitas[ultima] : null;
 
   return (
     <div className="space-y-3">
@@ -1469,11 +1522,33 @@ function Tabuleiro({
         personagem={vista.personagem}
         avatar={vista.avatar}
         estados={estados}
-        peao={atual >= n ? n + 1 : atual + 1}
+        peao={feitas.length >= n ? n + 1 : semVidas ? feitas.length : atual + 1}
         legendas={legendas}
         emojis={vista.emojis}
       />
-      {atual < n ? (
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+        <span className="font-bold text-marca-900" aria-label={`${Math.max(0, vidas - erros)} de ${vidas} vidas`}>
+          Vidas:{" "}
+          {Array.from({ length: vidas }, (_, v) => (
+            <span key={v} className={v < vidas - erros ? "" : "opacity-30 grayscale"}>
+              ❤️
+            </span>
+          ))}
+        </span>
+        <span className="text-slate-500">Cada erro gasta uma vida. Sem vidas, o próximo erro encerra o caminho.</span>
+      </div>
+      {ultima >= 0 && ultimaCerta !== null && ultimaCerta !== undefined && !fixas.has(ultima) && (
+        <p
+          className={`rounded-xl px-3 py-2 text-sm font-semibold ${
+            feitas[ultima] === ultimaCerta ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"
+          }`}
+        >
+          {feitas[ultima] === ultimaCerta
+            ? `✓ Casa ${ultima + 1}: acertou!`
+            : `✗ Casa ${ultima + 1}: errou. ${vista.personagem}: ${vista.casas[ultima][ultimaCerta]}`}
+        </p>
+      )}
+      {!encerrado ? (
         <section className="rounded-2xl border-2 border-marca-200 bg-marca-50 p-3 sm:p-4">
           <h3 className="mb-3 font-bold">
             <span className="text-ouro-escuro">
@@ -1489,7 +1564,7 @@ function Tabuleiro({
                 <button
                   key={`${atual}-${i}`}
                   type="button"
-                  disabled={desabilitada || travada}
+                  disabled={desabilitada || travada || enviando}
                   onClick={() => escolher(i)}
                   aria-pressed={marcada}
                   className={`flex items-start gap-3 rounded-xl border-2 p-3 text-left transition ${
@@ -1519,20 +1594,28 @@ function Tabuleiro({
               );
             })}
           </div>
+          {erro && <p className="mt-2 text-sm font-semibold text-red-700">{erro}</p>}
           <div className="mt-3 flex justify-end">
             <button
               type="button"
-              disabled={desabilitada || escolha === null || escolha === undefined}
-              onClick={() => setPasso(atual + 1)}
+              disabled={desabilitada || enviando || escolha === null || escolha === undefined}
+              onClick={avancar}
               className="rounded-xl bg-marca-600 px-5 py-2.5 font-bold text-white shadow transition hover:bg-marca-700 disabled:opacity-40"
             >
-              {atual + 1 < n ? "Avançar uma casa ➜" : "Chegar ao fim 🏆"}
+              {enviando ? "Conferindo…" : atual + 1 < n ? "Avançar uma casa ➜" : "Chegar ao fim 🏆"}
             </button>
           </div>
         </section>
+      ) : semVidas ? (
+        <p className="rounded-2xl border-2 border-red-200 bg-red-50 p-4 text-center font-bold text-red-900">
+          💔 Acabaram as vidas: {vista.personagem} parou na casa {feitas.length}, com {certasNoCaminho} de {n} casas
+          certas. Confirme a resposta para seguir.
+        </p>
       ) : (
         <p className="rounded-2xl border-2 border-ouro-claro bg-amber-50 p-4 text-center font-bold text-marca-900">
-          🏆 {vista.personagem} chegou ao fim do caminho! Agora confirme a sua resposta.
+          🏆 {vista.personagem} chegou ao fim do caminho
+          {certasFeitas.some((c) => c !== null) ? `, com ${certasNoCaminho} de ${n} casas certas` : ""}! Confirme a
+          resposta para seguir.
         </p>
       )}
     </div>
