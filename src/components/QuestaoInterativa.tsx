@@ -7,6 +7,8 @@ import {
   TouchSensor,
   useSensor,
   useSensors,
+  useDraggable,
+  useDroppable,
   type DragEndEvent,
 } from "@dnd-kit/core";
 import {
@@ -17,7 +19,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useId, useState } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import { mapaFixas, type AjudaVista } from "@/lib/questoes/ajudas";
 import type { Resposta, Vista } from "@/lib/questoes/tipos";
 
@@ -570,7 +572,7 @@ function Pares({ vista, resposta, onChange, desabilitada, ajuda }: Props<Extract
                   aria-pressed={ativo === i}
                   className={`flex min-h-12 w-full items-center gap-2 rounded-xl border-2 p-2 text-left text-sm ${
                     fixas.has(i)
-                      ? "border-amber-300 bg-amber-50"
+                      ? `border-amber-400 ${cor(i).fundo}`
                       : ativo === i
                         ? `border-marca-600 ring-2 ring-marca-300 ${ligado !== null ? cor(i).fundo : "bg-marca-50"}`
                         : ligado !== null
@@ -580,7 +582,7 @@ function Pares({ vista, resposta, onChange, desabilitada, ajuda }: Props<Extract
                 >
                   {fixas.has(i) && <Cadeado />}
                   <span
-                    className={`h-3 w-3 shrink-0 rounded-full ${ligado !== null ? cor(i).ponto : "bg-slate-200"}`}
+                    className={`h-3 w-3 shrink-0 rounded-full ${ligado !== null || fixas.has(i) ? cor(i).ponto : "bg-slate-200"}`}
                   />
                   {texto}
                 </button>
@@ -590,7 +592,9 @@ function Pares({ vista, resposta, onChange, desabilitada, ajuda }: Props<Extract
         </ul>
         <ul className="space-y-2">
           {vista.direita.map((texto, d) => {
-            const dono = esquerdaDe(d);
+            // Par revelado pela eliminação: a cor vem do item travado da esquerda.
+            const donoFixo = [...fixas].find(([, v]) => v === d)?.[0];
+            const dono = donoFixo ?? esquerdaDe(d);
             return (
               <li key={d}>
                 <button
@@ -599,7 +603,7 @@ function Pares({ vista, resposta, onChange, desabilitada, ajuda }: Props<Extract
                   onClick={() => ligar(d)}
                   className={`flex min-h-12 w-full items-center gap-2 rounded-xl border-2 p-2 text-left text-sm disabled:opacity-100 ${
                     direitaFixa.has(d)
-                      ? "border-amber-300 bg-amber-50"
+                      ? `border-amber-400 ${cor(dono).fundo}`
                       : dono >= 0
                         ? cor(dono).caixa
                         : "border-slate-200 bg-white"
@@ -895,17 +899,29 @@ function CompletarLacunas({
   const removidas = new Set(ajuda?.removidas ?? []);
   const palavrasFixas = new Set(fixas.values());
   const [ativa, setAtiva] = useState<number | null>(0);
-  const preencher = (palavra: number) => {
+  // Mesmo jeito de arrastar do ordenar: mouse move um pouco; toque segura um instante.
+  const sensores = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
+  );
+  const idArraste = useId();
+  // Soltar a palavra dispara um clique nela; esse clique não pode preencher outra lacuna.
+  const arrastou = useRef(false);
+  const preencher = (palavra: number, lacuna?: number) => {
     if (removidas.has(palavra) || palavrasFixas.has(palavra)) return;
     const alvo =
-      ativa !== null && !fixas.has(ativa)
-        ? ativa
-        : resposta.preenchidas.findIndex((p, k) => p === null && !fixas.has(k));
+      lacuna !== undefined
+        ? fixas.has(lacuna)
+          ? -1
+          : lacuna
+        : ativa !== null && !fixas.has(ativa)
+          ? ativa
+          : resposta.preenchidas.findIndex((p, k) => p === null && !fixas.has(k));
     if (alvo < 0) return;
     const preenchidas = resposta.preenchidas.map((p) => (p === palavra ? null : p));
     preenchidas[alvo] = palavra;
     onChange({ tipo: "completar_lacunas", preenchidas });
-    const proxima = preenchidas.findIndex((p, k) => p === null && k !== alvo);
+    const proxima = preenchidas.findIndex((p, k) => p === null && k !== alvo && !fixas.has(k));
     setAtiva(proxima >= 0 ? proxima : null);
   };
   const tocarLacuna = (k: number) => {
@@ -917,60 +933,145 @@ function CompletarLacunas({
     }
     setAtiva(k);
   };
+  const aoSoltar = ({ active, over }: DragEndEvent) => {
+    setTimeout(() => (arrastou.current = false), 0);
+    if (!over) return;
+    preencher(Number(active.id), Number(String(over.id).slice(1)));
+  };
   return (
-    <div className="space-y-3">
-      <p className="text-sm text-slate-500">Toque numa lacuna e depois na palavra. Toque de novo para esvaziar.</p>
-      <p className="rounded-xl border border-slate-200 bg-white p-3 leading-9">
-        {vista.partes.map((parte, k) => (
-          <span key={k}>
-            {parte}
-            {k < vista.partes.length - 1 && (
-              <button
-                type="button"
-                disabled={desabilitada || fixas.has(k)}
-                onClick={() => tocarLacuna(k)}
-                className={`mx-0.5 inline-flex min-w-20 justify-center gap-1 rounded-lg border-2 px-2 align-middle text-sm leading-7 font-medium ${
-                  fixas.has(k)
-                    ? "border-amber-300 bg-amber-50 text-amber-900"
-                    : ativa === k
-                      ? "border-marca-600 bg-marca-50 text-marca-900"
-                      : resposta.preenchidas[k] !== null
-                        ? "border-marca-300 bg-marca-100 text-marca-900"
-                        : "border-dashed border-slate-300 text-slate-400"
-                }`}
-              >
-                {fixas.has(k) && <Cadeado />}
-                {resposta.preenchidas[k] !== null ? vista.banco[resposta.preenchidas[k]!] : `${k + 1}`}
-              </button>
-            )}
-          </span>
-        ))}
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {vista.banco.map((palavra, i) => {
-          const usada = resposta.preenchidas.includes(i);
-          const riscada = removidas.has(i);
-          return (
-            <button
+    <DndContext
+      id={idArraste}
+      sensors={sensores}
+      onDragStart={() => (arrastou.current = true)}
+      onDragCancel={() => setTimeout(() => (arrastou.current = false), 0)}
+      onDragEnd={aoSoltar}
+    >
+      <div className="space-y-3">
+        <p className="text-sm text-slate-500">
+          Arraste a palavra até a lacuna, ou toque na lacuna e depois na palavra. Toque de novo para esvaziar.
+        </p>
+        <p className="rounded-xl border border-slate-200 bg-white p-3 leading-9">
+          {vista.partes.map((parte, k) => (
+            <span key={k}>
+              {parte}
+              {k < vista.partes.length - 1 && (
+                <Lacuna
+                  k={k}
+                  fixa={fixas.has(k)}
+                  ativa={ativa === k}
+                  cheia={resposta.preenchidas[k] !== null}
+                  desabilitada={desabilitada}
+                  onClick={() => tocarLacuna(k)}
+                >
+                  {fixas.has(k) && <Cadeado />}
+                  {resposta.preenchidas[k] !== null ? vista.banco[resposta.preenchidas[k]!] : `${k + 1}`}
+                </Lacuna>
+              )}
+            </span>
+          ))}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {vista.banco.map((palavra, i) => (
+            <PalavraArrastavel
               key={i}
-              type="button"
-              disabled={desabilitada || riscada || palavrasFixas.has(i)}
-              onClick={() => preencher(i)}
-              aria-label={riscada ? `${palavra}, eliminada` : undefined}
-              className={`rounded-full border-2 px-3 py-1.5 text-sm font-medium ${
-                riscada
-                  ? "border-dashed border-slate-200 bg-slate-50 text-slate-400 line-through"
-                  : usada
-                    ? "border-slate-200 bg-slate-100 text-slate-400"
-                    : "border-marca-200 bg-white text-marca-900"
-              }`}
-            >
-              {palavra}
-            </button>
-          );
-        })}
+              i={i}
+              palavra={palavra}
+              usada={resposta.preenchidas.includes(i)}
+              riscada={removidas.has(i)}
+              desabilitada={desabilitada || removidas.has(i) || palavrasFixas.has(i)}
+              onClick={() => {
+                if (!arrastou.current) preencher(i);
+              }}
+            />
+          ))}
+        </div>
       </div>
-    </div>
+    </DndContext>
+  );
+}
+
+function Lacuna({
+  k,
+  fixa,
+  ativa,
+  cheia,
+  desabilitada,
+  onClick,
+  children,
+}: {
+  k: number;
+  fixa: boolean;
+  ativa: boolean;
+  cheia: boolean;
+  desabilitada?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: `l${k}`, disabled: desabilitada || fixa });
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      disabled={desabilitada || fixa}
+      onClick={onClick}
+      className={`mx-0.5 inline-flex min-w-20 justify-center gap-1 rounded-lg border-2 px-2 align-middle text-sm leading-7 font-medium transition ${
+        fixa
+          ? "border-amber-300 bg-amber-50 text-amber-900"
+          : isOver
+            ? "scale-105 border-marca-600 bg-marca-200 text-marca-900"
+            : ativa
+              ? "border-marca-600 bg-marca-50 text-marca-900"
+              : cheia
+                ? "border-marca-300 bg-marca-100 text-marca-900"
+                : "border-dashed border-slate-300 text-slate-400"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function PalavraArrastavel({
+  i,
+  palavra,
+  usada,
+  riscada,
+  desabilitada,
+  onClick,
+}: {
+  i: number;
+  palavra: string;
+  usada: boolean;
+  riscada: boolean;
+  desabilitada?: boolean;
+  onClick: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: i,
+    disabled: desabilitada,
+  });
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      {...attributes}
+      {...listeners}
+      disabled={desabilitada}
+      onClick={onClick}
+      aria-label={riscada ? `${palavra}, eliminada` : undefined}
+      style={{ transform: CSS.Translate.toString(transform) }}
+      className={`touch-manipulation rounded-full border-2 px-3 py-1.5 text-sm font-medium select-none ${
+        riscada
+          ? "border-dashed border-slate-200 bg-slate-50 text-slate-400 line-through"
+          : isDragging
+            ? "relative z-20 cursor-grabbing border-marca-500 bg-white text-marca-900 shadow-lg"
+            : usada
+              ? "cursor-grab border-slate-200 bg-slate-100 text-slate-400"
+              : "cursor-grab border-marca-200 bg-white text-marca-900"
+      }`}
+    >
+      {palavra}
+    </button>
   );
 }
 

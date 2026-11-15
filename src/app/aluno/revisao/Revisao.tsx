@@ -122,7 +122,7 @@ export function Revisao({ pendentes }: { pendentes: number }) {
           {erro && <Aviso>{erro}</Aviso>}
           <Botao
             variante="sucesso"
-            className="sticky bottom-4 w-full py-4 text-base shadow-lg"
+            className="w-full py-4 text-base shadow-lg"
             disabled={pendente || !respostaCompleta(resposta)}
             onClick={() =>
               iniciar(async () => {
