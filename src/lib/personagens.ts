@@ -52,6 +52,106 @@ const TODOS: Personagem[] = [
   { nome: "Maria Quitéria", epoca: "Brasil, Independência", imagem: "/personagens/maria-quiteria.webp" },
   { nome: "Rosa Parks", epoca: "EUA, direitos civis", imagem: "/personagens/rosa-parks.webp" },
   { nome: "Malala", epoca: "Paquistão, séc. XXI", imagem: "/personagens/malala.webp" },
+  { nome: "Antonieta de Barros", epoca: "Santa Catarina, séc. XX", imagem: "/personagens/antonieta-de-barros.webp" },
+  { nome: "Griô do Mali", epoca: "Império do Mali, séc. XIV", imagem: "/personagens/grio-do-mali.webp" },
+  { nome: "Capoeirista", epoca: "Brasil, séc. XIX", imagem: "/personagens/capoeirista.webp" },
+  { nome: "Chasqui inca", epoca: "Império Inca", imagem: "/personagens/chasqui-inca.webp" },
+  { nome: "Hammurabi", epoca: "Mesopotâmia, séc. XVIII a.C.", imagem: "/personagens/hammurabi.webp" },
+  { nome: "Hatshepsut", epoca: "Egito Antigo", imagem: "/personagens/hatshepsut.webp" },
+  { nome: "Akhenaton", epoca: "Egito Antigo", imagem: "/personagens/akhenaton.webp" },
+  { nome: "Arqueira núbia", epoca: "Reino de Kush", imagem: "/personagens/arqueira-nubia.webp" },
+  { nome: "Confúcio", epoca: "China, séc. VI–V a.C.", imagem: "/personagens/confucio.webp" },
+  { nome: "Péricles", epoca: "Grécia Antiga", imagem: "/personagens/pericles.webp" },
+  { nome: "Sêneca", epoca: "Roma Antiga", imagem: "/personagens/seneca.webp" },
+  { nome: "Guerreiro-águia asteca", epoca: "México pré-colonial", imagem: "/personagens/guerreiro-aguia-asteca.webp" },
+  { nome: "Ceramista marajoara", epoca: "Amazônia pré-colonial", imagem: "/personagens/ceramista-marajoara.webp" },
+  {
+    nome: "Mercador da Rota da Seda",
+    epoca: "China, dinastia Tang",
+    imagem: "/personagens/mercador-da-rota-da-seda.webp",
+  },
+  { nome: "Wu Zetian", epoca: "China, séc. VII", imagem: "/personagens/wu-zetian.webp" },
+  { nome: "Sábio de Bagdá", epoca: "Casa da Sabedoria, séc. IX", imagem: "/personagens/sabio-de-bagda.webp" },
+  { nome: "Carlos, o Calvo", epoca: "Império Carolíngio, séc. IX", imagem: "/personagens/carlos-o-calvo.webp" },
+  { nome: "Rumi", epoca: "Pérsia, séc. XIII", imagem: "/personagens/rumi.webp" },
+  { nome: "Ibn Battuta", epoca: "Marrocos, séc. XIV", imagem: "/personagens/ibn-battuta.webp" },
+  { nome: "Michelangelo", epoca: "Renascimento", imagem: "/personagens/michelangelo.webp" },
+  { nome: "Michel de Montaigne", epoca: "França, séc. XVI", imagem: "/personagens/michel-de-montaigne.webp" },
+  { nome: "William Shakespeare", epoca: "Inglaterra, séc. XVI–XVII", imagem: "/personagens/william-shakespeare.webp" },
+  { nome: "Galileu Galilei", epoca: "Itália, séc. XVII", imagem: "/personagens/galileu-galilei.webp" },
+  { nome: "Ching Shih", epoca: "China, séc. XIX", imagem: "/personagens/ching-shih.webp" },
+  { nome: "John Locke", epoca: "Inglaterra, séc. XVII", imagem: "/personagens/john-locke.webp" },
+  { nome: "Montesquieu", epoca: "França, séc. XVIII", imagem: "/personagens/montesquieu.webp" },
+  { nome: "Lovisa Ulrika", epoca: "Suécia, séc. XVIII", imagem: "/personagens/lovisa-ulrika.webp" },
+  { nome: "Catarina, a Grande", epoca: "Rússia, séc. XVIII", imagem: "/personagens/catarina-a-grande.webp" },
+  { nome: "Aleijadinho", epoca: "Brasil, séc. XVIII", imagem: "/personagens/aleijadinho.webp" },
+  { nome: "Chico Rei", epoca: "Brasil Colônia, séc. XVIII", imagem: "/personagens/chico-rei.webp" },
+  { nome: "Bartolomeu de Gusmão", epoca: "Brasil, séc. XVIII", imagem: "/personagens/bartolomeu-de-gusmao.webp" },
+  { nome: "Benjamin Franklin", epoca: "EUA, séc. XVIII", imagem: "/personagens/benjamin-franklin.webp" },
+  { nome: "Thomas Jefferson", epoca: "EUA, séc. XVIII–XIX", imagem: "/personagens/thomas-jefferson.webp" },
+  { nome: "Tupac Amaru II", epoca: "Peru, séc. XVIII", imagem: "/personagens/tupac-amaru-ii.webp" },
+  { nome: "Toussaint Louverture", epoca: "Haiti, séc. XVIII", imagem: "/personagens/toussaint-louverture.webp" },
+  { nome: "Beethoven", epoca: "Alemanha, séc. XVIII–XIX", imagem: "/personagens/beethoven.webp" },
+  { nome: "Simón Bolívar", epoca: "América do Sul, séc. XIX", imagem: "/personagens/simon-bolivar.webp" },
+  { nome: "Imperatriz Leopoldina", epoca: "Brasil Império", imagem: "/personagens/imperatriz-leopoldina.webp" },
+  { nome: "Dom Pedro II", epoca: "Brasil Império", imagem: "/personagens/dom-pedro-ii.webp" },
+  { nome: "Imperatriz Sissi", epoca: "Áustria, séc. XIX", imagem: "/personagens/imperatriz-sissi.webp" },
+  { nome: "Anita Garibaldi", epoca: "Brasil e Itália, séc. XIX", imagem: "/personagens/anita-garibaldi.webp" },
+  { nome: "Abraham Lincoln", epoca: "EUA, séc. XIX", imagem: "/personagens/abraham-lincoln.webp" },
+  { nome: "Sojourner Truth", epoca: "EUA, séc. XIX", imagem: "/personagens/sojourner-truth.webp" },
+  { nome: "Frederick Douglass", epoca: "EUA, séc. XIX", imagem: "/personagens/frederick-douglass.webp" },
+  { nome: "Barão de Mauá", epoca: "Brasil, séc. XIX", imagem: "/personagens/barao-de-maua.webp" },
+  { nome: "André Rebouças", epoca: "Brasil, séc. XIX", imagem: "/personagens/andre-reboucas.webp" },
+  { nome: "Chiquinha Gonzaga", epoca: "Brasil, séc. XIX–XX", imagem: "/personagens/chiquinha-gonzaga.webp" },
+  { nome: "Imigrante japonesa", epoca: "Brasil, 1908", imagem: "/personagens/imigrante-japonesa.webp" },
+  { nome: "Mulher xokleng", epoca: "Vale do Itajaí, povos originários", imagem: "/personagens/mulher-xokleng.webp" },
+  { nome: "Guerreira agojie", epoca: "Reino do Daomé", imagem: "/personagens/guerreira-agojie.webp" },
+  { nome: "Quitandeira", epoca: "Brasil Colônia", imagem: "/personagens/quitandeira.webp" },
+  { nome: "Cacique guarani", epoca: "Missões, séc. XVIII", imagem: "/personagens/cacique-guarani.webp" },
+  { nome: "Pixinguinha", epoca: "Brasil, séc. XX", imagem: "/personagens/pixinguinha.webp" },
+  { nome: "Bessie Coleman", epoca: "EUA, séc. XX", imagem: "/personagens/bessie-coleman.webp" },
+  { nome: "Louis Armstrong", epoca: "EUA, séc. XX", imagem: "/personagens/louis-armstrong.webp" },
+  { nome: "Josephine Baker", epoca: "França, séc. XX", imagem: "/personagens/josephine-baker.webp" },
+  { nome: "Walt Disney", epoca: "EUA, séc. XX", imagem: "/personagens/walt-disney.webp" },
+  { nome: "Alan Turing", epoca: "Inglaterra, séc. XX", imagem: "/personagens/alan-turing.webp" },
+  { nome: "Anne Frank", epoca: "Holanda, séc. XX", imagem: "/personagens/anne-frank.webp" },
+  { nome: "Simone de Beauvoir", epoca: "França, séc. XX", imagem: "/personagens/simone-de-beauvoir.webp" },
+  { nome: "Nise da Silveira", epoca: "Brasil, séc. XX", imagem: "/personagens/nise-da-silveira.webp" },
+  { nome: "Abdias do Nascimento", epoca: "Brasil, séc. XX", imagem: "/personagens/abdias-do-nascimento.webp" },
+  { nome: "Mao Tsé-Tung", epoca: "China, séc. XX", imagem: "/personagens/mao-tse-tung.webp" },
+  { nome: "Celso Furtado", epoca: "Brasil, séc. XX", imagem: "/personagens/celso-furtado.webp" },
+  { nome: "Martin Luther King Jr.", epoca: "EUA, séc. XX", imagem: "/personagens/martin-luther-king.webp" },
+  { nome: "James Baldwin", epoca: "EUA, séc. XX", imagem: "/personagens/james-baldwin.webp" },
+  { nome: "Patrice Lumumba", epoca: "Congo, séc. XX", imagem: "/personagens/patrice-lumumba.webp" },
+  { nome: "John Lennon", epoca: "Inglaterra, séc. XX", imagem: "/personagens/john-lennon.webp" },
+  { nome: "Neil Armstrong", epoca: "EUA, séc. XX", imagem: "/personagens/neil-armstrong.webp" },
+  { nome: "Tom Jobim", epoca: "Brasil, séc. XX", imagem: "/personagens/tom-jobim.webp" },
+  { nome: "Milton Santos", epoca: "Brasil, séc. XX", imagem: "/personagens/milton-santos.webp" },
+  { nome: "Wangari Maathai", epoca: "Quênia, séc. XX", imagem: "/personagens/wangari-maathai.webp" },
+  { nome: "Desmond Tutu", epoca: "África do Sul, séc. XX", imagem: "/personagens/desmond-tutu.webp" },
+  { nome: "Ayrton Senna", epoca: "Brasil, séc. XX", imagem: "/personagens/ayrton-senna.webp" },
+  { nome: "Steve Jobs", epoca: "EUA, séc. XX–XXI", imagem: "/personagens/steve-jobs.webp" },
+  { nome: "Mansa Musa", epoca: "Império do Mali, séc. XIV", imagem: "/personagens/mansa-musa.webp" },
+  { nome: "Nzinga Mbande", epoca: "Ndongo e Matamba (Angola), séc. XVII", imagem: "/personagens/nzinga-mbande.webp" },
+  { nome: "Luiz Gama", epoca: "Abolicionista, Brasil", imagem: "/personagens/luiz-gama.webp" },
+  { nome: "Machado de Assis", epoca: "Literatura, Brasil", imagem: "/personagens/machado-de-assis.webp" },
+  { nome: "Harriet Tubman", epoca: "EUA, abolição", imagem: "/personagens/harriet-tubman.webp" },
+  { nome: "Carolina Maria de Jesus", epoca: "Literatura, Brasil", imagem: "/personagens/carolina-maria-de-jesus.webp" },
+  { nome: "Nelson Mandela", epoca: "África do Sul, séc. XX", imagem: "/personagens/nelson-mandela.webp" },
+  { nome: "Sócrates", epoca: "Grécia Antiga", imagem: "/personagens/socrates.webp" },
+  { nome: "Hipátia", epoca: "Alexandria, séc. IV–V", imagem: "/personagens/hipatia.webp" },
+  { nome: "Carlos Magno", epoca: "Império Carolíngio, séc. VIII–IX", imagem: "/personagens/carlos-magno.webp" },
+  { nome: "Avicena", epoca: "Pérsia, séc. X–XI", imagem: "/personagens/avicena.webp" },
+  { nome: "Gengis Khan", epoca: "Mongólia, séc. XIII", imagem: "/personagens/gengis-khan.webp" },
+  { nome: "Martinho Lutero", epoca: "Alemanha, séc. XVI", imagem: "/personagens/martinho-lutero.webp" },
+  { nome: "José de San Martín", epoca: "América do Sul, séc. XIX", imagem: "/personagens/jose-de-san-martin.webp" },
+  { nome: "Emmeline Pankhurst", epoca: "Inglaterra, séc. XIX–XX", imagem: "/personagens/emmeline-pankhurst.webp" },
+  {
+    nome: "Tereza de Benguela",
+    epoca: "Quilombo do Quariterê, séc. XVIII",
+    imagem: "/personagens/tereza-de-benguela.webp",
+  },
+  { nome: "Murasaki Shikibu", epoca: "Japão, séc. XI", imagem: "/personagens/murasaki-shikibu.webp" },
 ];
 
 const porNome = (nomes: string[]) =>
@@ -115,6 +215,100 @@ export const PERSONAGENS = porNome([
   "Maria Quitéria",
   "Rosa Parks",
   "Malala",
+  // 45–48: básicos (diversidade, 2026-11)
+  "Antonieta de Barros",
+  "Griô do Mali",
+  "Capoeirista",
+  "Chasqui inca",
+  // 49 em diante: catálogo do Cadu (2026-11-15)
+  "Hammurabi",
+  "Hatshepsut",
+  "Akhenaton",
+  "Arqueira núbia",
+  "Confúcio",
+  "Péricles",
+  "Sêneca",
+  "Guerreiro-águia asteca",
+  "Ceramista marajoara",
+  "Mercador da Rota da Seda",
+  "Wu Zetian",
+  "Sábio de Bagdá",
+  "Carlos, o Calvo",
+  "Rumi",
+  "Ibn Battuta",
+  "Michelangelo",
+  "Michel de Montaigne",
+  "William Shakespeare",
+  "Galileu Galilei",
+  "Ching Shih",
+  "John Locke",
+  "Montesquieu",
+  "Lovisa Ulrika",
+  "Catarina, a Grande",
+  "Aleijadinho",
+  "Chico Rei",
+  "Bartolomeu de Gusmão",
+  "Benjamin Franklin",
+  "Thomas Jefferson",
+  "Tupac Amaru II",
+  "Toussaint Louverture",
+  "Beethoven",
+  "Simón Bolívar",
+  "Imperatriz Leopoldina",
+  "Dom Pedro II",
+  "Imperatriz Sissi",
+  "Anita Garibaldi",
+  "Abraham Lincoln",
+  "Sojourner Truth",
+  "Frederick Douglass",
+  "Barão de Mauá",
+  "André Rebouças",
+  "Chiquinha Gonzaga",
+  "Imigrante japonesa",
+  "Mulher xokleng",
+  "Guerreira agojie",
+  "Quitandeira",
+  "Cacique guarani",
+  "Pixinguinha",
+  "Bessie Coleman",
+  "Louis Armstrong",
+  "Josephine Baker",
+  "Walt Disney",
+  "Alan Turing",
+  "Anne Frank",
+  "Simone de Beauvoir",
+  "Nise da Silveira",
+  "Abdias do Nascimento",
+  "Mao Tsé-Tung",
+  "Celso Furtado",
+  "Martin Luther King Jr.",
+  "James Baldwin",
+  "Patrice Lumumba",
+  "John Lennon",
+  "Neil Armstrong",
+  "Tom Jobim",
+  "Milton Santos",
+  "Wangari Maathai",
+  "Desmond Tutu",
+  "Ayrton Senna",
+  "Steve Jobs",
+  "Mansa Musa",
+  "Nzinga Mbande",
+  "Luiz Gama",
+  "Machado de Assis",
+  "Harriet Tubman",
+  "Carolina Maria de Jesus",
+  "Nelson Mandela",
+  "Sócrates",
+  "Hipátia",
+  "Carlos Magno",
+  "Avicena",
+  "Gengis Khan",
+  "Martinho Lutero",
+  "José de San Martín",
+  "Emmeline Pankhurst",
+  "Tereza de Benguela",
+  "Murasaki Shikibu",
 ]);
 export const TOTAL_PERSONAGENS = PERSONAGENS.length;
 
@@ -137,42 +331,214 @@ export const ORDEM_ESPECIAIS = [
   "Marie Curie",
   "Albert Einstein",
   "Malala",
+  "Mansa Musa",
+  "Nzinga Mbande",
+  "Luiz Gama",
+  "Machado de Assis",
+  "Harriet Tubman",
+  "Carolina Maria de Jesus",
+  "Nelson Mandela",
+  "Tereza de Benguela",
+  "Murasaki Shikibu",
 ].map(indice);
 
-/** Liberados para todos, na ordem da tela de escolha (dois do 1º lote, um do 2º, intercalados). */
-export const BASICOS = Array.from({ length: 10 }, (_, k) => [2 * k, 2 * k + 1, 30 + k]).flat();
+/** Básicos acrescentados depois (índices 45 em diante), na ordem da tela. */
+const BASICOS_NOVOS = [
+  "Antonieta de Barros",
+  "Griô do Mali",
+  "Capoeirista",
+  "Chasqui inca",
+  "Hammurabi",
+  "Hatshepsut",
+  "Akhenaton",
+  "Arqueira núbia",
+  "Confúcio",
+  "Péricles",
+  "Sêneca",
+  "Guerreiro-águia asteca",
+  "Ceramista marajoara",
+  "Mercador da Rota da Seda",
+  "Wu Zetian",
+  "Sábio de Bagdá",
+  "Carlos, o Calvo",
+  "Rumi",
+  "Ibn Battuta",
+  "Michelangelo",
+  "Michel de Montaigne",
+  "William Shakespeare",
+  "Galileu Galilei",
+  "Ching Shih",
+  "John Locke",
+  "Montesquieu",
+  "Lovisa Ulrika",
+  "Catarina, a Grande",
+  "Aleijadinho",
+  "Chico Rei",
+  "Bartolomeu de Gusmão",
+  "Benjamin Franklin",
+  "Thomas Jefferson",
+  "Tupac Amaru II",
+  "Toussaint Louverture",
+  "Beethoven",
+  "Simón Bolívar",
+  "Imperatriz Leopoldina",
+  "Dom Pedro II",
+  "Imperatriz Sissi",
+  "Anita Garibaldi",
+  "Abraham Lincoln",
+  "Sojourner Truth",
+  "Frederick Douglass",
+  "Barão de Mauá",
+  "André Rebouças",
+  "Chiquinha Gonzaga",
+  "Imigrante japonesa",
+  "Mulher xokleng",
+  "Guerreira agojie",
+  "Quitandeira",
+  "Cacique guarani",
+  "Pixinguinha",
+  "Bessie Coleman",
+  "Louis Armstrong",
+  "Josephine Baker",
+  "Walt Disney",
+  "Alan Turing",
+  "Anne Frank",
+  "Simone de Beauvoir",
+  "Nise da Silveira",
+  "Abdias do Nascimento",
+  "Mao Tsé-Tung",
+  "Celso Furtado",
+  "Martin Luther King Jr.",
+  "James Baldwin",
+  "Patrice Lumumba",
+  "John Lennon",
+  "Neil Armstrong",
+  "Tom Jobim",
+  "Milton Santos",
+  "Wangari Maathai",
+  "Desmond Tutu",
+  "Ayrton Senna",
+  "Steve Jobs",
+  "Sócrates",
+  "Hipátia",
+  "Carlos Magno",
+  "Avicena",
+  "Gengis Khan",
+  "Martinho Lutero",
+  "José de San Martín",
+  "Emmeline Pankhurst",
+].map(indice);
+
+/**
+ * Liberados para todos, na ordem da tela de escolha (dois do 1º lote, um do 2º, intercalados),
+ * seguidos dos básicos novos.
+ */
+export const BASICOS = [...Array.from({ length: 10 }, (_, k) => [2 * k, 2 * k + 1, 30 + k]).flat(), ...BASICOS_NOVOS];
 
 export const ehEspecial = (avatar: number) => ORDEM_ESPECIAIS.includes(avatar);
 
-/** Personagens com que todo aluno começa (4 e 4, um de cada época). */
+/**
+ * Personagens com que todo aluno começa e que aparecem no cadastro: 5 meninos e 5 meninas,
+ * de povos e épocas diferentes (pedido do Cadu: lista inicial diversa).
+ */
 export const INICIAIS = [
   "Caçador pré-histórico",
   "Faraó",
-  "Hoplita grego",
-  "Viking",
-  "Escudeira viking",
+  "Guerreiro tupi",
+  "Samurai",
+  "Griô do Mali",
   "Mulher ateniense",
-  "Camponesa medieval",
-  "Operária",
+  "Escudeira viking",
+  "Dandara",
+  "Antonieta de Barros",
+  "Frida Kahlo",
 ].map(indice);
 
 /** Básicos na ordem de desbloqueio: os iniciais e depois os demais, na ordem da tela. */
 export const ORDEM_BASICOS = [...INICIAIS, ...BASICOS.filter((i) => !INICIAIS.includes(i))];
 
-/** A cada nível novo, mais personagens básicos são liberados para o aluno. */
-export const BASICOS_POR_NIVEL = 2;
+/** Desafio concluído com mais da metade de acertos libera 4 básicos; com metade ou menos, 1. */
+export const BASICOS_POR_DESAFIO_BOM = 4;
+export const BASICOS_POR_DESAFIO = 1;
 
-/** Nível do aluno em que um básico é liberado (1 = desde o início). */
-export function nivelNecessario(avatar: number): number {
-  const pos = ORDEM_BASICOS.indexOf(avatar);
-  if (pos < INICIAIS.length) return 1;
-  return 2 + Math.floor((pos - INICIAIS.length) / BASICOS_POR_NIVEL);
+/** Acerto mínimo da temporada (todos os desafios feitos) para ganhar um lendário no fim dela. */
+export const ACERTO_TEMPORADA_LENDARIO = 0.5;
+
+/** Básicos que um desafio concluído libera, pelo acerto (fração de 0 a 1). */
+export const basicosDoDesafio = (acerto: number) => (acerto > 0.5 ? BASICOS_POR_DESAFIO_BOM : BASICOS_POR_DESAFIO);
+
+/** Quantos personagens o aluno já ganhou: básicos além dos iniciais e lendários. */
+export type Desbloqueios = { basicos: number; lendarios: number };
+
+/**
+ * Regras de liberação (pedido do Cadu, 2026-11-15):
+ * - cada desafio concluído libera 4 básicos com mais da metade de acertos, ou 1 com metade ou menos;
+ * - cada temporada encerrada em que o aluno fez todos os desafios (fora o CaduRush) libera um
+ *   lendário com acerto médio de pelo menos 50%, ou um básico abaixo disso;
+ * - cada vitória (maior pontuação de um desafio) também libera um lendário.
+ */
+export function calcularDesbloqueios({
+  desafios,
+  temporadas,
+  vitorias,
+}: {
+  /** Desafios concluídos pelo aluno, com o acerto de cada um (0 a 1). */
+  desafios: { id: string; acerto: number }[];
+  /** Temporadas da turma: desafios obrigatórios e se a pontuação já encerrou. */
+  temporadas: { desafios: string[]; encerrada: boolean }[];
+  vitorias: number;
+}): Desbloqueios {
+  const acerto = new Map(desafios.map((d) => [d.id, d.acerto]));
+  let basicos = desafios.reduce((s, d) => s + basicosDoDesafio(d.acerto), 0);
+  let lendarios = vitorias;
+  for (const t of temporadas) {
+    if (!t.encerrada || !t.desafios.length || !t.desafios.every((id) => acerto.has(id))) continue;
+    const media = t.desafios.reduce((s, id) => s + (acerto.get(id) ?? 0), 0) / t.desafios.length;
+    if (media >= ACERTO_TEMPORADA_LENDARIO) lendarios++;
+    else basicos++;
+  }
+  return { basicos, lendarios };
 }
 
-/** O aluno pode usar este personagem? Básicos pelo nível, especiais pelos desafios vencidos. */
-export function personagemLiberado(avatar: number, { nivel, medalhas }: { nivel: number; medalhas: number }) {
-  return ehEspecial(avatar) ? medalhasNecessarias(avatar) <= medalhas : nivelNecessario(avatar) <= nivel;
+/** Quantos básicos (iniciais incluídos) e lendários o aluno tem liberados. */
+export const basicosLiberados = (d: Desbloqueios) => Math.min(ORDEM_BASICOS.length, INICIAIS.length + d.basicos);
+export const lendariosLiberados = (d: Desbloqueios) => Math.min(ORDEM_ESPECIAIS.length, d.lendarios);
+
+/** O aluno pode usar este personagem? Os iniciais e os que já saíram no sorteio. */
+export const personagemLiberado = (avatar: number, revelados: readonly number[]) =>
+  INICIAIS.includes(avatar) || revelados.includes(avatar);
+
+/** Personagens ganhos que o aluno ainda não sorteou. */
+export function personagensPendentes(d: Desbloqueios, revelados: readonly number[]): Desbloqueios {
+  const lendarios = revelados.filter(ehEspecial).length;
+  const basicos = revelados.filter((i) => !ehEspecial(i) && !INICIAIS.includes(i)).length;
+  return {
+    basicos: Math.max(0, basicosLiberados(d) - INICIAIS.length - basicos),
+    lendarios: Math.max(0, lendariosLiberados(d) - lendarios),
+  };
 }
 
-/** Quantas medalhas o aluno precisa para usar este avatar (0 para os básicos). */
-export const medalhasNecessarias = (avatar: number) => ORDEM_ESPECIAIS.indexOf(avatar) + 1;
+/** Sorteia os personagens pendentes entre os que o aluno ainda não tem (lendários primeiro). */
+export function sortearPersonagens(
+  revelados: readonly number[],
+  pendentes: Desbloqueios,
+  aleatorio: () => number = Math.random,
+): number[] {
+  const tirar = (lista: readonly number[], n: number) => {
+    const resto = lista.filter((i) => !revelados.includes(i) && !INICIAIS.includes(i));
+    const sorteados: number[] = [];
+    while (sorteados.length < n && resto.length)
+      sorteados.push(resto.splice(Math.floor(aleatorio() * resto.length), 1)[0]);
+    return sorteados;
+  };
+  return [...tirar(ORDEM_ESPECIAIS, pendentes.lendarios), ...tirar(ORDEM_BASICOS, pendentes.basicos)];
+}
+
+/** Sem a coluna do sorteio (SQL ainda não rodou): os ganhos saem em ordem, sem sorteio. */
+export const reveladosEmOrdem = (d: Desbloqueios) => [
+  ...ORDEM_BASICOS.slice(INICIAIS.length, basicosLiberados(d)),
+  ...ORDEM_ESPECIAIS.slice(0, lendariosLiberados(d)),
+];
+
+/** Posição do lendário na ordem de liberação (1 = o primeiro). */
+export const numeroDoLendario = (avatar: number) => ORDEM_ESPECIAIS.indexOf(avatar) + 1;
