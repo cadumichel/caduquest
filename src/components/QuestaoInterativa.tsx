@@ -22,7 +22,23 @@ import { mapaFixas, type AjudaVista } from "@/lib/questoes/ajudas";
 import type { Resposta, Vista } from "@/lib/questoes/tipos";
 
 const LETRAS = "ABCDEF";
-const CORES_PAR = ["bg-sky-500", "bg-amber-500", "bg-emerald-500", "bg-fuchsia-500", "bg-rose-500", "bg-lime-600"];
+/**
+ * Cores das caixas de ordenar e dos pares ligados: bolinha forte e fundo claro
+ * (texto escuro continua legível). Sem âmbar, que marca o item revelado pela
+ * eliminação. A cor acompanha a frase ou o par do aluno, nunca a resposta certa.
+ */
+const CORES = [
+  { ponto: "bg-sky-500", borda: "border-sky-300", fundo: "bg-sky-100" },
+  { ponto: "bg-orange-500", borda: "border-orange-300", fundo: "bg-orange-100" },
+  { ponto: "bg-emerald-500", borda: "border-emerald-300", fundo: "bg-emerald-100" },
+  { ponto: "bg-pink-500", borda: "border-pink-300", fundo: "bg-pink-100" },
+  { ponto: "bg-lime-600", borda: "border-lime-300", fundo: "bg-lime-100" },
+  { ponto: "bg-violet-500", borda: "border-violet-300", fundo: "bg-violet-100" },
+];
+const cor = (i: number) => {
+  const c = CORES[i % CORES.length];
+  return { ...c, caixa: `${c.borda} ${c.fundo}` };
+};
 
 type Props<V extends Vista> = {
   vista: V;
@@ -391,12 +407,12 @@ function ItemOrdenavel({
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`flex items-center gap-2 rounded-xl border-2 bg-white p-2 ${isDragging ? "z-10 border-marca-500 shadow-lg" : "border-slate-200"}`}
+      className={`flex items-center gap-2 rounded-xl border-2 p-2 ${cor(id).caixa} ${isDragging ? "relative z-10 shadow-lg ring-2 ring-marca-500" : ""}`}
     >
       <span
         {...attributes}
         {...listeners}
-        className="flex h-10 w-8 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg bg-slate-100 text-slate-500"
+        className="flex h-10 w-8 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg bg-white/70 text-slate-500"
         aria-label="Arrastar"
       >
         ⋮⋮
@@ -408,7 +424,7 @@ function ItemOrdenavel({
           type="button"
           disabled={desabilitada || acima === null}
           onClick={() => acima !== null && mover(posicao, acima)}
-          className="px-2 text-slate-500 disabled:opacity-30"
+          className="px-2 text-slate-600 disabled:opacity-30"
           aria-label="Subir"
         >
           ▲
@@ -417,7 +433,7 @@ function ItemOrdenavel({
           type="button"
           disabled={desabilitada || abaixo === null}
           onClick={() => abaixo !== null && mover(posicao, abaixo)}
-          className="px-2 text-slate-500 disabled:opacity-30"
+          className="px-2 text-slate-600 disabled:opacity-30"
           aria-label="Descer"
         >
           ▼
@@ -538,17 +554,20 @@ function Pares({ vista, resposta, onChange, desabilitada, ajuda }: Props<Extract
                   type="button"
                   disabled={desabilitada || fixas.has(i)}
                   onClick={() => setAtivo(i)}
+                  aria-pressed={ativo === i}
                   className={`flex min-h-12 w-full items-center gap-2 rounded-xl border-2 p-2 text-left text-sm ${
                     fixas.has(i)
                       ? "border-amber-300 bg-amber-50"
                       : ativo === i
-                        ? "border-marca-600 bg-marca-50"
-                        : "border-slate-200 bg-white"
+                        ? `border-marca-600 ring-2 ring-marca-300 ${ligado !== null ? cor(i).fundo : "bg-marca-50"}`
+                        : ligado !== null
+                          ? cor(i).caixa
+                          : "border-slate-200 bg-white"
                   }`}
                 >
                   {fixas.has(i) && <Cadeado />}
                   <span
-                    className={`h-3 w-3 shrink-0 rounded-full ${ligado !== null ? CORES_PAR[i % CORES_PAR.length] : "bg-slate-200"}`}
+                    className={`h-3 w-3 shrink-0 rounded-full ${ligado !== null ? cor(i).ponto : "bg-slate-200"}`}
                   />
                   {texto}
                 </button>
@@ -566,11 +585,15 @@ function Pares({ vista, resposta, onChange, desabilitada, ajuda }: Props<Extract
                   disabled={desabilitada || ativo === null || direitaFixa.has(d)}
                   onClick={() => ligar(d)}
                   className={`flex min-h-12 w-full items-center gap-2 rounded-xl border-2 p-2 text-left text-sm disabled:opacity-100 ${
-                    direitaFixa.has(d) ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-white"
+                    direitaFixa.has(d)
+                      ? "border-amber-300 bg-amber-50"
+                      : dono >= 0
+                        ? cor(dono).caixa
+                        : "border-slate-200 bg-white"
                   }`}
                 >
                   <span
-                    className={`h-3 w-3 shrink-0 rounded-full ${dono >= 0 ? CORES_PAR[dono % CORES_PAR.length] : "bg-slate-200"}`}
+                    className={`h-3 w-3 shrink-0 rounded-full ${dono >= 0 ? cor(dono).ponto : "bg-slate-200"}`}
                   />
                   {texto}
                 </button>
