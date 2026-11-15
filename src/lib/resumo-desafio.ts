@@ -2,7 +2,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AlunoSessao } from "@/lib/aluno-sessao";
 import { desafioDoAluno } from "@/lib/jogo";
-import { nivelNecessario, ORDEM_BASICOS } from "@/lib/personagens";
+import { basicosDoDesafio, basicosLiberados } from "@/lib/personagens";
+import { desbloqueiosDoAluno } from "@/lib/desbloqueio-dados";
 import { calcularNivel, nomeDoNivel, xpDeUmDesafio } from "@/lib/progresso";
 import { progressoDoAluno } from "@/lib/progresso-dados";
 import { errosParaRevisar } from "@/lib/revisao";
@@ -19,7 +20,7 @@ export type ResumoDesafio = {
   nivel: number;
   nomeNivel: string;
   subiuDeNivel: boolean;
-  /** Personagens liberados pelo nível que ele acabou de alcançar. */
+  /** Personagens básicos que este desafio liberou (4 com mais da metade de acertos, 1 abaixo). */
   personagensNovos: number;
   posicao: number | null;
   alunosNaTurma: number;
@@ -62,6 +63,7 @@ export async function resumoDoDesafio(
         .eq("desafios.temporada_id", desafio.temporada_id),
       errosParaRevisar(db, aluno.id, aluno.turmaId),
     ]);
+  const desbloqueios = await desbloqueiosDoAluno(aluno.id, aluno.turmaId);
 
   const fracoes = (respostas ?? []).map((r) => Number(r.fracao));
   const concluido = terminou(tentativa);
@@ -89,10 +91,14 @@ export async function resumoDoDesafio(
     nivel: progresso.nivel,
     nomeNivel: nomeDoNivel(progresso.nivel),
     subiuDeNivel: progresso.nivel > nivelAntes,
-    personagensNovos: ORDEM_BASICOS.filter((a) => {
-      const n = nivelNecessario(a);
-      return n > nivelAntes && n <= progresso.nivel;
-    }).length,
+    personagensNovos: concluido
+      ? basicosLiberados(desbloqueios) -
+        basicosLiberados({
+          ...desbloqueios,
+          basicos:
+            desbloqueios.basicos - basicosDoDesafio(fracoes.reduce((s, f) => s + f, 0) / (tentativa.ordem.length || 1)),
+        })
+      : 0,
     posicao: eu?.posicao ?? null,
     alunosNaTurma: situacao.ranking.length,
     sequencia: eu?.sequencia ?? 0,

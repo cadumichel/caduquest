@@ -1,8 +1,11 @@
-import { BASICOS_POR_NIVEL, INICIAIS, ORDEM_BASICOS, ORDEM_ESPECIAIS } from "@/lib/personagens";
+import {
+  BASICOS_POR_DESAFIO,
+  BASICOS_POR_DESAFIO_BOM,
+  INICIAIS,
+  ORDEM_BASICOS,
+  ORDEM_ESPECIAIS,
+} from "@/lib/personagens";
 import { XP_POR_ACERTO, XP_POR_DESAFIO, XP_POR_QUESTAO, XP_POR_REVISAO, xpDoNivel } from "@/lib/progresso";
-
-/** Último nível que ainda libera um personagem básico. */
-const NIVEL_ULTIMO_BASICO = 1 + Math.ceil((ORDEM_BASICOS.length - INICIAIS.length) / BASICOS_POR_NIVEL);
 
 /** Explica ao aluno como ganhar XP, subir de nível e liberar personagens. */
 export function ComoGanharXp() {
@@ -39,18 +42,22 @@ export function ComoGanharXp() {
           </div>
         </div>
         <div>
-          <p className="font-bold text-marca-900">🧑‍🎓 Personagens: sobem com o nível</p>
+          <p className="font-bold text-marca-900">🧑‍🎓 Personagens: termine desafios</p>
           <p>
-            Você começa com {INICIAIS.length} personagens. A cada nível novo, mais {BASICOS_POR_NIVEL} são liberados,
-            até o nível {NIVEL_ULTIMO_BASICO}, quando você tem todos os {ORDEM_BASICOS.length}.
+            Você começa com {INICIAIS.length} personagens. Cada desafio que você termina libera mais{" "}
+            {BASICOS_POR_DESAFIO_BOM} se você acertar mais da metade das questões, ou {BASICOS_POR_DESAFIO} se acertar
+            metade ou menos. São {ORDEM_BASICOS.length} ao todo.
           </p>
         </div>
         <div>
-          <p className="font-bold text-marca-900">✦ Lendários: vença desafios</p>
+          <p className="font-bold text-marca-900">✦ Lendários: complete temporadas</p>
           <p>
-            Faça a maior pontuação da turma em um desafio e ganhe uma medalha 🏅 (se empatar no topo, todos os empatados
-            ganham). A medalha conta quando o desafio fecha. Cada medalha libera o próximo lendário, em ordem: são{" "}
-            {ORDEM_ESPECIAIS.length} ao todo.
+            Faça todos os desafios de uma temporada com pelo menos 50% de acerto e ganhe um lendário quando ela encerrar
+            (abaixo de 50%, você ganha um personagem comum). O CaduRush em sala não entra nessa conta.
+          </p>
+          <p className="mt-1">
+            Fazer a maior pontuação da turma em um desafio também dá uma medalha 🏅 e um lendário (se empatar no topo,
+            todos os empatados ganham). Os lendários saem em ordem: são {ORDEM_ESPECIAIS.length} ao todo.
           </p>
         </div>
       </div>

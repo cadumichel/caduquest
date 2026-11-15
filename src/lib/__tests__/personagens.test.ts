@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { BASICOS, medalhasNecessarias, ORDEM_ESPECIAIS, PERSONAGENS, TOTAL_PERSONAGENS } from "../personagens";
+import { BASICOS, numeroDoLendario, ORDEM_ESPECIAIS, PERSONAGENS, TOTAL_PERSONAGENS } from "../personagens";
 
 describe("personagens", () => {
   it("tem 113 básicos e 24 especiais, sem repetição", () => {
@@ -21,12 +21,11 @@ describe("personagens", () => {
     expect(PERSONAGENS[45].nome).toBe("Antonieta de Barros");
   });
 
-  it("libera um especial por desafio vencido", () => {
-    expect(medalhasNecessarias(0)).toBe(0);
-    expect(medalhasNecessarias(35)).toBe(0);
-    expect(medalhasNecessarias(20)).toBe(1);
-    expect(medalhasNecessarias(ORDEM_ESPECIAIS[14])).toBe(15);
-    expect(medalhasNecessarias(ORDEM_ESPECIAIS[21])).toBe(22);
+  it("numera os lendários na ordem de liberação", () => {
+    expect(numeroDoLendario(0)).toBe(0);
+    expect(numeroDoLendario(20)).toBe(1);
+    expect(numeroDoLendario(ORDEM_ESPECIAIS[14])).toBe(15);
+    expect(numeroDoLendario(ORDEM_ESPECIAIS[23])).toBe(24);
   });
 
   it("tem uma ilustração para cada personagem", () => {
@@ -43,24 +42,56 @@ describe("curiosidades dos personagens", () => {
 });
 
 describe("desbloqueio dos personagens", async () => {
-  const { INICIAIS, ORDEM_BASICOS, nivelNecessario, personagemLiberado } = await import("../personagens");
-  it("começa com 10 básicos e libera 3 por nível até todos", () => {
+  const { INICIAIS, ORDEM_BASICOS, calcularDesbloqueios, personagemLiberado, basicosLiberados } =
+    await import("../personagens");
+  it("começa com os 10 iniciais", () => {
     expect(INICIAIS).toHaveLength(10);
     expect(INICIAIS).not.toContain(-1);
     expect(new Set(ORDEM_BASICOS).size).toBe(113);
-    expect(ORDEM_BASICOS.filter((i) => nivelNecessario(i) === 1)).toHaveLength(10);
-    expect(ORDEM_BASICOS.filter((i) => nivelNecessario(i) === 2)).toHaveLength(3);
-    expect(Math.max(...ORDEM_BASICOS.map(nivelNecessario))).toBe(36);
+    const nada = { basicos: 0, lendarios: 0 };
+    expect(basicosLiberados(nada)).toBe(10);
+    expect(personagemLiberado(ORDEM_BASICOS[9], nada)).toBe(true);
+    expect(personagemLiberado(ORDEM_BASICOS[10], nada)).toBe(false);
+    expect(personagemLiberado(ORDEM_ESPECIAIS[0], nada)).toBe(false);
   });
-  it("lista inicial diversa: metade meninas e Antonieta de Barros no lugar da Baiana", () => {
+  it("lista inicial diversa: Antonieta de Barros no lugar da Baiana", () => {
     const nomes = INICIAIS.map((i) => PERSONAGENS[i].nome);
     expect(nomes).toContain("Antonieta de Barros");
     expect(nomes).not.toContain("Baiana do acarajé");
   });
-  it("lendários só com desafios vencidos, básicos só com nível", () => {
-    expect(personagemLiberado(ORDEM_ESPECIAIS[0], { nivel: 50, medalhas: 0 })).toBe(false);
-    expect(personagemLiberado(ORDEM_ESPECIAIS[0], { nivel: 1, medalhas: 1 })).toBe(true);
-    expect(personagemLiberado(ORDEM_BASICOS[10], { nivel: 1, medalhas: 10 })).toBe(false);
-    expect(personagemLiberado(ORDEM_BASICOS[10], { nivel: 2, medalhas: 0 })).toBe(true);
+  it("desafio com mais da metade de acertos libera 4; metade ou menos, 1", () => {
+    const d = calcularDesbloqueios({
+      desafios: [
+        { id: "a", acerto: 0.6 },
+        { id: "b", acerto: 0.5 },
+        { id: "c", acerto: 0.2 },
+      ],
+      temporadas: [],
+      vitorias: 0,
+    });
+    expect(d).toEqual({ basicos: 6, lendarios: 0 });
+    expect(personagemLiberado(ORDEM_BASICOS[15], d)).toBe(true);
+    expect(personagemLiberado(ORDEM_BASICOS[16], d)).toBe(false);
+  });
+  it("temporada completa e encerrada: lendário com 50% ou mais, básico abaixo", () => {
+    const desafios = [
+      { id: "a", acerto: 0.8 },
+      { id: "b", acerto: 0.2 },
+      { id: "c", acerto: 0.3 },
+      { id: "d", acerto: 0.3 },
+    ];
+    const d = calcularDesbloqueios({
+      desafios,
+      temporadas: [
+        { desafios: ["a", "b"], encerrada: true }, // média 0,5: lendário
+        { desafios: ["c", "d"], encerrada: true }, // média 0,3: básico
+        { desafios: ["a", "x"], encerrada: true }, // faltou um desafio: nada
+        { desafios: ["a"], encerrada: false }, // ainda em andamento: nada
+      ],
+      vitorias: 2,
+    });
+    expect(d).toEqual({ basicos: 4 + 1 + 1 + 1 + 1, lendarios: 1 + 2 });
+    expect(personagemLiberado(ORDEM_ESPECIAIS[2], d)).toBe(true);
+    expect(personagemLiberado(ORDEM_ESPECIAIS[3], d)).toBe(false);
   });
 });

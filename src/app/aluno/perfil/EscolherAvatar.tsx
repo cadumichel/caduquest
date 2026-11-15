@@ -3,11 +3,16 @@ import { useState, useTransition } from "react";
 import { Avatar, CORES_AVATAR } from "@/components/Avatar";
 import { Aviso, Botao } from "@/components/ui";
 import {
-  medalhasNecessarias,
-  nivelNecessario,
+  BASICOS_POR_DESAFIO,
+  BASICOS_POR_DESAFIO_BOM,
+  type Desbloqueios,
+  INICIAIS,
+  lendariosLiberados,
+  numeroDoLendario,
   ORDEM_BASICOS,
   ORDEM_ESPECIAIS,
   PERSONAGENS,
+  personagemLiberado,
   TOTAL_PERSONAGENS,
 } from "@/lib/personagens";
 import { CURIOSIDADE_PERSONAGEM } from "@/lib/personagens-curiosidades";
@@ -17,12 +22,12 @@ export function EscolherAvatar({
   avatarAtual,
   corAtual,
   medalhas,
-  nivel,
+  desbloqueios,
 }: {
   avatarAtual: number;
   corAtual: number;
   medalhas: number;
-  nivel: number;
+  desbloqueios: Desbloqueios;
 }) {
   const [avatar, setAvatar] = useState(avatarAtual);
   // Personagem em destaque no álbum: o escolhido ou um bloqueado que o aluno tocou.
@@ -31,11 +36,7 @@ export function EscolherAvatar({
   const [msg, setMsg] = useState<{ tipo: "ok" | "erro"; texto: string }>();
   const [pendente, iniciar] = useTransition();
   const mudou = avatar !== avatarAtual || cor !== corAtual;
-  const liberado = (i: number) =>
-    i === avatarAtual ||
-    ((ORDEM_ESPECIAIS as readonly number[]).includes(i)
-      ? medalhasNecessarias(i) <= medalhas
-      : nivelNecessario(i) <= nivel);
+  const liberado = (i: number) => i === avatarAtual || personagemLiberado(i, desbloqueios);
   const naColecao = PERSONAGENS.filter((_, i) => liberado(i)).length;
   const escolher = (i: number) => {
     setAvatar(i);
@@ -44,7 +45,6 @@ export function EscolherAvatar({
   const p = PERSONAGENS[visto % TOTAL_PERSONAGENS];
   const vistoLiberado = liberado(visto);
   const lendarioVisto = (ORDEM_ESPECIAIS as readonly number[]).includes(visto);
-  const n = medalhasNecessarias(visto);
 
   return (
     <div id="visual" className="scroll-mt-4 space-y-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -87,8 +87,8 @@ export function EscolherAvatar({
             {vistoLiberado
               ? CURIOSIDADE_PERSONAGEM[p.nome]
               : lendarioVisto
-                ? `Vença ${n} ${n === 1 ? "desafio" : "desafios"} para liberar este lendário e a curiosidade dele.`
-                : `Chegue ao nível ${nivelNecessario(visto)} para liberar este personagem e a curiosidade dele.`}
+                ? "Complete uma temporada com pelo menos 50% de acerto ou vença um desafio para liberar os lendários, em ordem."
+                : "Conclua desafios para liberar este personagem e a curiosidade dele."}
           </p>
         </div>
       </div>
@@ -96,7 +96,8 @@ export function EscolherAvatar({
       <section>
         <h3 className="font-semibold">Personagens</h3>
         <p className="mb-2 text-sm text-slate-600">
-          Você começa com 8. A cada nível novo, mais 2 personagens são liberados.
+          Você começa com {INICIAIS.length}. Cada desafio que você termina libera mais: {BASICOS_POR_DESAFIO_BOM} se
+          acertar mais da metade, {BASICOS_POR_DESAFIO} se acertar metade ou menos.
         </p>
         <div className="grid grid-cols-5 gap-2">
           {ORDEM_BASICOS.map((i) =>
@@ -108,13 +109,12 @@ export function EscolherAvatar({
                 type="button"
                 onClick={() => setVisto(i)}
                 aria-pressed={visto === i}
-                title={`Chegue ao nível ${nivelNecessario(i)} para liberar`}
+                title="Conclua desafios para liberar"
                 className={`flex aspect-square flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-slate-500 ${
                   visto === i ? "ring-2 ring-amber-400" : ""
                 }`}
               >
                 <span className="text-lg">🔒</span>
-                <span className="text-[10px] font-semibold">Nív. {nivelNecessario(i)}</span>
               </button>
             ),
           )}
@@ -124,8 +124,9 @@ export function EscolherAvatar({
       <section className="-mx-2 rounded-2xl bg-gradient-to-br from-marca-950 via-marca-900 to-amber-900 p-3 text-white">
         <h3 className="font-extrabold text-amber-300">✦ Lendários</h3>
         <p className="mb-3 text-sm text-amber-50">
-          Só para quem vence desafios: cada vez que você faz a maior pontuação de um desafio, libera um lendário. Você
-          já liberou {Math.min(medalhas, ORDEM_ESPECIAIS.length)} de {ORDEM_ESPECIAIS.length}.
+          Faça todos os desafios de uma temporada com pelo menos 50% de acerto e ganhe um lendário quando ela encerrar.
+          Vencer um desafio (maior pontuação da turma) também libera um. Você já liberou{" "}
+          {lendariosLiberados(desbloqueios)} de {ORDEM_ESPECIAIS.length}.
         </p>
         <div className="grid grid-cols-5 gap-2">
           {ORDEM_ESPECIAIS.map((i) =>
@@ -137,13 +138,13 @@ export function EscolherAvatar({
                 type="button"
                 onClick={() => setVisto(i)}
                 aria-pressed={visto === i}
-                title={`Vença ${medalhasNecessarias(i)} ${medalhasNecessarias(i) === 1 ? "desafio" : "desafios"} para liberar`}
+                title={`${numeroDoLendario(i)}º lendário`}
                 className={`relative flex aspect-square flex-col items-center justify-center overflow-hidden rounded-xl bg-gradient-to-b from-amber-300/25 to-amber-700/30 text-amber-200 ring-1 ring-amber-300/50 ${
                   visto === i ? "ring-2 ring-amber-300" : ""
                 }`}
               >
                 <span className="text-lg">🔒</span>
-                <span className="text-[10px] font-semibold">{medalhasNecessarias(i)} 🏅</span>
+                <span className="text-[10px] font-semibold">{numeroDoLendario(i)}º</span>
               </button>
             ),
           )}

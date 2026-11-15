@@ -55,15 +55,19 @@ export function FimDoDesafio({ desafioId, aviso }: { desafioId: string; aviso?: 
               )}
               {resumo.subiuDeNivel && (
                 <Linha icone="⭐">
-                  Você subiu para o <b>nível {resumo.nivel}</b> ({resumo.nomeNivel})
-                  {resumo.personagensNovos > 0 &&
-                    ` e liberou ${resumo.personagensNovos} ${resumo.personagensNovos === 1 ? "personagem novo" : "personagens novos"}`}
+                  Você subiu para o <b>nível {resumo.nivel}</b> ({resumo.nomeNivel}).
+                </Linha>
+              )}
+              {resumo.personagensNovos > 0 && (
+                <Linha icone="🧑‍🎓">
+                  Você liberou{" "}
+                  <b>
+                    {resumo.personagensNovos} {resumo.personagensNovos === 1 ? "personagem novo" : "personagens novos"}
+                  </b>
                   .{" "}
-                  {resumo.personagensNovos > 0 && (
-                    <Link href="/aluno/perfil#visual" className="font-bold text-ouro-claro underline">
-                      Ver
-                    </Link>
-                  )}
+                  <Link href="/aluno/perfil#visual" className="font-bold text-ouro-claro underline">
+                    Ver
+                  </Link>
                 </Linha>
               )}
             </ul>

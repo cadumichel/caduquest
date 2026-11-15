@@ -457,20 +457,59 @@ export const INICIAIS = [
 /** Básicos na ordem de desbloqueio: os iniciais e depois os demais, na ordem da tela. */
 export const ORDEM_BASICOS = [...INICIAIS, ...BASICOS.filter((i) => !INICIAIS.includes(i))];
 
-/** A cada nível novo, mais personagens básicos são liberados para o aluno. */
-export const BASICOS_POR_NIVEL = 3;
+/** Desafio concluído com mais da metade de acertos libera 4 básicos; com metade ou menos, 1. */
+export const BASICOS_POR_DESAFIO_BOM = 4;
+export const BASICOS_POR_DESAFIO = 1;
 
-/** Nível do aluno em que um básico é liberado (1 = desde o início). */
-export function nivelNecessario(avatar: number): number {
-  const pos = ORDEM_BASICOS.indexOf(avatar);
-  if (pos < INICIAIS.length) return 1;
-  return 2 + Math.floor((pos - INICIAIS.length) / BASICOS_POR_NIVEL);
+/** Acerto mínimo da temporada (todos os desafios feitos) para ganhar um lendário no fim dela. */
+export const ACERTO_TEMPORADA_LENDARIO = 0.5;
+
+/** Básicos que um desafio concluído libera, pelo acerto (fração de 0 a 1). */
+export const basicosDoDesafio = (acerto: number) => (acerto > 0.5 ? BASICOS_POR_DESAFIO_BOM : BASICOS_POR_DESAFIO);
+
+/** Quantos personagens o aluno já ganhou: básicos além dos iniciais e lendários. */
+export type Desbloqueios = { basicos: number; lendarios: number };
+
+/**
+ * Regras de liberação (pedido do Cadu, 2026-11-15):
+ * - cada desafio concluído libera 4 básicos com mais da metade de acertos, ou 1 com metade ou menos;
+ * - cada temporada encerrada em que o aluno fez todos os desafios (fora o CaduRush) libera um
+ *   lendário com acerto médio de pelo menos 50%, ou um básico abaixo disso;
+ * - cada vitória (maior pontuação de um desafio) também libera um lendário.
+ */
+export function calcularDesbloqueios({
+  desafios,
+  temporadas,
+  vitorias,
+}: {
+  /** Desafios concluídos pelo aluno, com o acerto de cada um (0 a 1). */
+  desafios: { id: string; acerto: number }[];
+  /** Temporadas da turma: desafios obrigatórios e se a pontuação já encerrou. */
+  temporadas: { desafios: string[]; encerrada: boolean }[];
+  vitorias: number;
+}): Desbloqueios {
+  const acerto = new Map(desafios.map((d) => [d.id, d.acerto]));
+  let basicos = desafios.reduce((s, d) => s + basicosDoDesafio(d.acerto), 0);
+  let lendarios = vitorias;
+  for (const t of temporadas) {
+    if (!t.encerrada || !t.desafios.length || !t.desafios.every((id) => acerto.has(id))) continue;
+    const media = t.desafios.reduce((s, id) => s + (acerto.get(id) ?? 0), 0) / t.desafios.length;
+    if (media >= ACERTO_TEMPORADA_LENDARIO) lendarios++;
+    else basicos++;
+  }
+  return { basicos, lendarios };
 }
 
-/** O aluno pode usar este personagem? Básicos pelo nível, especiais pelos desafios vencidos. */
-export function personagemLiberado(avatar: number, { nivel, medalhas }: { nivel: number; medalhas: number }) {
-  return ehEspecial(avatar) ? medalhasNecessarias(avatar) <= medalhas : nivelNecessario(avatar) <= nivel;
+/** Quantos básicos (iniciais incluídos) e lendários o aluno tem liberados. */
+export const basicosLiberados = (d: Desbloqueios) => Math.min(ORDEM_BASICOS.length, INICIAIS.length + d.basicos);
+export const lendariosLiberados = (d: Desbloqueios) => Math.min(ORDEM_ESPECIAIS.length, d.lendarios);
+
+/** O aluno pode usar este personagem? Básicos e lendários na ordem de liberação. */
+export function personagemLiberado(avatar: number, d: Desbloqueios) {
+  return ehEspecial(avatar)
+    ? ORDEM_ESPECIAIS.indexOf(avatar) < lendariosLiberados(d)
+    : ORDEM_BASICOS.indexOf(avatar) < basicosLiberados(d);
 }
 
-/** Quantas medalhas o aluno precisa para usar este avatar (0 para os básicos). */
-export const medalhasNecessarias = (avatar: number) => ORDEM_ESPECIAIS.indexOf(avatar) + 1;
+/** Posição do lendário na ordem de liberação (1 = o primeiro). */
+export const numeroDoLendario = (avatar: number) => ORDEM_ESPECIAIS.indexOf(avatar) + 1;

@@ -6,6 +6,7 @@ import { medalhasDaTurma } from "@/lib/medalhas";
 import { apelidoImproprio } from "@/lib/apelido";
 import { cartaDoAluno } from "@/lib/carta-coringa";
 import { personagemLiberado } from "@/lib/personagens";
+import { desbloqueiosDoAluno } from "@/lib/desbloqueio-dados";
 import { calcularConquistas } from "@/lib/progresso";
 import { progressoDoAluno } from "@/lib/progresso-dados";
 import { rankingParaAluno } from "@/lib/ranking";
@@ -132,12 +133,8 @@ export async function salvarPerfil(avatar: number, cor: number): Promise<{ erro?
   const db = criarClienteAdmin();
   // O personagem atual sempre pode ficar (quem escolheu antes das regras de desbloqueio).
   if (avatar !== aluno.avatar) {
-    const [medalhas, { nivel }] = await Promise.all([
-      medalhasDaTurma(db, aluno.turmaId),
-      progressoDoAluno(aluno.id, aluno.turmaId),
-    ]);
-    if (!personagemLiberado(avatar, { nivel, medalhas: medalhas.get(aluno.id) ?? 0 })) {
-      return { erro: "Esse personagem ainda está bloqueado. Suba de nível ou vença desafios para liberar!" };
+    if (!personagemLiberado(avatar, await desbloqueiosDoAluno(aluno.id, aluno.turmaId))) {
+      return { erro: "Esse personagem ainda está bloqueado. Conclua desafios para liberar!" };
     }
   }
   const { error } = await db.from("alunos").update({ avatar, cor }).eq("id", aluno.id);
