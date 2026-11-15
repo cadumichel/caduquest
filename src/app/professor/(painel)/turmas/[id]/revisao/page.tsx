@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Titulo, Vazio } from "@/components/ui";
 import { alunosDeTeste } from "@/lib/aluno-teste";
-import { emPedacos, lerTudo } from "@/lib/paginar";
+import { lerPorIds, respostasCorrigidas } from "@/lib/paginar";
 import { exigirProfessor } from "@/lib/professor";
 import type { Conteudo } from "@/lib/questoes/tipos";
 import { alternativasDe, questoesMaisErradas, type RespostaQuadro } from "@/lib/revisao-quadro";
@@ -71,28 +71,16 @@ export default async function PaginaRevisaoNoQuadro({
   );
 
   const idsDesafios = desafios.map((d) => d.id);
-  const [{ data: todasTentativas }, deTeste] = await Promise.all([
-    idsDesafios.length
-      ? supabase.from("tentativas").select("id, aluno_id").in("desafio_id", idsDesafios)
-      : { data: [] as { id: string; aluno_id: string }[] },
+  const [todasTentativas, deTeste] = await Promise.all([
+    lerPorIds<{ id: string; aluno_id: string }>(supabase, "tentativas", "id, aluno_id", "desafio_id", idsDesafios),
     alunosDeTeste(supabase, id),
   ]);
-  const tentativas = (todasTentativas ?? []).filter((t) => !deTeste.has(t.aluno_id));
-  const respostas = (
-    await Promise.all(
-      emPedacos(tentativas.map((t) => t.id as string)).map((ids) =>
-        lerTudo<RespostaLida>((de, ate) =>
-          supabase
-            .from("respostas")
-            .select("tentativa_id, questao_id, fracao, permutacao, resposta")
-            .in("tentativa_id", ids)
-            .not("fracao", "is", null)
-            .order("id")
-            .range(de, ate),
-        ),
-      ),
-    )
-  ).flat();
+  const tentativas = todasTentativas.filter((t) => !deTeste.has(t.aluno_id));
+  const respostas = await respostasCorrigidas<RespostaLida>(
+    supabase,
+    "tentativa_id, questao_id, fracao, permutacao, resposta",
+    tentativas.map((t) => t.id as string),
+  );
 
   const maisErradas = questoesMaisErradas(
     respostas.map((r): RespostaQuadro => ({

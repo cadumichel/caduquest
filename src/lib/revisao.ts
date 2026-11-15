@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { lerPorIds } from "@/lib/paginar";
 import { JANELA_APOS_FECHAR_S } from "@/lib/questoes/correcao";
 import { gabaritoLiberado, type Desafio } from "@/lib/tipos-banco";
 
@@ -25,17 +26,21 @@ export async function errosParaRevisar(db: SupabaseClient, alunoId: string, turm
     .map((t) => t.id as string);
   if (!ids.length) return [];
 
-  const [{ data: respostas }, { data: revisadas }] = await Promise.all([
-    db
-      .from("respostas")
-      .select("questao_id, servida_em")
-      .in("tentativa_id", ids)
-      .lt("fracao", 1)
-      .order("servida_em", { ascending: false }),
+  const [respostas, { data: revisadas }] = await Promise.all([
+    lerPorIds<{ questao_id: string; servida_em: string }>(
+      db,
+      "respostas",
+      "questao_id, servida_em",
+      "tentativa_id",
+      ids,
+      (c) => c.lt("fracao", 1),
+    ),
     db.from("revisoes").select("questao_id").eq("aluno_id", alunoId).not("acertou_em", "is", null),
   ]);
+  // Das erradas mais recentes para as mais antigas.
+  respostas.sort((a, b) => b.servida_em.localeCompare(a.servida_em));
   const acertadas = new Set((revisadas ?? []).map((r) => r.questao_id as string));
-  return [...new Set((respostas ?? []).map((r) => r.questao_id as string))].filter((id) => !acertadas.has(id));
+  return [...new Set(respostas.map((r) => r.questao_id))].filter((id) => !acertadas.has(id));
 }
 
 /** Questões já acertadas na revisão (contam XP no perfil). */

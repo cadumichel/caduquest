@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { calcularProgresso, type DesafioProgresso, type RespostaProgresso } from "@/lib/progresso";
+import { lerPorIds, respostasCorrigidas } from "@/lib/paginar";
 import { revisoesAcertadas } from "@/lib/revisao";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { situacaoDesafio } from "@/lib/tipos-banco";
@@ -34,24 +35,27 @@ export const progressoDoAluno = cache(async (alunoId: string, turmaId: string) =
   );
   const ids = tentativas.map((t) => t.id);
 
-  const { data: respostasBrutas } = ids.length
-    ? await db
-        .from("respostas")
-        .select("tentativa_id, questao_id, fracao")
-        .in("tentativa_id", ids)
-        .not("fracao", "is", null)
-    : { data: [] as { tentativa_id: string; questao_id: string; fracao: number }[] };
+  const respostasBrutas = await respostasCorrigidas<{ tentativa_id: string; questao_id: string; fracao: number }>(
+    db,
+    "tentativa_id, questao_id, fracao",
+    ids,
+  );
   const desafioDaTentativa = new Map(tentativas.map((t) => [t.id, t.desafio_id]));
-  const respostas: RespostaProgresso[] = (respostasBrutas ?? []).map((r) => ({
+  const respostas: RespostaProgresso[] = respostasBrutas.map((r) => ({
     desafioId: desafioDaTentativa.get(r.tentativa_id) ?? "",
     questaoId: r.questao_id,
     fracao: Number(r.fracao),
   }));
 
   const idsQuestoes = [...new Set(respostas.map((r) => r.questaoId))];
-  const { data: questoesBrutas } = idsQuestoes.length
-    ? await db.from("questoes").select("id, habilidades, capitulo").in("id", idsQuestoes)
-    : { data: [] as { id: string; habilidades: string[]; capitulo: string | null }[] };
+  // Em pedaços: o aluno responde centenas de questões no ano, e a lista de ids não cabe num pedido só.
+  const questoesBrutas = await lerPorIds<{ id: string; habilidades: string[] | null; capitulo: string | null }>(
+    db,
+    "questoes",
+    "id, habilidades, capitulo",
+    "id",
+    idsQuestoes,
+  );
 
   const desafios: DesafioProgresso[] = tentativas.map((t) => ({
     id: t.desafio_id,
@@ -66,9 +70,7 @@ export const progressoDoAluno = cache(async (alunoId: string, turmaId: string) =
   return calcularProgresso({
     respostas,
     desafios,
-    questoes: new Map(
-      (questoesBrutas ?? []).map((q) => [q.id, { habilidades: q.habilidades ?? [], capitulo: q.capitulo }]),
-    ),
+    questoes: new Map(questoesBrutas.map((q) => [q.id, { habilidades: q.habilidades ?? [], capitulo: q.capitulo }])),
     revisoesAcertadas: revisoes,
   });
 });

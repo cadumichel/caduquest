@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { lerTudo } from "@/lib/paginar";
 import { montarRanking, type LinhaRanking } from "@/lib/ranking";
 import { rankingDaTemporada } from "@/lib/temporada-dados";
 import { situacaoDesafio, type Desafio, type Temporada } from "@/lib/tipos-banco";
@@ -33,21 +34,27 @@ export async function rankingsDaTurma(
 ): Promise<RankingsTemporada[]> {
   if (!temporadas.length) return [];
   const ids = temporadas.map((t) => t.id);
-  const [rankings, { data: desafiosBrutos }, { data: tentativasBrutas }] = await Promise.all([
+  const [rankings, { data: desafiosBrutos }, tentativasBrutas] = await Promise.all([
     Promise.all(temporadas.map((t) => rankingDaTemporada(db, t))),
     db
       .from("desafios")
       .select("id, temporada_id, titulo, tipo, abre_em, fecha_em")
       .in("temporada_id", ids)
       .order("abre_em"),
-    db
-      .from("tentativas")
-      .select("aluno_id, desafio_id, pontos, respostas(fracao), desafios!inner(temporada_id)")
-      .in("desafios.temporada_id", ids),
+    // Página a página: a turma passa de 1000 tentativas ao longo do ano.
+    lerTudo<TentativaDesafio>((de, ate) =>
+      db
+        .from("tentativas")
+        .select("aluno_id, desafio_id, pontos, respostas(fracao), desafios!inner(temporada_id)")
+        .in("desafios.temporada_id", ids)
+        .order("id")
+        .range(de, ate)
+        .then((r) => ({ data: r.data as unknown as TentativaDesafio[] | null, error: r.error })),
+    ),
   ]);
   const desafios = (desafiosBrutos ?? []) as (RankingDesafio["desafio"] & { temporada_id: string })[];
   const porDesafio = new Map<string, TentativaDesafio[]>();
-  for (const t of (tentativasBrutas ?? []) as unknown as TentativaDesafio[]) {
+  for (const t of tentativasBrutas) {
     porDesafio.set(t.desafio_id, [...(porDesafio.get(t.desafio_id) ?? []), t]);
   }
   const aluno = new Map(alunos.map((a) => [a.id, a]));

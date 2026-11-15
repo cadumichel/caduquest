@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Abas } from "@/components/Abas";
 import { Aviso, BotaoLink, Botao, Cartao, Entrada, Selecao, Titulo, Vazio } from "@/components/ui";
 import { HABILIDADES } from "@/lib/habilidades";
+import { lerTudo } from "@/lib/paginar";
 import { exigirProfessor } from "@/lib/professor";
 import { ehEra, ERAS } from "@/lib/publico/regras";
 import { NOME_DIFICULDADE, NOME_TIPO, TIPOS, type TipoQuestao } from "@/lib/questoes/tipos";
@@ -62,15 +63,25 @@ export default async function BancoQuestoes({ searchParams }: PageProps<"/profes
   else if (ehEra(filtros.publico)) consulta = consulta.eq("era_publica", filtros.publico);
   if (filtros.status === "rascunho" || filtros.status === "publicada") consulta = consulta.eq("status", filtros.status);
 
-  const [{ data }, { data: capitulosBrutos }, { data: erasBrutas }] = await Promise.all([
+  // As contagens leem o banco inteiro, página a página (o banco devolve no máximo 1000 linhas por consulta).
+  const [{ data }, capitulosBrutos, erasBrutas] = await Promise.all([
     consulta,
-    supabase.from("questoes").select("capitulo, status"),
+    lerTudo<{ capitulo: string | null; status: string }>((de, ate) =>
+      supabase.from("questoes").select("capitulo, status").order("id").range(de, ate),
+    ),
     aba === "publicos"
-      ? supabase.from("questoes").select("era_publica, status").not("era_publica", "is", null)
-      : Promise.resolve({ data: [] as { era_publica: string; status: string }[] }),
+      ? lerTudo<{ era_publica: string; status: string }>((de, ate) =>
+          supabase
+            .from("questoes")
+            .select("era_publica, status")
+            .not("era_publica", "is", null)
+            .order("id")
+            .range(de, ate),
+        ).catch(() => [])
+      : Promise.resolve([] as { era_publica: string; status: string }[]),
   ]);
   const porEra = new Map<string, { publicadas: number; rascunhos: number }>();
-  for (const q of (erasBrutas ?? []) as { era_publica: string; status: string }[]) {
+  for (const q of erasBrutas) {
     const atual = porEra.get(q.era_publica) ?? { publicadas: 0, rascunhos: 0 };
     if (q.status === "publicada") atual.publicadas += 1;
     else atual.rascunhos += 1;
@@ -86,11 +97,11 @@ export default async function BancoQuestoes({ searchParams }: PageProps<"/profes
     !filtros.uso &&
     !filtros.publico;
   const emPastas = (aba === "publicadas" || aba === "todas") && semFiltro && param(sp.lista) !== "1";
-  const capitulos = [
-    ...new Set((capitulosBrutos ?? []).map((c) => c.capitulo as string | null).filter((c): c is string => !!c)),
-  ].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+  const capitulos = [...new Set(capitulosBrutos.map((c) => c.capitulo).filter((c): c is string => !!c))].sort((a, b) =>
+    a.localeCompare(b, "pt-BR", { numeric: true }),
+  );
   const pastas = new Map<string, { publicadas: number; rascunhos: number }>();
-  for (const c of (capitulosBrutos ?? []) as { capitulo: string | null; status: string }[]) {
+  for (const c of capitulosBrutos) {
     const nome = c.capitulo?.trim() || "";
     const atual = pastas.get(nome) ?? { publicadas: 0, rascunhos: 0 };
     if (c.status === "publicada") atual.publicadas += 1;

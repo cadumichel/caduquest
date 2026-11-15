@@ -6,7 +6,7 @@ import { Vazio } from "@/components/ui";
 import { alunosDeTeste } from "@/lib/aluno-teste";
 import { consultaPorAluno, resumoConsulta, somarConsultas } from "@/lib/consulta";
 import { formatarData, hojeEmBrasilia } from "@/lib/datas";
-import { emPedacos, lerTudo } from "@/lib/paginar";
+import { respostasCorrigidas } from "@/lib/paginar";
 import { agruparPorTopico, SEM_CAPITULO, type RespostaPlano, type TopicoPlano } from "@/lib/plano-estudo";
 import { formatarPontos } from "@/lib/pontos";
 import { exigirProfessor } from "@/lib/professor";
@@ -105,35 +105,21 @@ export default async function RelatorioDaTurma({
     ) as [string, { id: string; capitulo: string | null; habilidades: string[] | null }][],
   );
   const respostas = (
-    await Promise.all(
-      emPedacos(tentativas).map((ids) =>
-        lerTudo<{ questao_id: string; fracao: number }>((de, ate) =>
-          supabase
-            .from("respostas")
-            .select("questao_id, fracao")
-            .in("tentativa_id", ids)
-            .not("fracao", "is", null)
-            .order("id")
-            .range(de, ate),
-        ),
-      ),
-    )
-  )
-    .flat()
-    .flatMap((r): RespostaPlano[] => {
-      const q = questoes.get(r.questao_id);
-      return q
-        ? [
-            {
-              questaoId: r.questao_id,
-              capitulo: q.capitulo,
-              habilidades: q.habilidades ?? [],
-              enunciado: "",
-              fracao: Number(r.fracao),
-            },
-          ]
-        : [];
-    });
+    await respostasCorrigidas<{ questao_id: string; fracao: number }>(supabase, "questao_id, fracao", tentativas)
+  ).flatMap((r): RespostaPlano[] => {
+    const q = questoes.get(r.questao_id);
+    return q
+      ? [
+          {
+            questaoId: r.questao_id,
+            capitulo: q.capitulo,
+            habilidades: q.habilidades ?? [],
+            enunciado: "",
+            fracao: Number(r.fracao),
+          },
+        ]
+      : [];
+  });
   const capitulos = agruparPorTopico(respostas, (r) => [r.capitulo?.trim() || SEM_CAPITULO]);
   const habilidades = agruparPorTopico(respostas, (r) => r.habilidades.map((h) => h.trim()).filter(Boolean)).filter(
     (h) => h.questoes >= QUESTOES_MINIMAS_DO_TEMA,

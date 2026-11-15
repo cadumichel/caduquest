@@ -1,18 +1,23 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { lerTudo } from "@/lib/paginar";
 import { montarRankingPublico, type EraId, type LinhaRankingPublico } from "./regras";
 
 export type LinhaRankingComJogador = LinhaRankingPublico & { apelido: string; avatar: number; cor: number };
 
 /** Partidas que valem ranking (a primeira de cada era, concluída). */
 async function partidasDeRanking(db: SupabaseClient) {
-  const { data } = await db
-    .from("partidas_publicas")
-    .select("jogador_id, era, pontos, iniciada_em, concluida_em, jogadores_publicos(apelido, avatar, cor)")
-    .eq("vale_ranking", true)
-    .not("concluida_em", "is", null)
-    .limit(20000);
-  return (data ?? []).map((p) => ({
+  // Página a página: o banco devolve no máximo 1000 linhas por consulta.
+  const data = await lerTudo((de, ate) =>
+    db
+      .from("partidas_publicas")
+      .select("jogador_id, era, pontos, iniciada_em, concluida_em, jogadores_publicos(apelido, avatar, cor)")
+      .eq("vale_ranking", true)
+      .not("concluida_em", "is", null)
+      .order("id")
+      .range(de, ate),
+  );
+  return data.map((p) => ({
     jogadorId: p.jogador_id as string,
     era: p.era as string,
     pontos: Number(p.pontos),

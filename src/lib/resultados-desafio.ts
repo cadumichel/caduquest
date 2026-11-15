@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { alunosDeTeste } from "@/lib/aluno-teste";
+import { lerPorIds } from "@/lib/paginar";
 import type { ResultadoQuestao } from "@/lib/relatorio";
 import type { Tentativa } from "@/lib/tipos-banco";
 
@@ -37,27 +38,24 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
   // O aluno de teste do professor não entra nos resultados nem no acerto por questão.
   const alunos = (todosAlunos ?? []).filter((a) => !deTeste.has(a.id));
   const tentativas = ((tentativasBrutas ?? []) as Tentativa[]).filter((t) => !deTeste.has(t.aluno_id));
-  const { data: respostas } = tentativas.length
-    ? await db
-        .from("respostas")
-        // "*" traz também as colunas da verificação de leitura, quando o SQL dela já rodou.
-        .select("*")
-        .in(
-          "tentativa_id",
-          tentativas.map((t) => t.id),
-        )
-    : {
-        data: [] as {
-          tentativa_id: string;
-          questao_id: string;
-          fracao: number | null;
-          tempo_esgotado: boolean;
-          saidas_tela: number;
-          zerada_por_saida: boolean;
-          motivo_zerada: string | null;
-          verificacao_acertou?: boolean | null;
-        }[],
-      };
+  // "*" traz também as colunas da verificação de leitura, quando o SQL dela já rodou.
+  // Página a página: turma grande com desafio longo passa de 1000 respostas.
+  const respostas = await lerPorIds<{
+    tentativa_id: string;
+    questao_id: string;
+    fracao: number | null;
+    tempo_esgotado: boolean;
+    saidas_tela: number;
+    zerada_por_saida: boolean;
+    motivo_zerada: string | null;
+    verificacao_acertou?: boolean | null;
+  }>(
+    db,
+    "respostas",
+    "*",
+    "tentativa_id",
+    tentativas.map((t) => t.id),
+  );
 
   type Agregado = {
     acertos: number;
@@ -75,7 +73,7 @@ export async function resultadosDoDesafio(db: SupabaseClient, desafioId: string,
   const porTentativa = new Map<string, Agregado>();
   const porQuestao = new Map<string, { soma: number; n: number }>();
   const detalhe = new Map<string, Map<string, ResultadoQuestao>>();
-  for (const r of respostas ?? []) {
+  for (const r of respostas) {
     const doAluno = detalhe.get(r.tentativa_id) ?? new Map<string, ResultadoQuestao>();
     doAluno.set(r.questao_id, {
       fracao: r.fracao === null ? null : Number(r.fracao),
