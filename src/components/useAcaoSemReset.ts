@@ -1,7 +1,7 @@
 "use client";
 import { startTransition, useActionState, type FormEvent } from "react";
 
-export type EstadoAcao = { erro?: string; ok?: string };
+export type EstadoAcao = { erro?: string; ok?: string; oferecerCadastro?: boolean };
 
 /**
  * Como useActionState, mas sem o reset automático do formulário que o React

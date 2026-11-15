@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { Avatar, CORES_AVATAR } from "@/components/Avatar";
 import { BotaoEnviar, PendenteForm } from "@/components/BotaoEnviar";
+import { AvisoAnotar, BotoesAcesso, useModoAcesso } from "@/components/EscolhaAcesso";
+import { MARCA_TURMA } from "@/components/MarcaAparelho";
 import { useAcaoSemReset } from "@/components/useAcaoSemReset";
 import { Aviso, Campo, Entrada } from "@/components/ui";
 import { INICIAIS, PERSONAGENS } from "@/lib/personagens";
@@ -11,7 +13,7 @@ type Lembrado = { codigo: string; apelido: string; avatar: number; cor: number }
 
 export function FormEntrar({ aviso, lembrado }: { aviso?: string; lembrado: Lembrado | null }) {
   const { estado, onSubmit, pendente } = useAcaoSemReset(entrar);
-  const [modo, setModo] = useState<"entrar" | "cadastrar">("entrar");
+  const { modo, setModo, apelidoNaoAchado } = useModoAcesso(MARCA_TURMA, estado.oferecerCadastro, estado);
   const [avatar, setAvatar] = useState(INICIAIS[0]);
   const [cor, setCor] = useState(0);
 
@@ -20,7 +22,7 @@ export function FormEntrar({ aviso, lembrado }: { aviso?: string; lembrado: Lemb
       rotulo={cadastro ? "Crie sua senha (PIN de 4 números)" : "Sua senha (PIN)"}
       dica={
         cadastro
-          ? "O PIN é a sua senha: 4 números que só você sabe. Você vai digitá-lo toda vez que entrar. Anote em lugar seguro e não conte para ninguém."
+          ? "O PIN é a sua senha: 4 números que só você sabe. Não conte para ninguém."
           : "São os 4 números que você criou no primeiro acesso."
       }
     >
@@ -60,8 +62,11 @@ export function FormEntrar({ aviso, lembrado }: { aviso?: string; lembrado: Lemb
           </PendenteForm>
         </form>
         <form action={trocarConta}>
-          <button type="submit" className="w-full text-center text-sm text-marca-700 underline">
-            Não é você? Entrar com outra conta
+          <button
+            type="submit"
+            className="w-full rounded-xl border border-slate-200 py-2.5 text-center text-sm font-semibold text-marca-700 hover:bg-marca-50"
+          >
+            Não é você? Entrar com outra conta ou criar a sua
           </button>
         </form>
       </div>
@@ -71,21 +76,16 @@ export function FormEntrar({ aviso, lembrado }: { aviso?: string; lembrado: Lemb
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <PendenteForm value={pendente}>
-        <div className="grid grid-cols-2 rounded-xl bg-slate-100 p-1 text-sm font-semibold">
-          {(["entrar", "cadastrar"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setModo(m)}
-              className={`rounded-lg py-2 ${modo === m ? "bg-white shadow-sm" : "text-slate-500"}`}
-            >
-              {m === "entrar" ? "Já tenho cadastro" : "Primeiro acesso"}
-            </button>
-          ))}
-        </div>
+        <BotoesAcesso modo={modo} setModo={setModo} />
         <input type="hidden" name="modo" value={modo} />
 
         {aviso && <Aviso tipo="info">{aviso}</Aviso>}
+        {apelidoNaoAchado && (
+          <Aviso tipo="info">
+            Não achamos esse apelido nesta turma. <strong>Se é a sua primeira vez</strong>, complete o cadastro abaixo.
+            Se você já tem conta, toque em &quot;Já tenho conta&quot; e confira como escreveu o apelido.
+          </Aviso>
+        )}
         {estado.erro && <Aviso>{estado.erro}</Aviso>}
 
         <Campo rotulo="Código da turma">
@@ -152,6 +152,7 @@ export function FormEntrar({ aviso, lembrado }: { aviso?: string; lembrado: Lemb
           </>
         )}
         {campoPin(modo === "cadastrar")}
+        {modo === "cadastrar" && <AvisoAnotar turma />}
         <BotaoEnviar className="w-full py-3 text-base" pendente="Entrando…">
           {modo === "cadastrar" ? "Criar e entrar" : "Entrar"}
         </BotaoEnviar>

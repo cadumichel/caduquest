@@ -36,7 +36,7 @@ const schema = z.object({
   voltar: z.string().optional(),
 });
 
-export type EstadoEntrarPublico = { erro?: string };
+export type EstadoEntrarPublico = { erro?: string; oferecerCadastro?: boolean };
 
 /** Só volta para páginas do próprio modo público. */
 const destinoSeguro = (v?: string) => (v && /^\/jogar(\/[\w-]*)*$/.test(v) ? v : "/jogar");
@@ -58,8 +58,10 @@ export async function entrarPublico(_: EstadoEntrarPublico, form: FormData): Pro
   let jogadorId: string;
   let versao: number;
   if (!jogador) {
-    if (modo === "entrar") return { erro: 'Não achamos esse apelido. Se é a sua primeira vez, escolha "Criar conta".' };
+    if (modo === "entrar") return { oferecerCadastro: true };
     if (apelidoImproprio(apelido)) return { erro: "Esse apelido não é permitido. Escolha outro." };
+    if (form.get("anotei") !== "sim")
+      return { erro: "Anote seu apelido e seu PIN e marque a caixa confirmando que anotou." };
     const avatar = INICIAIS.includes(dados.data.avatar ?? -1)
       ? dados.data.avatar!
       : INICIAIS[Math.floor(Math.random() * INICIAIS.length)];
