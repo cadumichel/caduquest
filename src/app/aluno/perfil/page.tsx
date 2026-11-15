@@ -3,14 +3,9 @@ import Image from "next/image";
 import { Avatar } from "@/components/Avatar";
 import { medalhasDaTurmaDoAluno, temporadaAtualDoAluno } from "@/lib/aluno-dados";
 import { exigirAluno } from "@/lib/aluno-sessao";
-import {
-  basicosLiberados as contarBasicos,
-  lendariosLiberados,
-  ORDEM_ESPECIAIS,
-  PERSONAGENS,
-  TOTAL_PERSONAGENS,
-} from "@/lib/personagens";
-import { desbloqueiosDoAluno } from "@/lib/desbloqueio-dados";
+import { ehEspecial, INICIAIS, ORDEM_ESPECIAIS, PERSONAGENS, TOTAL_PERSONAGENS } from "@/lib/personagens";
+import { personagensDoAluno } from "@/lib/desbloqueio-dados";
+import { SorteioPersonagens } from "@/components/SorteioPersonagens";
 import { fundoDoAluno, fundoLiberado } from "@/lib/visual-perfil";
 import { formatarData } from "@/lib/datas";
 import { calcularConquistas, nomeDoNivel } from "@/lib/progresso";
@@ -46,20 +41,21 @@ async function visualSalvo(alunoId: string) {
 export default async function Perfil() {
   const aluno = await exigirAluno();
   const db = criarClienteAdmin();
-  const [medalhasTurma, temporada, progresso, visual, desbloqueios] = await Promise.all([
+  const [medalhasTurma, temporada, progresso, visual, personagens] = await Promise.all([
     medalhasDaTurmaDoAluno(aluno.turmaId),
     temporadaAtualDoAluno(aluno.turmaId),
     progressoDoAluno(aluno.id, aluno.turmaId),
     visualSalvo(aluno.id),
-    desbloqueiosDoAluno(aluno.id, aluno.turmaId),
+    personagensDoAluno(aluno.id, aluno.turmaId),
   ]);
   const medalhas = medalhasTurma.get(aluno.id) ?? 0;
   const ranking = temporada ? await rankingDaTemporada(db, temporada, aluno.id) : [];
   const { eu, total } = rankingParaAluno(ranking, aluno.id);
 
-  const especiaisLiberados = lendariosLiberados(desbloqueios);
-  const basicosLiberados = contarBasicos(desbloqueios);
-  const proximo: number | undefined = ORDEM_ESPECIAIS[especiaisLiberados];
+  const especiaisLiberados = personagens.revelados.filter(ehEspecial).length;
+  const basicosLiberados = INICIAIS.length + personagens.revelados.filter((i) => !ehEspecial(i)).length;
+  // Silhueta do próximo lendário: o primeiro ainda não sorteado (o sorteio em si é aleatório).
+  const proximo = ORDEM_ESPECIAIS.find((i) => !personagens.revelados.includes(i));
   const personagem = PERSONAGENS[Math.abs(aluno.avatar) % TOTAL_PERSONAGENS];
   const conquistas = calcularConquistas(progresso, {
     posicao: eu?.posicao ?? null,
@@ -78,6 +74,11 @@ export default async function Perfil() {
 
   return (
     <div className="space-y-5">
+      <SorteioPersonagens
+        basicos={personagens.pendentes.basicos}
+        lendarios={personagens.pendentes.lendarios}
+        cor={aluno.cor}
+      />
       <section
         className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${fundo.classes} p-6 text-white shadow-lg`}
       >
@@ -199,7 +200,12 @@ export default async function Perfil() {
         nomeNivel={nomeDoNivel(progresso.nivel)}
       />
 
-      <EscolherAvatar avatarAtual={aluno.avatar} corAtual={aluno.cor} medalhas={medalhas} desbloqueios={desbloqueios} />
+      <EscolherAvatar
+        avatarAtual={aluno.avatar}
+        corAtual={aluno.cor}
+        medalhas={medalhas}
+        revelados={personagens.revelados}
+      />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { medalhasDaTurmaDoAluno } from "@/lib/aluno-dados";
-import { calcularDesbloqueios, type Desbloqueios } from "@/lib/personagens";
+import { calcularDesbloqueios, type Desbloqueios, personagensPendentes, reveladosEmOrdem } from "@/lib/personagens";
 import { progressoDoAluno } from "@/lib/progresso-dados";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { pontuacaoEncerrada, type Temporada } from "@/lib/tipos-banco";
@@ -25,4 +25,20 @@ export const desbloqueiosDoAluno = cache(async (alunoId: string, turmaId: string
     })),
     vitorias: medalhas.get(alunoId) ?? 0,
   });
+});
+
+/**
+ * Personagens do aluno: os ganhos pelas regras, os já sorteados e os que faltam sortear.
+ * Sem o SQL do sorteio, os ganhos ficam liberados em ordem e não há sorteio.
+ */
+export const personagensDoAluno = cache(async (alunoId: string, turmaId: string) => {
+  const db = criarClienteAdmin();
+  const [desbloqueios, { data, error }] = await Promise.all([
+    desbloqueiosDoAluno(alunoId, turmaId),
+    db.from("alunos").select("personagens_revelados").eq("id", alunoId).maybeSingle(),
+  ]);
+  if (error)
+    return { desbloqueios, revelados: reveladosEmOrdem(desbloqueios), pendentes: { basicos: 0, lendarios: 0 } };
+  const revelados = ((data?.personagens_revelados as number[] | null) ?? []).map(Number);
+  return { desbloqueios, revelados, pendentes: personagensPendentes(desbloqueios, revelados) };
 });

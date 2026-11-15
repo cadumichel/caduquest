@@ -5,8 +5,8 @@ import { exigirAluno } from "@/lib/aluno-sessao";
 import { medalhasDaTurma } from "@/lib/medalhas";
 import { apelidoImproprio } from "@/lib/apelido";
 import { cartaDoAluno } from "@/lib/carta-coringa";
-import { personagemLiberado } from "@/lib/personagens";
-import { desbloqueiosDoAluno } from "@/lib/desbloqueio-dados";
+import { personagemLiberado, personagensPendentes, sortearPersonagens } from "@/lib/personagens";
+import { desbloqueiosDoAluno, personagensDoAluno } from "@/lib/desbloqueio-dados";
 import { calcularConquistas } from "@/lib/progresso";
 import { progressoDoAluno } from "@/lib/progresso-dados";
 import { rankingParaAluno } from "@/lib/ranking";
@@ -133,7 +133,7 @@ export async function salvarPerfil(avatar: number, cor: number): Promise<{ erro?
   const db = criarClienteAdmin();
   // O personagem atual sempre pode ficar (quem escolheu antes das regras de desbloqueio).
   if (avatar !== aluno.avatar) {
-    if (!personagemLiberado(avatar, await desbloqueiosDoAluno(aluno.id, aluno.turmaId))) {
+    if (!personagemLiberado(avatar, (await personagensDoAluno(aluno.id, aluno.turmaId)).revelados)) {
       return { erro: "Esse personagem ainda está bloqueado. Conclua desafios para liberar!" };
     }
   }
@@ -271,4 +271,33 @@ export async function salvarCarta(temaBruto: string): Promise<{ erro?: string; o
   return {
     ok: "Tema enviado! Ele aparece para todos assim que o professor aprovar, e vira uma questão da próxima prova.",
   };
+}
+
+/**
+ * Sorteia os personagens que o aluno ganhou e ainda não revelou e grava no perfil.
+ * A gravação só vale se ninguém sorteou no meio (outra aba): senão, sorteia de novo.
+ */
+export async function revelarPersonagens(): Promise<{ novos?: number[]; erro?: string }> {
+  const aluno = await exigirAluno();
+  const db = criarClienteAdmin();
+  const desbloqueios = await desbloqueiosDoAluno(aluno.id, aluno.turmaId);
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    const { data, error } = await db.from("alunos").select("personagens_revelados").eq("id", aluno.id).single();
+    if (error) return { erro: "Não foi possível abrir o sorteio. Peça ao professor para atualizar o app." };
+    const revelados = ((data.personagens_revelados as number[] | null) ?? []).map(Number);
+    const pendentes = personagensPendentes(desbloqueios, revelados);
+    const novos = sortearPersonagens(revelados, pendentes);
+    if (!novos.length) return { novos: [] };
+    const { data: gravou } = await db
+      .from("alunos")
+      .update({ personagens_revelados: [...revelados, ...novos] })
+      .eq("id", aluno.id)
+      .eq("personagens_revelados", `{${revelados.join(",")}}`)
+      .select("id");
+    if (gravou?.length) {
+      revalidatePath("/aluno", "layout");
+      return { novos };
+    }
+  }
+  return { erro: "Não foi possível abrir o sorteio. Tente de novo." };
 }

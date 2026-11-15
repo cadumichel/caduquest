@@ -5,10 +5,8 @@ import { Aviso, Botao } from "@/components/ui";
 import {
   BASICOS_POR_DESAFIO,
   BASICOS_POR_DESAFIO_BOM,
-  type Desbloqueios,
+  ehEspecial,
   INICIAIS,
-  lendariosLiberados,
-  numeroDoLendario,
   ORDEM_BASICOS,
   ORDEM_ESPECIAIS,
   PERSONAGENS,
@@ -22,12 +20,12 @@ export function EscolherAvatar({
   avatarAtual,
   corAtual,
   medalhas,
-  desbloqueios,
+  revelados,
 }: {
   avatarAtual: number;
   corAtual: number;
   medalhas: number;
-  desbloqueios: Desbloqueios;
+  revelados: number[];
 }) {
   const [avatar, setAvatar] = useState(avatarAtual);
   // Personagem em destaque no álbum: o escolhido ou um bloqueado que o aluno tocou.
@@ -36,7 +34,7 @@ export function EscolherAvatar({
   const [msg, setMsg] = useState<{ tipo: "ok" | "erro"; texto: string }>();
   const [pendente, iniciar] = useTransition();
   const mudou = avatar !== avatarAtual || cor !== corAtual;
-  const liberado = (i: number) => i === avatarAtual || personagemLiberado(i, desbloqueios);
+  const liberado = (i: number) => i === avatarAtual || personagemLiberado(i, revelados);
   const naColecao = PERSONAGENS.filter((_, i) => liberado(i)).length;
   const escolher = (i: number) => {
     setAvatar(i);
@@ -87,8 +85,8 @@ export function EscolherAvatar({
             {vistoLiberado
               ? CURIOSIDADE_PERSONAGEM[p.nome]
               : lendarioVisto
-                ? "Complete uma temporada com pelo menos 50% de acerto ou vença um desafio para liberar os lendários, em ordem."
-                : "Conclua desafios para liberar este personagem e a curiosidade dele."}
+                ? "Complete uma temporada com pelo menos 50% de acerto ou vença um desafio para ganhar um lendário no sorteio."
+                : "Conclua desafios para ganhar sorteios de personagens. Quem sabe ele sai para você!"}
           </p>
         </div>
       </div>
@@ -96,8 +94,9 @@ export function EscolherAvatar({
       <section>
         <h3 className="font-semibold">Personagens</h3>
         <p className="mb-2 text-sm text-slate-600">
-          Você começa com {INICIAIS.length}. Cada desafio que você termina libera mais: {BASICOS_POR_DESAFIO_BOM} se
-          acertar mais da metade, {BASICOS_POR_DESAFIO} se acertar metade ou menos.
+          Você começa com {INICIAIS.length}. Cada desafio que você termina dá mais personagens, sorteados entre os que
+          você ainda não tem: {BASICOS_POR_DESAFIO_BOM} se acertar mais da metade, {BASICOS_POR_DESAFIO} se acertar
+          metade ou menos.
         </p>
         <div className="grid grid-cols-5 gap-2">
           {ORDEM_BASICOS.map((i) =>
@@ -109,7 +108,7 @@ export function EscolherAvatar({
                 type="button"
                 onClick={() => setVisto(i)}
                 aria-pressed={visto === i}
-                title="Conclua desafios para liberar"
+                title="Conclua desafios para ganhar sorteios"
                 className={`flex aspect-square flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-slate-500 ${
                   visto === i ? "ring-2 ring-amber-400" : ""
                 }`}
@@ -126,7 +125,7 @@ export function EscolherAvatar({
         <p className="mb-3 text-sm text-amber-50">
           Faça todos os desafios de uma temporada com pelo menos 50% de acerto e ganhe um lendário quando ela encerrar.
           Vencer um desafio (maior pontuação da turma) também libera um. Você já liberou{" "}
-          {lendariosLiberados(desbloqueios)} de {ORDEM_ESPECIAIS.length}.
+          {revelados.filter(ehEspecial).length} de {ORDEM_ESPECIAIS.length}.
         </p>
         <div className="grid grid-cols-5 gap-2">
           {ORDEM_ESPECIAIS.map((i) =>
@@ -138,13 +137,12 @@ export function EscolherAvatar({
                 type="button"
                 onClick={() => setVisto(i)}
                 aria-pressed={visto === i}
-                title={`${numeroDoLendario(i)}º lendário`}
+                title="Lendário: ganhe no sorteio"
                 className={`relative flex aspect-square flex-col items-center justify-center overflow-hidden rounded-xl bg-gradient-to-b from-amber-300/25 to-amber-700/30 text-amber-200 ring-1 ring-amber-300/50 ${
                   visto === i ? "ring-2 ring-amber-300" : ""
                 }`}
               >
                 <span className="text-lg">🔒</span>
-                <span className="text-[10px] font-semibold">{numeroDoLendario(i)}º</span>
               </button>
             ),
           )}

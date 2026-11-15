@@ -60,13 +60,14 @@ export function FimDoDesafio({ desafioId, aviso }: { desafioId: string; aviso?: 
               )}
               {resumo.personagensNovos > 0 && (
                 <Linha icone="🧑‍🎓">
-                  Você liberou{" "}
+                  Você ganhou{" "}
                   <b>
-                    {resumo.personagensNovos} {resumo.personagensNovos === 1 ? "personagem novo" : "personagens novos"}
+                    {resumo.personagensNovos} {resumo.personagensNovos === 1 ? "personagem" : "personagens"} para
+                    sortear
                   </b>
-                  .{" "}
-                  <Link href="/aluno/perfil#visual" className="font-bold text-ouro-claro underline">
-                    Ver
+                  !{" "}
+                  <Link href="/aluno" className="font-bold text-ouro-claro underline">
+                    Abrir o sorteio no Início
                   </Link>
                 </Linha>
               )}

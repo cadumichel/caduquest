@@ -57,7 +57,8 @@ export function ComoGanharXp() {
           </p>
           <p className="mt-1">
             Fazer a maior pontuação da turma em um desafio também dá uma medalha 🏅 e um lendário (se empatar no topo,
-            todos os empatados ganham). Os lendários saem em ordem: são {ORDEM_ESPECIAIS.length} ao todo.
+            todos os empatados ganham). Os personagens novos são sorteados: quando aparecer o aviso 🎁, toque nele para
+            revelar quem você ganhou. Os lendários são {ORDEM_ESPECIAIS.length} ao todo.
           </p>
         </div>
       </div>

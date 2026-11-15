@@ -504,12 +504,41 @@ export function calcularDesbloqueios({
 export const basicosLiberados = (d: Desbloqueios) => Math.min(ORDEM_BASICOS.length, INICIAIS.length + d.basicos);
 export const lendariosLiberados = (d: Desbloqueios) => Math.min(ORDEM_ESPECIAIS.length, d.lendarios);
 
-/** O aluno pode usar este personagem? Básicos e lendários na ordem de liberação. */
-export function personagemLiberado(avatar: number, d: Desbloqueios) {
-  return ehEspecial(avatar)
-    ? ORDEM_ESPECIAIS.indexOf(avatar) < lendariosLiberados(d)
-    : ORDEM_BASICOS.indexOf(avatar) < basicosLiberados(d);
+/** O aluno pode usar este personagem? Os iniciais e os que já saíram no sorteio. */
+export const personagemLiberado = (avatar: number, revelados: readonly number[]) =>
+  INICIAIS.includes(avatar) || revelados.includes(avatar);
+
+/** Personagens ganhos que o aluno ainda não sorteou. */
+export function personagensPendentes(d: Desbloqueios, revelados: readonly number[]): Desbloqueios {
+  const lendarios = revelados.filter(ehEspecial).length;
+  const basicos = revelados.filter((i) => !ehEspecial(i) && !INICIAIS.includes(i)).length;
+  return {
+    basicos: Math.max(0, basicosLiberados(d) - INICIAIS.length - basicos),
+    lendarios: Math.max(0, lendariosLiberados(d) - lendarios),
+  };
 }
+
+/** Sorteia os personagens pendentes entre os que o aluno ainda não tem (lendários primeiro). */
+export function sortearPersonagens(
+  revelados: readonly number[],
+  pendentes: Desbloqueios,
+  aleatorio: () => number = Math.random,
+): number[] {
+  const tirar = (lista: readonly number[], n: number) => {
+    const resto = lista.filter((i) => !revelados.includes(i) && !INICIAIS.includes(i));
+    const sorteados: number[] = [];
+    while (sorteados.length < n && resto.length)
+      sorteados.push(resto.splice(Math.floor(aleatorio() * resto.length), 1)[0]);
+    return sorteados;
+  };
+  return [...tirar(ORDEM_ESPECIAIS, pendentes.lendarios), ...tirar(ORDEM_BASICOS, pendentes.basicos)];
+}
+
+/** Sem a coluna do sorteio (SQL ainda não rodou): os ganhos saem em ordem, sem sorteio. */
+export const reveladosEmOrdem = (d: Desbloqueios) => [
+  ...ORDEM_BASICOS.slice(INICIAIS.length, basicosLiberados(d)),
+  ...ORDEM_ESPECIAIS.slice(0, lendariosLiberados(d)),
+];
 
 /** Posição do lendário na ordem de liberação (1 = o primeiro). */
 export const numeroDoLendario = (avatar: number) => ORDEM_ESPECIAIS.indexOf(avatar) + 1;

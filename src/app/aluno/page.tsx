@@ -23,6 +23,8 @@ import { disputaDaTurma } from "@/lib/disputa-turmas-dados";
 import { escolherFundo, FUNDOS_TEMPORADA, imagemDoFundo } from "@/lib/fundos-temporada";
 import { faseDaTemporada, situacaoDesafio, treinoLiberado, type Desafio, type Tentativa } from "@/lib/tipos-banco";
 import { formatarPontos } from "@/lib/pontos";
+import { personagensDoAluno } from "@/lib/desbloqueio-dados";
+import { SorteioPersonagens } from "@/components/SorteioPersonagens";
 
 export const metadata: Metadata = { title: "Início" };
 
@@ -82,6 +84,7 @@ export default async function Inicio() {
       .eq("turma_id", aluno.turmaId)
       .lt("inicio", temporada.inicio),
   ]);
+  const personagens = await personagensDoAluno(aluno.id, aluno.turmaId);
   const fundo = escolherFundo(temporada, temporadasAntes ?? 0);
   const desafios = (desafiosBrutos ?? []) as (Desafio & { desafio_questoes: { count: number }[] })[];
   const tentativas = new Map(((tentativasBrutas ?? []) as Tentativa[]).map((t) => [t.desafio_id, t]));
@@ -120,6 +123,11 @@ export default async function Inicio() {
 
   return (
     <div className="inicio-largo space-y-6">
+      <SorteioPersonagens
+        basicos={personagens.pendentes.basicos}
+        lendarios={personagens.pendentes.lendarios}
+        cor={aluno.cor}
+      />
       <section className="relative overflow-hidden rounded-3xl bg-marca-900 text-white shadow-lg shadow-marca-900/20">
         <Image
           src={imagemDoFundo(fundo)}

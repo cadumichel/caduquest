@@ -42,17 +42,26 @@ describe("curiosidades dos personagens", () => {
 });
 
 describe("desbloqueio dos personagens", async () => {
-  const { INICIAIS, ORDEM_BASICOS, calcularDesbloqueios, personagemLiberado, basicosLiberados } =
-    await import("../personagens");
+  const {
+    INICIAIS,
+    ORDEM_BASICOS,
+    calcularDesbloqueios,
+    personagemLiberado,
+    basicosLiberados,
+    personagensPendentes,
+    sortearPersonagens,
+    reveladosEmOrdem,
+  } = await import("../personagens");
   it("começa com os 10 iniciais", () => {
     expect(INICIAIS).toHaveLength(10);
     expect(INICIAIS).not.toContain(-1);
     expect(new Set(ORDEM_BASICOS).size).toBe(113);
     const nada = { basicos: 0, lendarios: 0 };
     expect(basicosLiberados(nada)).toBe(10);
-    expect(personagemLiberado(ORDEM_BASICOS[9], nada)).toBe(true);
-    expect(personagemLiberado(ORDEM_BASICOS[10], nada)).toBe(false);
-    expect(personagemLiberado(ORDEM_ESPECIAIS[0], nada)).toBe(false);
+    expect(personagemLiberado(INICIAIS[9], [])).toBe(true);
+    expect(personagemLiberado(ORDEM_BASICOS[10], [])).toBe(false);
+    expect(personagemLiberado(ORDEM_BASICOS[10], [ORDEM_BASICOS[10]])).toBe(true);
+    expect(personagemLiberado(ORDEM_ESPECIAIS[0], [])).toBe(false);
   });
   it("lista inicial diversa: Antonieta de Barros no lugar da Baiana", () => {
     const nomes = INICIAIS.map((i) => PERSONAGENS[i].nome);
@@ -70,8 +79,7 @@ describe("desbloqueio dos personagens", async () => {
       vitorias: 0,
     });
     expect(d).toEqual({ basicos: 6, lendarios: 0 });
-    expect(personagemLiberado(ORDEM_BASICOS[15], d)).toBe(true);
-    expect(personagemLiberado(ORDEM_BASICOS[16], d)).toBe(false);
+    expect(personagensPendentes(d, [])).toEqual({ basicos: 6, lendarios: 0 });
   });
   it("temporada completa e encerrada: lendário com 50% ou mais, básico abaixo", () => {
     const desafios = [
@@ -91,7 +99,33 @@ describe("desbloqueio dos personagens", async () => {
       vitorias: 2,
     });
     expect(d).toEqual({ basicos: 4 + 1 + 1 + 1 + 1, lendarios: 1 + 2 });
-    expect(personagemLiberado(ORDEM_ESPECIAIS[2], d)).toBe(true);
-    expect(personagemLiberado(ORDEM_ESPECIAIS[3], d)).toBe(false);
+    expect(reveladosEmOrdem(d)).toContain(ORDEM_ESPECIAIS[2]);
+    expect(reveladosEmOrdem(d)).not.toContain(ORDEM_ESPECIAIS[3]);
+  });
+  it("pendentes descontam o que já foi sorteado", () => {
+    const d = { basicos: 5, lendarios: 2 };
+    const revelados = [ORDEM_BASICOS[20], ORDEM_BASICOS[40], ORDEM_ESPECIAIS[7]];
+    expect(personagensPendentes(d, revelados)).toEqual({ basicos: 3, lendarios: 1 });
+    expect(personagensPendentes({ basicos: 1, lendarios: 0 }, revelados)).toEqual({ basicos: 0, lendarios: 0 });
+  });
+  it("sorteio é aleatório, sem repetir nem pegar iniciais ou já revelados", () => {
+    const revelados = [ORDEM_BASICOS[20]];
+    const primeiro = sortearPersonagens(revelados, { basicos: 3, lendarios: 1 }, () => 0);
+    const ultimo = sortearPersonagens(revelados, { basicos: 3, lendarios: 1 }, () => 0.999);
+    for (const novos of [primeiro, ultimo]) {
+      expect(novos).toHaveLength(4);
+      expect(new Set(novos).size).toBe(4);
+      expect(ORDEM_ESPECIAIS).toContain(novos[0]);
+      for (const n of novos) {
+        expect(INICIAIS).not.toContain(n);
+        expect(revelados).not.toContain(n);
+      }
+      for (const n of novos.slice(1)) expect(ORDEM_BASICOS).toContain(n);
+    }
+    expect(primeiro).not.toEqual(ultimo);
+  });
+  it("sorteio para quando acabam os personagens", () => {
+    const todos = [...ORDEM_BASICOS, ...ORDEM_ESPECIAIS];
+    expect(sortearPersonagens(todos, { basicos: 2, lendarios: 1 })).toEqual([]);
   });
 });
