@@ -48,7 +48,7 @@ export function RetratoPersonagem({ nome, avatar, classe }: { nome: string; avat
     .toUpperCase();
   return avatar ? (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={avatar} alt={nome} className={`${classe} max-w-none shrink-0 bg-white object-cover`} />
+    <img src={avatar} alt={nome} className={`${classe} max-w-none shrink-0 bg-white object-cover object-[50%_25%]`} />
   ) : (
     <span
       aria-label={nome}

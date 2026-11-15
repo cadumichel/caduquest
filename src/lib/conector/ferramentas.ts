@@ -62,6 +62,7 @@ import {
 } from "@/lib/temporada-encerramento";
 import { ultimoDiaComPontos, type Temporada } from "@/lib/tipos-banco";
 import { guardarImagemDaUrl } from "./imagem";
+import { imagemDoPersonagem } from "@/lib/personagens";
 import { professorDoConector } from "./professor";
 
 const resultado = (dados: unknown) => ({
@@ -490,7 +491,7 @@ const schemaQuestao = z.object({
       personagem: z
         .string()
         .describe(
-          "Quem percorre o caminho, pelo nome mais conhecido (ex.: 'Abraham Lincoln'). Se o app tiver o retrato dele, ele vira o peão.",
+          "Quem percorre o caminho, pelo nome mais conhecido (ex.: 'Abraham Lincoln'). Se o app tiver o desenho dele, ele vira o peão; senão, imagem_url é obrigatória e vira o peão.",
         ),
       casas: z.array(
         z.object({
@@ -505,7 +506,7 @@ const schemaQuestao = z.object({
     })
     .optional()
     .describe(
-      "tabuleiro: um personagem percorre de 3 a 6 casas (o ideal é 5), na ordem da vida dele; em cada casa o aluno escolhe entre duas opções qual ele fez. Crédito parcial por casa. Use o enunciado para situar (ex.: 'Leve Abraham Lincoln até o fim do caminho.').",
+      "tabuleiro: um personagem percorre de 3 a 6 casas (o ideal é 5), na ordem da vida dele; em cada casa o aluno escolhe entre duas opções qual ele fez. Crédito parcial por casa. Use o enunciado para situar (ex.: 'Leve Abraham Lincoln até o fim do caminho.'). Personagem sem desenho no app: mande em imagem_url um retrato dele (pintura ou foto em que o rosto apareça bem, da Wikimedia Commons); o app recorta em círculo e usa como peão, no lugar da imagem acima do enunciado.",
     ),
 });
 
@@ -835,7 +836,10 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           (q.tipo === "fonte_primaria" && !imagem && !(conteudo.data as { documento: string }).documento
             ? "Fonte primária sem documento: envie o trecho em documento ou a imagem em imagem_url."
             : null) ??
-          (q.tipo === "mapa" && !imagem ? "Mapa sem imagem: envie o mapa em imagem_url." : null);
+          (q.tipo === "mapa" && !imagem ? "Mapa sem imagem: envie o mapa em imagem_url." : null) ??
+          (q.tipo === "tabuleiro" && !imagem && !imagemDoPersonagem(q.tabuleiro?.personagem ?? "")
+            ? `O app não tem desenho de ${q.tabuleiro?.personagem}: envie um retrato dele em imagem_url (pintura ou foto do rosto, da Wikimedia Commons).`
+            : null);
         if (motivoFinal || !conteudo.success) {
           recusadas.push({ posicao: i + 1, enunciado: q.enunciado.slice(0, 80), motivo: motivoFinal ?? "" });
           continue;
@@ -848,6 +852,8 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         if (q.tipo === "mapa")
           dados = { ...dados, imagem: caminhoImagem ?? "", ...(posicionar && { posicionar: true }) };
         if (posicionar) pinosPorPosicionar.push(i + 1);
+        // No tabuleiro, a imagem é o retrato do peão.
+        if (q.tipo === "tabuleiro" && caminhoImagem) dados = { ...dados, retrato: caminhoImagem };
         linhas.push({
           professor_id: professorId,
           tipo: q.tipo,
@@ -860,7 +866,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           dica: q.dica.trim() || null,
           tema: q.tema.trim(),
           fonte: q.fonte?.trim() || null,
-          imagem_path: q.tipo === "mapa" ? null : caminhoImagem,
+          imagem_path: q.tipo === "mapa" || q.tipo === "tabuleiro" ? null : caminhoImagem,
           tempo_limite_s: relampago?.tempo ?? q.tempo_limite_s ?? TEMPO_PADRAO[q.tipo as TipoQuestao],
           ...(relampago && { relampago: true }),
           conteudo: dados,

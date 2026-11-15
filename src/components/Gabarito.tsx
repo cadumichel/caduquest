@@ -12,7 +12,7 @@ import {
 import { urlImagem } from "@/lib/tipos-banco";
 import { Citacao, Documento, ImagemComPinos } from "./QuestaoInterativa";
 import { CaminhoTabuleiro } from "./Tabuleiro";
-import { imagemDoPersonagem } from "@/lib/personagens";
+import { retratoDoTabuleiro } from "@/lib/questoes/apresentacao";
 
 const LETRAS = "ABCDEF";
 
@@ -461,7 +461,7 @@ export function Gabarito({
         <div className="space-y-2 text-sm">
           <CaminhoTabuleiro
             personagem={personagem}
-            avatar={imagemDoPersonagem(personagem)}
+            avatar={retratoDoTabuleiro(conteudo.conteudo)}
             estados={acertos.map((a) => (!comResposta ? "neutra" : a ? "certa" : "errada"))}
             peao={casas.length + 1}
             legendas={casas.map((c) => c.certa)}

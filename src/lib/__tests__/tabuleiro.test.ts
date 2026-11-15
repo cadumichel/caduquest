@@ -91,3 +91,18 @@ describe("tabuleiro", () => {
     }
   });
 });
+
+describe("retrato do peão", () => {
+  it("usa o retrato enviado quando o app não tem o desenho", () => {
+    const c = {
+      tipo: "tabuleiro",
+      conteudo: { ...lincoln.conteudo, personagem: "Marechal Deodoro", retrato: "prof/deodoro.jpg" },
+    } as Conteudo;
+    const vista = montarVista(c, perm);
+    expect(vista.tipo === "tabuleiro" && vista.avatar).toContain("deodoro.jpg");
+  });
+  it("o desenho do app vem antes do retrato enviado", () => {
+    const c = { tipo: "tabuleiro", conteudo: { ...lincoln.conteudo, retrato: "prof/x.jpg" } } as Conteudo;
+    expect(montarVista(c, perm)).toMatchObject({ avatar: "/personagens/abraham-lincoln.webp" });
+  });
+});

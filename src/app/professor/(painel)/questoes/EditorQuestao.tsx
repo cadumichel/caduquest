@@ -33,6 +33,7 @@ import {
 } from "@/lib/questoes/tipos";
 import { criarClienteNavegador } from "@/lib/supabase/client";
 import type { Questao } from "@/lib/tipos-banco";
+import { imagemDoPersonagem } from "@/lib/personagens";
 import { urlImagem } from "@/lib/tipos-banco";
 import { excluirQuestao, salvarQuestao } from "../actions";
 
@@ -81,7 +82,9 @@ export function EditorQuestao({
     if (!campos.relampago) set("tempo_limite_s", TEMPO_PADRAO[tipo]);
   };
 
-  const temImagem = Boolean(campos.imagem_path) && conteudo.tipo !== "mapa";
+  // No mapa e no tabuleiro, a imagem vai dentro do conteúdo (o mapa dos pinos, o retrato do peão).
+  const imagemNoConteudo = conteudo.tipo === "mapa" || conteudo.tipo === "tabuleiro";
+  const temImagem = Boolean(campos.imagem_path) && !imagemNoConteudo;
   const sugestao = sugerirTempoRelampago(campos.enunciado, conteudo, temImagem);
   const problemas = campos.relampago ? problemasRelampago(campos.enunciado, conteudo, campos.tempo_limite_s) : [];
   const alternarRelampago = (ligar: boolean) =>
@@ -103,6 +106,8 @@ export function EditorQuestao({
     if (error) return setMensagem({ erro: "Não foi possível enviar a imagem." });
     // No mapa, a imagem fica dentro do conteúdo, embaixo dos pinos.
     if (conteudo.tipo === "mapa") setConteudo({ tipo: "mapa", conteudo: { ...conteudo.conteudo, imagem: caminho } });
+    else if (conteudo.tipo === "tabuleiro")
+      setConteudo({ tipo: "tabuleiro", conteudo: { ...conteudo.conteudo, retrato: caminho } });
     else set("imagem_path", caminho);
   };
 
@@ -128,7 +133,7 @@ export function EditorQuestao({
         conteudo: conteudo.conteudo,
         status,
         ...campos,
-        imagem_path: conteudo.tipo === "mapa" ? null : campos.imagem_path,
+        imagem_path: imagemNoConteudo ? null : campos.imagem_path,
       });
       setMensagem(r);
       if (proxima && !r.erro) return irParaProxima();
@@ -191,11 +196,19 @@ export function EditorQuestao({
             />
           </Campo>
           <Campo
-            rotulo={conteudo.tipo === "mapa" ? "Imagem do mapa" : "Imagem (fonte, charge, mapa)"}
+            rotulo={
+              conteudo.tipo === "mapa"
+                ? "Imagem do mapa"
+                : conteudo.tipo === "tabuleiro"
+                  ? "Retrato do personagem (vira o peão)"
+                  : "Imagem (fonte, charge, mapa)"
+            }
             dica={
               conteudo.tipo === "mapa"
                 ? "PNG, JPG ou WEBP até 2 MB, sem os nomes escritos nos lugares cobrados."
-                : "PNG, JPG ou WEBP até 2 MB. Meta: 40% das questões de cada desafio com imagem."
+                : conteudo.tipo === "tabuleiro"
+                  ? "Só para quem não tem desenho no app: pintura ou foto do rosto, PNG, JPG ou WEBP até 2 MB."
+                  : "PNG, JPG ou WEBP até 2 MB. Meta: 40% das questões de cada desafio com imagem."
             }
           >
             <div className="flex items-center gap-3">
@@ -207,7 +220,18 @@ export function EditorQuestao({
                 className="text-sm"
               />
               {enviandoImagem && <span className="text-sm text-slate-500">Enviando…</span>}
-              {campos.imagem_path && conteudo.tipo !== "mapa" && (
+              {conteudo.tipo === "tabuleiro" && conteudo.conteudo.retrato && (
+                <button
+                  type="button"
+                  className="text-sm text-red-700"
+                  onClick={() =>
+                    setConteudo({ tipo: "tabuleiro", conteudo: { ...conteudo.conteudo, retrato: undefined } })
+                  }
+                >
+                  Remover
+                </button>
+              )}
+              {campos.imagem_path && !imagemNoConteudo && (
                 <button type="button" className="text-sm text-red-700" onClick={() => set("imagem_path", null)}>
                   Remover
                 </button>
@@ -384,7 +408,7 @@ export function EditorQuestao({
             <Previa
               conteudo={{ tipo: conteudo.tipo, conteudo: validacao.data } as Conteudo}
               enunciado={campos.enunciado}
-              imagemUrl={conteudo.tipo === "mapa" ? null : urlImagem(campos.imagem_path)}
+              imagemUrl={imagemNoConteudo ? null : urlImagem(campos.imagem_path)}
               tempo={campos.tempo_limite_s}
               relampago={campos.relampago}
             />
@@ -1269,6 +1293,11 @@ function EditorConteudo({
             <span className="text-sm font-medium text-slate-700">
               Personagem (se o app tiver o desenho dele, como Abraham Lincoln, ele vira o peão)
             </span>
+            {c.personagem.trim() && !imagemDoPersonagem(c.personagem) && !c.retrato && (
+              <span className="block text-sm text-amber-700">
+                O app não tem desenho deste personagem: envie um retrato dele no campo de imagem acima.
+              </span>
+            )}
             <input
               className={classeInput}
               placeholder="Ex.: Abraham Lincoln"

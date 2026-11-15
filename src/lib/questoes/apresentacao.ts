@@ -12,6 +12,11 @@ import {
   type Vista,
 } from "./tipos";
 
+/** Peão do tabuleiro: o desenho do app, se houver; senão, o retrato enviado com a questão. */
+export function retratoDoTabuleiro(c: { personagem: string; retrato?: string }): string | null {
+  return imagemDoPersonagem(c.personagem) ?? urlImagem(c.retrato ?? null) ?? null;
+}
+
 /** Monta a vista do aluno a partir do conteúdo e da permutação sorteada para ele. */
 export function montarVista(c: Conteudo, permutacao: number[]): Vista {
   switch (c.tipo) {
@@ -91,7 +96,7 @@ export function montarVista(c: Conteudo, permutacao: number[]): Vista {
       return {
         tipo: c.tipo,
         personagem: c.conteudo.personagem,
-        avatar: imagemDoPersonagem(c.conteudo.personagem),
+        avatar: retratoDoTabuleiro(c.conteudo),
         casas: c.conteudo.casas.map((casa, k) => {
           const opcoes = [casa.certa, casa.errada];
           const [a, b] = ordemDaCasa(permutacao, k);

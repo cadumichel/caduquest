@@ -257,6 +257,8 @@ export const conteudoMapa = z
 export const conteudoTabuleiro = z.object({
   // Quem percorre o caminho (ex.: Abraham Lincoln).
   personagem: texto.max(80, "Nome do personagem longo demais (máx. 80 caracteres)."),
+  // Retrato enviado (caminho no bucket das questões), para quem não tem desenho no app.
+  retrato: z.string().trim().optional(),
   // Na ordem do caminho: em cada casa, o que ele fez (certa) e o que não fez (errada).
   casas: z
     .array(
