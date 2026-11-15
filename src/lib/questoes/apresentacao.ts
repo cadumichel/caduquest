@@ -17,6 +17,16 @@ export function retratoDoTabuleiro(c: { personagem: string; retrato?: string }):
   return imagemDoPersonagem(c.personagem) ?? urlImagem(c.retrato ?? null) ?? null;
 }
 
+/**
+ * Tabuleiro com gabarito já público (treino e revisão): posição na tela da opção
+ * certa de cada casa, para a casa ficar verde ou vermelha assim que o aluno avança.
+ * Nunca mande isto para o desafio aberto.
+ */
+export function certasDoTabuleiro(c: Conteudo, permutacao: number[]): number[] | undefined {
+  if (c.tipo !== "tabuleiro") return undefined;
+  return c.conteudo.casas.map((_, k) => ordemDaCasa(permutacao, k).indexOf(0));
+}
+
 /** Monta a vista do aluno a partir do conteúdo e da permutação sorteada para ele. */
 export function montarVista(c: Conteudo, permutacao: number[]): Vista {
   switch (c.tipo) {
@@ -160,7 +170,7 @@ export function respostaCompleta(r: Resposta): boolean {
     case "mapa":
       return r.pinos.every((v) => v !== null);
     case "tabuleiro":
-      return r.escolhas.every((v) => v !== null);
+      return Boolean(r.fim) || r.escolhas.every((v) => v !== null);
     case "vf_bloco":
       return r.valores.every((v) => v !== null);
     case "linha_do_tempo":

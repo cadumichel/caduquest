@@ -14,6 +14,7 @@ import { rankingDaTemporada, temporadaAtual } from "@/lib/temporada-dados";
 import { fundoLiberado, FUNDOS } from "@/lib/visual-perfil";
 import {
   abrirDica,
+  andarTabuleiro,
   eliminarAlternativa,
   entrarNoJogo,
   sairDoJogo,
@@ -24,7 +25,7 @@ import {
   type ResultadoAjuda,
 } from "@/lib/jogo";
 import { corrigirTreino, iniciarTreino, type ItemTreino } from "@/lib/treino";
-import { montarVista } from "@/lib/questoes/apresentacao";
+import { certasDoTabuleiro, montarVista } from "@/lib/questoes/apresentacao";
 import { corrigir } from "@/lib/questoes/correcao";
 import { permutacaoSemRanking, permutacaoValida } from "@/lib/questoes/embaralhar";
 import { schemaResposta, tamanhoPermutacao, type Conteudo, type Vista } from "@/lib/questoes/tipos";
@@ -109,6 +110,12 @@ export async function eliminar(desafioId: string, questaoId: string): Promise<Re
   return eliminarAlternativa(criarClienteAdmin(), aluno, String(desafioId), String(questaoId));
 }
 
+/** Tabuleiro: responde a próxima casa (o servidor confere e devolve a cor e as vidas). */
+export async function andarNoTabuleiroDesafio(desafioId: string, questaoId: string, escolha: number) {
+  const aluno = await exigirAluno();
+  return andarTabuleiro(criarClienteAdmin(), aluno, String(desafioId), String(questaoId), Number(escolha));
+}
+
 /** Ajuda da temporada: mostra a dica da questão atual. */
 export async function pedirDica(desafioId: string, questaoId: string): Promise<ResultadoAjuda> {
   const aluno = await exigirAluno();
@@ -177,6 +184,8 @@ export type QuestaoRevisao = {
   imagemUrl: string | null;
   vista: Vista;
   permutacao: number[];
+  /** Tabuleiro: opção certa de cada casa (o gabarito da revisão já é público). */
+  certas?: number[];
 };
 
 export type CorrecaoRevisao = {
@@ -215,6 +224,7 @@ export async function proximaRevisao(
       imagemUrl: urlImagem(q.imagem_path),
       vista: montarVista(conteudo, permutacao),
       permutacao,
+      certas: certasDoTabuleiro(conteudo, permutacao),
     },
     posicao: jaFeitas.size + 1,
     total,

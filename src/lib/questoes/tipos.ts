@@ -269,8 +269,8 @@ export const conteudoTabuleiro = z.object({
         emoji: z.string().trim().max(16, "Use um emoji só por casa.").optional(),
       }),
     )
-    .min(3, "Use de 3 a 6 casas.")
-    .max(6, "Use de 3 a 6 casas."),
+    .min(3, "Use de 3 a 10 casas.")
+    .max(10, "Use de 3 a 10 casas."),
 });
 
 /**
@@ -532,7 +532,7 @@ export type Resposta =
   | { tipo: "linha_do_tempo_datas"; faixas: (number | null)[] }
   | { tipo: "mapa"; pinos: (number | null)[] }
   /** Por casa: 0 = opção da esquerda, 1 = da direita (posições da tela). */
-  | { tipo: "tabuleiro"; escolhas: (number | null)[] };
+  | { tipo: "tabuleiro"; escolhas: (number | null)[]; fim?: boolean };
 
 export const schemaResposta = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("multipla_escolha"), escolha: z.number().int().nullable() }),
@@ -551,5 +551,10 @@ export const schemaResposta = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("ponto_de_vista"), ligacoes: z.array(z.number().int().nullable()).max(10) }),
   z.object({ tipo: z.literal("linha_do_tempo_datas"), faixas: z.array(z.number().int().nullable()).max(10) }),
   z.object({ tipo: z.literal("mapa"), pinos: z.array(z.number().int().nullable()).max(10) }),
-  z.object({ tipo: z.literal("tabuleiro"), escolhas: z.array(z.number().int().min(0).max(1).nullable()).max(10) }),
+  z.object({
+    tipo: z.literal("tabuleiro"),
+    escolhas: z.array(z.number().int().min(0).max(1).nullable()).max(10),
+    // A tela encerrou o caminho (chegada ou sem vidas): as casas que faltaram valem zero.
+    fim: z.boolean().optional(),
+  }),
 ]);

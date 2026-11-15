@@ -512,7 +512,7 @@ const schemaQuestao = z.object({
     })
     .optional()
     .describe(
-      "tabuleiro: um personagem percorre de 3 a 6 casas (o ideal é 5), na ordem da vida dele; em cada casa o aluno escolhe entre duas opções qual ele fez. Crédito parcial por casa. Use o enunciado para situar (ex.: 'Leve Abraham Lincoln até o fim do caminho.'). Personagem sem desenho no app: mande em imagem_url um retrato dele (pintura ou foto em que o rosto apareça bem, da Wikimedia Commons); o app recorta em círculo e usa como peão, no lugar da imagem acima do enunciado.",
+      "tabuleiro: um personagem percorre de 3 a 10 casas (o ideal é 5 a 8), na ordem da vida dele; em cada casa o aluno escolhe entre duas opções qual ele fez e vê na hora se acertou. Vidas: até 4 casas, 1; 5 ou 6, 2; 7 a 10, 3. Cada erro gasta uma vida e, sem vidas, o próximo erro encerra o caminho ali. Crédito parcial por casa. Use o enunciado para situar (ex.: 'Leve Abraham Lincoln até o fim do caminho.'). Personagem sem desenho no app: mande em imagem_url um retrato dele (pintura ou foto em que o rosto apareça bem, da Wikimedia Commons); o app recorta em círculo e usa como peão, no lugar da imagem acima do enunciado.",
     ),
 });
 

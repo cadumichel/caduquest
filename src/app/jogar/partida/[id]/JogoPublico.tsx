@@ -18,9 +18,16 @@ import {
 } from "@/lib/publico/regras";
 import { aplicarAjuda, rotuloEliminacao } from "@/lib/questoes/ajudas";
 import { respostaCompleta, respostaInicial } from "@/lib/questoes/apresentacao";
+import { respostaComProgresso } from "@/lib/questoes/tabuleiro";
 import { ESCOLHA_UNICA, type Resposta } from "@/lib/questoes/tipos";
 import { textoMarca, type MotivoZerada } from "@/lib/tela-protegida";
-import { carregarPartida, dicaNaPartida, eliminarNaPartida, responderPublico } from "../../actions";
+import {
+  andarNoTabuleiroPartida,
+  carregarPartida,
+  dicaNaPartida,
+  eliminarNaPartida,
+  responderPublico,
+} from "../../actions";
 
 type QuestaoEmJogo = Extract<EstadoPartida, { fase: "questao" }>;
 
@@ -210,7 +217,7 @@ function TelaQuestao({
 }) {
   const { questao, posicao, total, final, aviso } = estado;
   const [resposta, setResposta] = useState<Resposta>(() =>
-    aplicarAjuda(questao.vista, respostaInicial(questao.vista), questao.ajuda),
+    respostaComProgresso(aplicarAjuda(questao.vista, respostaInicial(questao.vista), questao.ajuda), questao.tabuleiro),
   );
   const [restante, setRestante] = useState(questao.restanteMs);
   const saidas = useRef(0);
@@ -338,6 +345,8 @@ function TelaQuestao({
         onChange={setResposta}
         desabilitada={pendente}
         ajuda={ajuda}
+        progressoTabuleiro={questao.tabuleiro}
+        andarTabuleiro={(escolha) => andarNoTabuleiroPartida(partidaId, questao.id, escolha)}
       />
 
       {!final && ajudas && (questao.podeEliminar || questao.temDica) && (

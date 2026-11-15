@@ -2,7 +2,15 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { arredondarPontos } from "@/lib/pontos";
 import { idsProfessoresAutorizados } from "@/lib/professores-autorizados";
-import { ajudaNaVista, candidatasEliminacao, respostaComAjuda, type AjudaVista } from "@/lib/questoes/ajudas";
+import { ajudaNaVista, candidatasEliminacao, type AjudaVista } from "@/lib/questoes/ajudas";
+import {
+  candidatasAFrente,
+  escolhasGravadas,
+  progressoTabuleiro,
+  respostaParaCorrigir,
+  type ProgressoTabuleiro,
+} from "@/lib/questoes/tabuleiro";
+import { gravarPassoTabuleiro } from "@/lib/tabuleiro-jogo";
 import { montarVista } from "@/lib/questoes/apresentacao";
 import { corrigir, tempoAcabou, tempoEsgotado } from "@/lib/questoes/correcao";
 import { permutacaoAleatoria } from "@/lib/questoes/embaralhar";
@@ -68,6 +76,8 @@ export type QuestaoPublica = {
   temDica: boolean;
   /** Texto da dica, se o jogador já abriu nesta questão. */
   dica: string | null;
+  /** Tabuleiro: andamento casa a casa (cores e vidas). */
+  tabuleiro?: ProgressoTabuleiro;
 };
 
 /** Ajudas que restam na partida. null = sem ajudas (rodada final ou banco sem as colunas). */
@@ -249,7 +259,8 @@ async function registrar(
   // A tela manda a resposta vazia sozinha quando o cronômetro zera.
   const semResposta = resposta === null && motivo === null;
   // Os itens travados pelas eliminações valem como estão na tela.
-  resposta = respostaComAjuda(comoConteudo(questao), linha.permutacao, linha.eliminadas, resposta);
+  // No tabuleiro, vale o andamento gravado casa a casa.
+  resposta = respostaParaCorrigir(comoConteudo(questao), linha.permutacao, linha.eliminadas, linha.resposta, resposta);
   const agora = new Date();
   const servida = new Date(linha.servida_em);
   const esgotado = tempoEsgotado(servida, agora, questao.tempo_limite_s);
@@ -353,9 +364,13 @@ export async function estadoPartida(
         restanteMs: Math.max(0, questao.tempo_limite_s * 1000 - decorrido),
         relampago: Boolean(questao.relampago),
         ajuda: ajudaNaVista(conteudo, linha.permutacao, eliminadas),
-        podeEliminar: candidatasEliminacao(conteudo, eliminadas).length > 0,
+        podeEliminar:
+          candidatasAFrente(conteudo, candidatasEliminacao(conteudo, eliminadas), linha.resposta).length > 0,
         temDica: Boolean(dica),
         dica: linha.dica_usada ? dica : null,
+        ...(conteudo.tipo === "tabuleiro" && {
+          tabuleiro: progressoTabuleiro(conteudo.conteudo, linha.permutacao, escolhasGravadas(linha.resposta)),
+        }),
       },
     };
   }
@@ -390,6 +405,33 @@ export async function responderPartida(
   const estado = await estadoPartida(db, jogador, partidaId);
   if (zerada && estado.fase !== "erro") estado.aviso = AVISO_ZERADA[zerada];
   return estado;
+}
+
+/** Tabuleiro: responde a próxima casa da questão em andamento (vale também na rodada final). */
+export async function andarTabuleiroPublico(
+  db: SupabaseClient,
+  jogador: JogadorSessao,
+  partidaId: string,
+  questaoId: string,
+  escolha: number,
+): Promise<{ progresso: ProgressoTabuleiro } | { erro: string }> {
+  const partida = await partidaDoJogador(db, jogador.id, partidaId);
+  if (!partida || partida.concluida_em || partida.ordem[partida.indice_atual] !== questaoId) {
+    return { erro: "Esta questão já passou." };
+  }
+  const { data } = await db
+    .from("respostas_publicas")
+    .select("*")
+    .eq("partida_id", partida.id)
+    .eq("questao_id", questaoId)
+    .maybeSingle();
+  const linha = data as RespostaPublica | null;
+  if (!linha || linha.respondida_em) return { erro: "Esta questão já passou." };
+  const questao = await carregarQuestao(db, questaoId);
+  if (tempoEsgotado(new Date(linha.servida_em), new Date(), questao.tempo_limite_s)) {
+    return { erro: "O tempo desta questão acabou." };
+  }
+  return gravarPassoTabuleiro(db, "respostas_publicas", linha, comoConteudo(questao), escolha);
 }
 
 /** Questão em andamento da partida, se ainda dá para usar ajuda nela. */
@@ -429,7 +471,7 @@ export async function eliminarPublica(
   if (ajudas.eliminacoes <= 0) return { erro: "Você já usou todas as eliminações deste desafio.", ajudas };
   const conteudo = comoConteudo(questao);
   const antes = linha.eliminadas ?? [];
-  const candidatas = candidatasEliminacao(conteudo, antes);
+  const candidatas = candidatasAFrente(conteudo, candidatasEliminacao(conteudo, antes), linha.resposta);
   if (!candidatas.length) return { erro: "Não dá para usar mais eliminações nesta questão.", ajudas };
   const eliminadas = [...antes, candidatas[Math.floor(Math.random() * candidatas.length)]];
   const { data: gravada } = await db
@@ -443,7 +485,7 @@ export async function eliminarPublica(
   if (!gravada?.length) return { erro: "Não foi possível eliminar agora. Tente de novo." };
   return {
     ajuda: ajudaNaVista(conteudo, linha.permutacao, eliminadas),
-    podeEliminar: candidatasEliminacao(conteudo, eliminadas).length > 0,
+    podeEliminar: candidatasAFrente(conteudo, candidatasEliminacao(conteudo, eliminadas), linha.resposta).length > 0,
     ajudas: { ...ajudas, eliminacoes: ajudas.eliminacoes - 1 },
   };
 }

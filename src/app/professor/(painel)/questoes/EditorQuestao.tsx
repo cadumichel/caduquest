@@ -1308,12 +1308,12 @@ function EditorConteudo({
           </label>
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium text-slate-700">
-              Casas do caminho (3 a 6), na ordem: o que ele fez e o que não fez. O aluno vê as duas em ordem sorteada.
+              Casas do caminho (3 a 10), na ordem: o que ele fez e o que não fez. O aluno vê as duas em ordem sorteada.
             </legend>
             <Linhas
               itens={c.casas}
               min={3}
-              max={6}
+              max={10}
               novo={() => ({ certa: "", errada: "", emoji: "" })}
               bloqueado={bloqueado}
               onChange={(casas) => mudar({ casas })}
