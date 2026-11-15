@@ -22,6 +22,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useId, useRef, useState, type ReactNode } from "react";
 import { mapaFixas, type AjudaVista } from "@/lib/questoes/ajudas";
 import type { Resposta, Vista } from "@/lib/questoes/tipos";
+import { CaminhoTabuleiro, type EstadoCasa } from "./Tabuleiro";
 
 const LETRAS = "ABCDEF";
 /**
@@ -236,6 +237,16 @@ export function QuestaoInterativa({
     case "mapa":
       return (
         <Mapa
+          vista={vista}
+          resposta={resposta as never}
+          onChange={onChange}
+          desabilitada={desabilitada}
+          ajuda={ajuda}
+        />
+      );
+    case "tabuleiro":
+      return (
+        <Tabuleiro
           vista={vista}
           resposta={resposta as never}
           onChange={onChange}
@@ -1389,6 +1400,118 @@ function Mapa({ vista, resposta, onChange, desabilitada, ajuda }: Props<Extract<
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * Tabuleiro: o personagem anda uma casa a cada escolha. As casas seguintes só
+ * aparecem depois da escolha e não dá para voltar. Nada mostra se a escolha foi
+ * certa: isso fica para a correção.
+ */
+function Tabuleiro({ vista, resposta, onChange, desabilitada, ajuda }: Props<Extract<Vista, { tipo: "tabuleiro" }>>) {
+  const fixas = mapaFixas(ajuda);
+  const n = vista.casas.length;
+  // Casas já passadas: as do começo que têm escolha (vale também ao voltar para a tela).
+  const inicio = () => {
+    const k = resposta.escolhas.findIndex((e) => e === null);
+    return k === -1 ? n : k;
+  };
+  // A tela reaproveita o componente entre questões: outra questão volta ao início do caminho.
+  const chave = `${vista.personagem}|${vista.casas.flat().join("|")}`;
+  const [caminho, setCaminho] = useState(() => ({ chave, passo: inicio() }));
+  if (caminho.chave !== chave) setCaminho({ chave, passo: inicio() });
+  const setPasso = (passo: number) => setCaminho({ chave, passo });
+  const atual = Math.min(caminho.chave === chave ? caminho.passo : inicio(), n);
+  const escolha = atual < n ? (fixas.get(atual) ?? resposta.escolhas[atual]) : null;
+  const travada = fixas.has(atual);
+
+  const escolher = (i: number) => {
+    const escolhas = [...resposta.escolhas];
+    escolhas[atual] = i;
+    onChange({ tipo: "tabuleiro", escolhas });
+  };
+
+  const estados: EstadoCasa[] = vista.casas.map((_, k) =>
+    k < atual ? (fixas.has(k) ? "revelada" : "feita") : k === atual ? "atual" : fixas.has(k) ? "revelada" : "oculta",
+  );
+  const legendas = vista.casas.map((casa, k) => {
+    const e = fixas.get(k) ?? resposta.escolhas[k];
+    return k < atual && e !== null && e !== undefined ? casa[e] : null;
+  });
+
+  return (
+    <div className="space-y-3">
+      <CaminhoTabuleiro
+        personagem={vista.personagem}
+        avatar={vista.avatar}
+        estados={estados}
+        peao={atual >= n ? n + 1 : atual + 1}
+        legendas={legendas}
+        emojis={vista.emojis}
+      />
+      {atual < n ? (
+        <section className="rounded-2xl border-2 border-marca-200 bg-marca-50 p-3 sm:p-4">
+          <h3 className="mb-3 font-bold">
+            <span className="text-ouro-escuro">
+              {vista.emojis?.[atual] && <span className="mr-1">{vista.emojis[atual]}</span>}
+              Casa {atual + 1} de {n}
+            </span>{" "}
+            · O que {vista.personagem} fez?
+          </h3>
+          <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
+            {vista.casas[atual].map((texto, i) => {
+              const marcada = escolha === i;
+              return (
+                <button
+                  key={`${atual}-${i}`}
+                  type="button"
+                  disabled={desabilitada || travada}
+                  onClick={() => escolher(i)}
+                  aria-pressed={marcada}
+                  className={`flex items-start gap-3 rounded-xl border-2 p-3 text-left transition ${
+                    marcada
+                      ? travada
+                        ? "border-ouro bg-amber-50"
+                        : "border-marca-600 bg-white"
+                      : travada
+                        ? "border-dashed border-slate-200 bg-slate-50 text-slate-400"
+                        : "border-slate-200 bg-white hover:border-marca-200"
+                  }`}
+                >
+                  <span
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                      marcada
+                        ? travada
+                          ? "bg-ouro text-white"
+                          : "bg-marca-600 text-white"
+                        : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {LETRAS[i]}
+                  </span>
+                  <span className="flex-1 pt-0.5">{texto}</span>
+                  {marcada && travada && <Cadeado />}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-3 flex justify-end">
+            <button
+              type="button"
+              disabled={desabilitada || escolha === null || escolha === undefined}
+              onClick={() => setPasso(atual + 1)}
+              className="rounded-xl bg-marca-600 px-5 py-2.5 font-bold text-white shadow transition hover:bg-marca-700 disabled:opacity-40"
+            >
+              {atual + 1 < n ? "Avançar uma casa ➜" : "Chegar ao fim 🏆"}
+            </button>
+          </div>
+        </section>
+      ) : (
+        <p className="rounded-2xl border-2 border-ouro-claro bg-amber-50 p-4 text-center font-bold text-marca-900">
+          🏆 {vista.personagem} chegou ao fim do caminho! Agora confirme a sua resposta.
+        </p>
+      )}
     </div>
   );
 }

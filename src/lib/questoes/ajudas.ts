@@ -1,5 +1,5 @@
 import { montarVista } from "./apresentacao";
-import { iniciosPerguntas, type Conteudo, type Resposta, type Vista } from "./tipos";
+import { iniciosPerguntas, ordemDaCasa, type Conteudo, type Resposta, type Vista } from "./tipos";
 
 /** Cota de cada aluno por temporada. */
 export const ELIMINACOES_POR_TEMPORADA = 6;
@@ -18,6 +18,7 @@ const ESCOLHA = ["multipla_escolha", "interpretacao", "quem_disse", "intruso"] a
  *   saíram; índices menores que n são itens travados no lugar certo (a consequência da causa k,
  *   a perspectiva do relato k, a palavra da lacuna k);
  * - V ou F, pares, classificar, linha do tempo, ordenar, régua, mapa: item travado no lugar certo;
+ * - tabuleiro: casa travada com a opção certa;
  * - encontrar o erro: trecho certo, marcado como sem erro.
  */
 export function candidatasEliminacao(c: Conteudo, eliminadas: number[]): number[] {
@@ -77,6 +78,8 @@ export function candidatasEliminacao(c: Conteudo, eliminadas: number[]): number[
       return travaveis(c.conteudo.eventos.length);
     case "mapa":
       return travaveis(c.conteudo.marcadores.length);
+    case "tabuleiro":
+      return travaveis(c.conteudo.casas.length);
     case "encontrar_erro": {
       // Marca trechos certos; sempre sobra ao menos um certo para confundir com os errados.
       const { trechos } = c.conteudo;
@@ -165,6 +168,9 @@ export function ajudaNaVista(c: Conteudo, permutacao: number[], eliminadas: numb
       return { removidas: [], fixas: eliminadas.map((i) => [tela(i), i]) };
     case "encontrar_erro":
       return { removidas: [], fixas: eliminadas.map((i) => [i, 0]) };
+    case "tabuleiro":
+      // [casa, posição da opção certa na tela]
+      return { removidas: [], fixas: eliminadas.map((k) => [k, ordemDaCasa(permutacao, k).indexOf(0)]) };
   }
 }
 
@@ -224,6 +230,8 @@ export function aplicarAjuda(vista: Vista, r: Resposta, ajuda: AjudaVista): Resp
       return { ...r, grupos: marcar(r.grupos, (v) => v) };
     case "linha_do_tempo_datas":
       return { ...r, faixas: marcar(r.faixas, (v) => v) };
+    case "tabuleiro":
+      return { ...r, escolhas: marcar(r.escolhas, (v) => v) };
     case "encontrar_erro": {
       const semErro = new Set(fixas.map(([i]) => i));
       return { ...r, marcados: r.marcados.filter((i) => !semErro.has(i)) };
@@ -247,6 +255,7 @@ export function fixarOrdem(ordem: number[], fixas: [number, number][]): number[]
 export function rotuloEliminacao(tipo: Conteudo["tipo"]): string {
   if ((ESCOLHA as readonly string[]).includes(tipo) || tipo === "fonte_primaria") return "Eliminar uma errada";
   if (tipo === "encontrar_erro") return "Mostrar um trecho certo";
+  if (tipo === "tabuleiro") return "Revelar uma casa";
   if (tipo === "causa_consequencia" || tipo === "ponto_de_vista" || tipo === "completar_lacunas") {
     return "Eliminar ou revelar";
   }

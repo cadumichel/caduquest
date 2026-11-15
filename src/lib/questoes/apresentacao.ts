@@ -1,14 +1,21 @@
+import { imagemDoPersonagem } from "../personagens";
 import { urlImagem } from "../tipos-banco";
 import {
   faixasDaRegua,
   formatarAno,
   iniciosPerguntas,
   MARCA_LACUNA,
+  ordemDaCasa,
   subPermutacao,
   type Conteudo,
   type Resposta,
   type Vista,
 } from "./tipos";
+
+/** Peão do tabuleiro: o desenho do app, se houver; senão, o retrato enviado com a questão. */
+export function retratoDoTabuleiro(c: { personagem: string; retrato?: string }): string | null {
+  return imagemDoPersonagem(c.personagem) ?? urlImagem(c.retrato ?? null) ?? null;
+}
 
 /** Monta a vista do aluno a partir do conteúdo e da permutação sorteada para ele. */
 export function montarVista(c: Conteudo, permutacao: number[]): Vista {
@@ -85,6 +92,18 @@ export function montarVista(c: Conteudo, permutacao: number[]): Vista {
         pinos: c.conteudo.marcadores.map(({ x, y }) => ({ x, y })),
         nomes: permutacao.map((i) => c.conteudo.marcadores[i].nome),
       };
+    case "tabuleiro":
+      return {
+        tipo: c.tipo,
+        personagem: c.conteudo.personagem,
+        avatar: retratoDoTabuleiro(c.conteudo),
+        casas: c.conteudo.casas.map((casa, k) => {
+          const opcoes = [casa.certa, casa.errada];
+          const [a, b] = ordemDaCasa(permutacao, k);
+          return [opcoes[a], opcoes[b]] as [string, string];
+        }),
+        emojis: c.conteudo.casas.map((casa) => casa.emoji?.trim() || null),
+      };
   }
 }
 
@@ -119,6 +138,8 @@ export function respostaInicial(vista: Vista): Resposta {
       return { tipo: vista.tipo, faixas: vista.eventos.map(() => null) };
     case "mapa":
       return { tipo: vista.tipo, pinos: vista.nomes.map(() => null) };
+    case "tabuleiro":
+      return { tipo: vista.tipo, escolhas: vista.casas.map(() => null) };
   }
 }
 
@@ -138,6 +159,8 @@ export function respostaCompleta(r: Resposta): boolean {
       return r.faixas.every((v) => v !== null);
     case "mapa":
       return r.pinos.every((v) => v !== null);
+    case "tabuleiro":
+      return r.escolhas.every((v) => v !== null);
     case "vf_bloco":
       return r.valores.every((v) => v !== null);
     case "linha_do_tempo":
