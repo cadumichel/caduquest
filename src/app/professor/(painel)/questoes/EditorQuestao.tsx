@@ -1260,6 +1260,59 @@ function EditorConteudo({
     }
     case "mapa":
       return <EditorMapa conteudo={conteudo.conteudo} onChange={onChange} bloqueado={bloqueado} />;
+    case "tabuleiro": {
+      const c = conteudo.conteudo;
+      const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "tabuleiro", conteudo: { ...c, ...novo } });
+      return (
+        <div className="space-y-3">
+          <label className="block space-y-1">
+            <span className="text-sm font-medium text-slate-700">
+              Personagem (se o app tiver o desenho dele, como Abraham Lincoln, ele vira o peão)
+            </span>
+            <input
+              className={classeInput}
+              placeholder="Ex.: Abraham Lincoln"
+              value={c.personagem}
+              disabled={bloqueado}
+              onChange={(e) => mudar({ personagem: e.target.value })}
+            />
+          </label>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Casas do caminho (3 a 6), na ordem: o que ele fez e o que não fez. O aluno vê as duas em ordem sorteada.
+            </legend>
+            <Linhas
+              itens={c.casas}
+              min={3}
+              max={6}
+              novo={() => ({ certa: "", errada: "" })}
+              bloqueado={bloqueado}
+              onChange={(casas) => mudar({ casas })}
+              render={(casa, i, atualizar) => (
+                <>
+                  <span className="w-5 shrink-0 text-sm font-bold text-marca-700">{i + 1}</span>
+                  <input
+                    className={classeInput}
+                    placeholder="Fez (certa)"
+                    value={casa.certa}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...casa, certa: e.target.value })}
+                  />
+                  <span className="text-slate-400">ou</span>
+                  <input
+                    className={classeInput}
+                    placeholder="Não fez (errada)"
+                    value={casa.errada}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...casa, errada: e.target.value })}
+                  />
+                </>
+              )}
+            />
+          </fieldset>
+        </div>
+      );
+    }
   }
 }
 

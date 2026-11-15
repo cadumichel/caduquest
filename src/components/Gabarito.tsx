@@ -4,12 +4,15 @@ import {
   formatarAno,
   iniciosPerguntas,
   MARCA_LACUNA,
+  ordemDaCasa,
   subPermutacao,
   type Conteudo,
   type Resposta,
 } from "@/lib/questoes/tipos";
 import { urlImagem } from "@/lib/tipos-banco";
 import { Citacao, Documento, ImagemComPinos } from "./QuestaoInterativa";
+import { CaminhoTabuleiro } from "./Tabuleiro";
+import { imagemDoPersonagem } from "@/lib/personagens";
 
 const LETRAS = "ABCDEF";
 
@@ -441,6 +444,57 @@ export function Gabarito({
               );
             })}
           </ul>
+        </div>
+      );
+    }
+    case "tabuleiro": {
+      const { personagem, casas } = conteudo.conteudo;
+      // Por casa: true = escolheu a certa, false = a errada, null = não escolheu.
+      const acertos = casas.map((_, k) => {
+        if (resposta?.tipo !== "tabuleiro" || !permutacao) return null;
+        const e = resposta.escolhas[k];
+        return e === 0 || e === 1 ? ordemDaCasa(permutacao, k)[e] === 0 : null;
+      });
+      const comResposta = resposta?.tipo === "tabuleiro";
+      const certas = acertos.filter(Boolean).length;
+      return (
+        <div className="space-y-2 text-sm">
+          <CaminhoTabuleiro
+            personagem={personagem}
+            avatar={imagemDoPersonagem(personagem)}
+            estados={acertos.map((a) => (!comResposta ? "neutra" : a ? "certa" : "errada"))}
+            peao={casas.length + 1}
+            legendas={casas.map((c) => c.certa)}
+          />
+          {comResposta && (
+            <p className="font-semibold text-marca-800">
+              {certas} de {casas.length} casas certas
+            </p>
+          )}
+          <ol className="space-y-1">
+            {casas.map((c, k) => {
+              const a = acertos[k];
+              return (
+                <li
+                  key={k}
+                  className={`flex gap-2 rounded-lg px-3 py-1.5 ${!comResposta ? "" : a ? "bg-emerald-50" : "bg-red-50"}`}
+                >
+                  <span className="w-5 font-bold text-marca-700">{k + 1}</span>
+                  <span className="flex-1">
+                    <span className="font-medium text-emerald-800">{c.certa}</span>
+                    {comResposta && !a ? (
+                      <span className="block text-xs text-red-700">
+                        {a === null ? `${rotulo}: sem resposta` : `${rotulo}: ${c.errada}`}
+                      </span>
+                    ) : (
+                      !comResposta && <span className="block text-xs text-slate-500 line-through">{c.errada}</span>
+                    )}
+                  </span>
+                  {comResposta && <span className={a ? "text-emerald-700" : "text-red-700"}>{a ? "✓" : "✗"}</span>}
+                </li>
+              );
+            })}
+          </ol>
         </div>
       );
     }

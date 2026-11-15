@@ -1,4 +1,4 @@
-import { faixaDoAno, iniciosPerguntas, subPermutacao, type Conteudo, type Resposta } from "./tipos";
+import { faixaDoAno, iniciosPerguntas, ordemDaCasa, subPermutacao, type Conteudo, type Resposta } from "./tipos";
 import { arredondarPontos } from "../pontos";
 
 /**
@@ -149,6 +149,17 @@ export function corrigir(c: Conteudo, permutacao: number[], r: Resposta | null):
         usados.add(pino);
         if (pino === orig) certos++;
       });
+      return certos / n;
+    }
+    case "tabuleiro": {
+      // Crédito por casa: cada casa certa vale 1/n.
+      const resp = r as Extract<Resposta, { tipo: "tabuleiro" }>;
+      const n = c.conteudo.casas.length;
+      let certos = 0;
+      for (let k = 0; k < n; k++) {
+        const escolha = resp.escolhas[k];
+        if (escolha === 0 || escolha === 1) if (ordemDaCasa(permutacao, k)[escolha] === 0) certos++;
+      }
       return certos / n;
     }
   }

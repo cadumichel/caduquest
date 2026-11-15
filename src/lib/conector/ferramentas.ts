@@ -485,6 +485,28 @@ const schemaQuestao = z.object({
     .describe(
       "mapa: exige imagem_url com o mapa (sem os nomes escritos nos lugares cobrados) e 2 a 6 marcadores. Se não souber as posições, omita x e y: a questão entra como rascunho e o professor toca no mapa, no app, para pôr os pinos no lugar. Avise o professor disso.",
     ),
+  tabuleiro: z
+    .object({
+      personagem: z
+        .string()
+        .describe(
+          "Quem percorre o caminho, pelo nome mais conhecido (ex.: 'Abraham Lincoln'). Se o app tiver o retrato dele, ele vira o peão.",
+        ),
+      casas: z.array(
+        z.object({
+          certa: z.string().describe("O que o personagem fez, até 200 caracteres."),
+          errada: z
+            .string()
+            .describe(
+              "Distrator do mesmo assunto, parecido no tamanho e na forma, que ele NÃO fez (ex.: 'aboliu a escravidão após o fim da guerra' contra 'em meio à guerra').",
+            ),
+        }),
+      ),
+    })
+    .optional()
+    .describe(
+      "tabuleiro: um personagem percorre de 3 a 6 casas (o ideal é 5), na ordem da vida dele; em cada casa o aluno escolhe entre duas opções qual ele fez. Crédito parcial por casa. Use o enunciado para situar (ex.: 'Leve Abraham Lincoln até o fim do caminho.').",
+    ),
 });
 
 function conteudoBruto(q: z.infer<typeof schemaQuestao>) {

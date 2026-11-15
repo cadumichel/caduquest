@@ -17,6 +17,7 @@ export const TIPOS = [
   "ponto_de_vista",
   "linha_do_tempo_datas",
   "mapa",
+  "tabuleiro",
 ] as const;
 export type TipoQuestao = (typeof TIPOS)[number];
 
@@ -40,6 +41,7 @@ export const NOME_TIPO: Record<TipoQuestao, string> = {
   ponto_de_vista: "Ponto de vista",
   linha_do_tempo_datas: "Linha do tempo com datas",
   mapa: "Mapa clicável",
+  tabuleiro: "Tabuleiro",
 };
 
 /** Tipos de uma resposta só: o aluno precisa escolher antes de confirmar. */
@@ -67,6 +69,7 @@ export const TEMPO_PADRAO: Record<TipoQuestao, number> = {
   ponto_de_vista: 90,
   linha_do_tempo_datas: 90,
   mapa: 75,
+  tabuleiro: 90,
 };
 
 export const NOME_DIFICULDADE: Record<number, string> = { 1: "Fácil", 2: "Média", 3: "Difícil" };
@@ -251,6 +254,30 @@ export const conteudoMapa = z
   })
   .refine((c) => !c.posicionar, "Toque no mapa para pôr cada marcador no lugar certo.");
 
+export const conteudoTabuleiro = z.object({
+  // Quem percorre o caminho (ex.: Abraham Lincoln).
+  personagem: texto.max(80, "Nome do personagem longo demais (máx. 80 caracteres)."),
+  // Na ordem do caminho: em cada casa, o que ele fez (certa) e o que não fez (errada).
+  casas: z
+    .array(
+      z.object({
+        certa: texto.max(200, "Opção longa demais (máx. 200 caracteres)."),
+        errada: texto.max(200, "Opção longa demais (máx. 200 caracteres)."),
+      }),
+    )
+    .min(3, "Use de 3 a 6 casas.")
+    .max(6, "Use de 3 a 6 casas."),
+});
+
+/**
+ * No tabuleiro, a permutação tem 2 itens por casa (2k = certa, 2k+1 = errada).
+ * Devolve a ordem das duas opções da casa k na tela: [0, 1] (certa à esquerda) ou [1, 0].
+ */
+export function ordemDaCasa(permutacao: number[], k: number): number[] {
+  const sub = subPermutacao(permutacao, 2 * k, 2);
+  return sub.length === 2 ? sub : [0, 1];
+}
+
 /** Faixas da régua: [início, fim) de cada uma. */
 export function faixasDaRegua(c: { inicio: number; fim: number; passo: number }): [number, number][] {
   const faixas: [number, number][] = [];
@@ -284,6 +311,7 @@ export const SCHEMA_CONTEUDO = {
   ponto_de_vista: conteudoPontoDeVista,
   linha_do_tempo_datas: conteudoLinhaDoTempoDatas,
   mapa: conteudoMapa,
+  tabuleiro: conteudoTabuleiro,
 } as const;
 
 export type ConteudoMultiplaEscolha = z.infer<typeof conteudoMultiplaEscolha>;
@@ -302,6 +330,7 @@ export type ConteudoIntruso = z.infer<typeof conteudoIntruso>;
 export type ConteudoPontoDeVista = z.infer<typeof conteudoPontoDeVista>;
 export type ConteudoLinhaDoTempoDatas = z.infer<typeof conteudoLinhaDoTempoDatas>;
 export type ConteudoMapa = z.infer<typeof conteudoMapa>;
+export type ConteudoTabuleiro = z.infer<typeof conteudoTabuleiro>;
 
 export type Conteudo =
   | { tipo: "multipla_escolha"; conteudo: ConteudoMultiplaEscolha }
@@ -319,7 +348,8 @@ export type Conteudo =
   | { tipo: "intruso"; conteudo: ConteudoIntruso }
   | { tipo: "ponto_de_vista"; conteudo: ConteudoPontoDeVista }
   | { tipo: "linha_do_tempo_datas"; conteudo: ConteudoLinhaDoTempoDatas }
-  | { tipo: "mapa"; conteudo: ConteudoMapa };
+  | { tipo: "mapa"; conteudo: ConteudoMapa }
+  | { tipo: "tabuleiro"; conteudo: ConteudoTabuleiro };
 
 export function validarConteudo(tipo: TipoQuestao, conteudo: unknown) {
   return SCHEMA_CONTEUDO[tipo].safeParse(conteudo);
@@ -364,6 +394,8 @@ export function tamanhoPermutacao(c: Conteudo): number {
       return c.conteudo.eventos.length;
     case "mapa":
       return c.conteudo.marcadores.length;
+    case "tabuleiro":
+      return c.conteudo.casas.length * 2;
   }
 }
 
@@ -441,6 +473,8 @@ export function conteudoVazio(tipo: TipoQuestao): Conteudo {
       };
     case "mapa":
       return { tipo, conteudo: { imagem: "", marcadores: [] } };
+    case "tabuleiro":
+      return { tipo, conteudo: { personagem: "", casas: [0, 1, 2, 3, 4].map(() => ({ certa: "", errada: "" })) } };
   }
 }
 
@@ -461,7 +495,9 @@ export type Vista =
   | { tipo: "intruso"; itens: string[] }
   | { tipo: "ponto_de_vista"; relatos: string[]; perspectivas: string[] }
   | { tipo: "linha_do_tempo_datas"; faixas: string[]; eventos: string[] }
-  | { tipo: "mapa"; imagem: string; pinos: { x: number; y: number }[]; nomes: string[] };
+  | { tipo: "mapa"; imagem: string; pinos: { x: number; y: number }[]; nomes: string[] }
+  /** Cada casa traz as duas opções na ordem da tela; avatar = retrato do personagem, se o app tiver. */
+  | { tipo: "tabuleiro"; personagem: string; avatar: string | null; casas: [string, string][] };
 
 /** Resposta do aluno, sempre em índices da ordem exibida. */
 export type Resposta =
@@ -480,7 +516,9 @@ export type Resposta =
   | { tipo: "intruso"; escolha: number | null }
   | { tipo: "ponto_de_vista"; ligacoes: (number | null)[] }
   | { tipo: "linha_do_tempo_datas"; faixas: (number | null)[] }
-  | { tipo: "mapa"; pinos: (number | null)[] };
+  | { tipo: "mapa"; pinos: (number | null)[] }
+  /** Por casa: 0 = opção da esquerda, 1 = da direita (posições da tela). */
+  | { tipo: "tabuleiro"; escolhas: (number | null)[] };
 
 export const schemaResposta = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("multipla_escolha"), escolha: z.number().int().nullable() }),
@@ -499,4 +537,5 @@ export const schemaResposta = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("ponto_de_vista"), ligacoes: z.array(z.number().int().nullable()).max(10) }),
   z.object({ tipo: z.literal("linha_do_tempo_datas"), faixas: z.array(z.number().int().nullable()).max(10) }),
   z.object({ tipo: z.literal("mapa"), pinos: z.array(z.number().int().nullable()).max(10) }),
+  z.object({ tipo: z.literal("tabuleiro"), escolhas: z.array(z.number().int().min(0).max(1).nullable()).max(10) }),
 ]);

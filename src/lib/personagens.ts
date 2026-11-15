@@ -542,3 +542,11 @@ export const reveladosEmOrdem = (d: Desbloqueios) => [
 
 /** Posição do lendário na ordem de liberação (1 = o primeiro). */
 export const numeroDoLendario = (avatar: number) => ORDEM_ESPECIAIS.indexOf(avatar) + 1;
+
+const semAcento = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLocaleLowerCase("pt-BR").trim();
+
+/** Retrato do personagem histórico pelo nome (ignora acentos e maiúsculas), se o app tiver. */
+export function imagemDoPersonagem(nome: string): string | null {
+  const alvo = semAcento(nome);
+  return TODOS.find((p) => semAcento(p.nome) === alvo)?.imagem ?? null;
+}
