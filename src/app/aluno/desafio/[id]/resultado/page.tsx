@@ -1,6 +1,6 @@
 import { consultaPorAluno, consultaVazia, resumoConsulta } from "@/lib/consulta";
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Gabarito } from "@/components/Gabarito";
 import { Aviso, BotaoLink, Cartao, Etiqueta } from "@/components/ui";
 import { exigirAluno } from "@/lib/aluno-sessao";
@@ -35,6 +35,10 @@ export default async function Resultado({ params }: PageProps<"/aluno/desafio/[i
   const { data } = await db.from("tentativas").select("*").eq("desafio_id", id).eq("aluno_id", aluno.id).maybeSingle();
   const tentativa = data as Tentativa | null;
   const encerrado = situacaoDesafio(desafio) === "encerrado";
+  // No meio do desafio não há resultado: os pontos parciais entregariam os acertos.
+  if (tentativa && !encerrado && !tentativa.concluida_em && tentativa.indice_atual < tentativa.ordem.length) {
+    redirect(`/aluno/desafio/${id}`);
+  }
   const liberado = gabaritoLiberado(desafio);
   const podeTreinar = treinoLiberado(desafio);
   // O gabarito guardado pelo professor sai sozinho no encerramento da temporada.
