@@ -114,3 +114,17 @@ describe("xpDeUmDesafio", () => {
     expect(xpDeUmDesafio([], false)).toBe(0);
   });
 });
+
+describe("Aprendi com o erro", () => {
+  const extra = { posicao: null, pontos: 0, medalhas: 0, maiorSequencia: 0 };
+  const tem = (revisoesAcertadas: number, revisaoZerada: boolean) =>
+    calcularConquistas(
+      calcularProgresso({ respostas: [], desafios: [], questoes, revisoesAcertadas, revisaoZerada }),
+      extra,
+    ).find((c) => c.id === "aprendi")!.conquistada;
+  it("vale quando zerou a revisão depois de acertar alguma questão nela", () => {
+    expect(tem(3, true)).toBe(true);
+    expect(tem(0, true)).toBe(false);
+    expect(tem(3, false)).toBe(false);
+  });
+});

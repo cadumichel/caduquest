@@ -5,10 +5,11 @@ import { alunosDeTeste } from "@/lib/aluno-teste";
 import { hojeEmBrasilia } from "@/lib/datas";
 import { agruparPorSemana, calcularConstancia, segundaDaSemana } from "@/lib/constancia";
 import { calcularMetaTurma, montarLigas } from "@/lib/ligas";
-import { lerPorIds, respostasCorrigidas } from "@/lib/paginar";
+import { emPedacos, lerPorIds, lerTudo, respostasCorrigidas } from "@/lib/paginar";
 import { arredondarPontos } from "@/lib/pontos";
 import { montarRanking } from "@/lib/ranking";
-import { situacaoDesafio, type Temporada } from "@/lib/tipos-banco";
+import { bonusDeRevisoes, inicioDoDiaEmBrasilia } from "@/lib/revisao-bonus";
+import { situacaoDesafio, ultimoDiaComPontos, type Temporada } from "@/lib/tipos-banco";
 
 /** Temporada em curso da turma; se não houver, a próxima; senão, a última. */
 export async function temporadaAtual(db: SupabaseClient, turmaId: string): Promise<Temporada | null> {
@@ -48,10 +49,12 @@ type DesafioRanking = { id: string; tipo: string; abre_em: string; fecha_em: str
  * 1000 linhas por consulta, e uma temporada passa disso).
  */
 const dadosDaTemporada = cache(async (db: SupabaseClient, temporadaId: string, turmaId: string) => {
-  const [{ data: todosAlunos }, { data: desafios }, deTeste] = await Promise.all([
+  const [{ data: todosAlunos }, { data: desafios }, deTeste, { data: temporada }] = await Promise.all([
     db.from("alunos").select("id, apelido, avatar, cor").eq("turma_id", turmaId).eq("aprovado", true),
     db.from("desafios").select("id, tipo, abre_em, fecha_em").eq("temporada_id", temporadaId),
     alunosDeTeste(db, turmaId),
+    // "*" traz também o encerramento, quando o SQL dele já rodou.
+    db.from("temporadas").select("*").eq("id", temporadaId).maybeSingle(),
   ]);
   const tentativas = await lerPorIds<TentativaRanking>(
     db,
@@ -65,14 +68,47 @@ const dadosDaTemporada = cache(async (db: SupabaseClient, temporadaId: string, t
     "tentativa_id, fracao",
     tentativas.map((t) => t.id),
   );
+  const revisoes = temporada
+    ? await revisoesDaTemporada(
+        db,
+        ((todosAlunos ?? []) as AlunoRanking[]).map((a) => a.id),
+        temporada as Temporada,
+      )
+    : [];
   return {
     todosAlunos: (todosAlunos ?? []) as AlunoRanking[],
     desafios: (desafios ?? []) as DesafioRanking[],
     deTeste,
     tentativas,
     respostas,
+    temporada: temporada as Temporada | null,
+    revisoes,
   };
 });
+
+/** Questões acertadas na revisão de erros pelos alunos da turma no período da temporada. */
+async function revisoesDaTemporada(db: SupabaseClient, alunos: string[], temporada: Temporada) {
+  if (!alunos.length) return [];
+  const fim = ultimoDiaComPontos(temporada);
+  // O dia seguinte ao último com pontos, à meia-noite de Brasília.
+  const depois = new Date(new Date(`${fim}T00:00:00Z`).getTime() + 86_400_000).toISOString().slice(0, 10);
+  const partes = await Promise.all(
+    emPedacos(alunos).map((pedaco) =>
+      lerTudo<{ aluno_id: string; acertou_em: string }>((de, ate) =>
+        db
+          .from("revisoes")
+          .select("aluno_id, acertou_em")
+          .in("aluno_id", pedaco)
+          .gte("acertou_em", inicioDoDiaEmBrasilia(temporada.inicio))
+          .lt("acertou_em", inicioDoDiaEmBrasilia(depois))
+          .order("aluno_id")
+          .order("questao_id")
+          .range(de, ate),
+      ).catch(() => []),
+    ),
+  );
+  return partes.flat();
+}
 
 /**
  * Ranking completo de uma temporada. O cliente precisa poder ler alunos,
@@ -102,6 +138,8 @@ export async function situacaoDaTemporada(
     deTeste,
     tentativas: todasTentativas,
     respostas,
+    temporada: dadosTemporada,
+    revisoes,
   } = await dadosDaTemporada(db, temporada.id, temporada.turma_id);
   const alunos = todosAlunos.filter((a) => !deTeste.has(a.id) || a.id === verComo);
   // Na visão do aluno, o desafio que alguém ainda está respondendo só entra nos
@@ -153,9 +191,24 @@ export async function situacaoDaTemporada(
     concluidosPorAluno.set(t.aluno_id, set);
   }
   const meta = calcularMetaTurma(semanas, concluidosPorAluno, [...porAluno.keys()]);
+  // Erros corrigidos na revisão: pontos só no ranking geral (a liga da semana fica de fora).
+  const acertosRevisao = new Map<string, string[]>();
+  for (const r of revisoes) acertosRevisao.set(r.aluno_id, [...(acertosRevisao.get(r.aluno_id) ?? []), r.acertou_em]);
   for (const e of porAluno.values()) {
+    const revisao = dadosTemporada
+      ? bonusDeRevisoes(
+          // Temporada encerrada pelo professor: o ranking congela na hora do encerramento.
+          (acertosRevisao.get(e.alunoId) ?? []).filter(
+            (a) => !dadosTemporada.encerrada_em || new Date(a) < new Date(dadosTemporada.encerrada_em),
+          ),
+          dadosTemporada.inicio,
+          ultimoDiaComPontos(dadosTemporada),
+        )
+      : { bonus: 0, corrigidos: 0 };
     Object.assign(e, calcularConstancia(semanais, concluidosPorAluno.get(e.alunoId) ?? new Set()), {
       bonusTurma: meta.bonus,
+      bonusRevisao: revisao.bonus,
+      errosCorrigidos: revisao.corrigidos,
     });
   }
   return {

@@ -6,6 +6,8 @@ import { PalcoQuestao, useModoFoco } from "@/components/PalcoQuestao";
 import { QuestaoInterativa } from "@/components/QuestaoInterativa";
 import { Aviso, Botao, BotaoLink } from "@/components/ui";
 import { respostaCompleta, respostaInicial } from "@/lib/questoes/apresentacao";
+import { XP_POR_REVISAO } from "@/lib/progresso";
+import { LIMITE_REVISAO_DIA } from "@/lib/revisao-bonus";
 import type { Resposta } from "@/lib/questoes/tipos";
 import { proximaRevisao, responderRevisao, type CorrecaoRevisao, type QuestaoRevisao } from "../actions";
 
@@ -17,6 +19,8 @@ export function Revisao({ pendentes }: { pendentes: number }) {
   const [fim, setFim] = useState(false);
   const [feitas, setFeitas] = useState<string[]>([]);
   const [acertos, setAcertos] = useState(0);
+  const [bonusRodada, setBonusRodada] = useState(0);
+  const [zerou, setZerou] = useState(false);
   const [resposta, setResposta] = useState<Resposta | null>(null);
   const [correcao, setCorrecao] = useState<CorrecaoRevisao | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -53,12 +57,21 @@ export function Revisao({ pendentes }: { pendentes: number }) {
         <p className="text-slate-600">
           Você acertou {acertos} de {feitas.length}. As que você acertou saem da sua lista de revisão.
         </p>
+        {(acertos > 0 || bonusRodada > 0) && (
+          <p className="font-bold text-marca-900">
+            +{acertos * XP_POR_REVISAO} XP{bonusRodada > 0 && ` · +${bonusRodada} pts de bônus no ranking`}
+          </p>
+        )}
+        {zerou && (
+          <Aviso tipo="ok">🔁 Você zerou a sua revisão de erros! Conquista “Aprendi com o erro” desbloqueada.</Aviso>
+        )}
         <div className="flex flex-col gap-3">
           {pendentes - acertos > 0 && (
             <Botao
               onClick={() => {
                 setFeitas([]);
                 setAcertos(0);
+                setBonusRodada(0);
                 setFim(false);
                 carregar([]);
               }}
@@ -101,7 +114,13 @@ export function Revisao({ pendentes }: { pendentes: number }) {
         <div className="space-y-3">
           <Aviso tipo={correcao.fracao === 1 ? "ok" : "info"}>
             {correcao.fracao === 1
-              ? "✅ Acertou! Esta questão sai da sua revisão."
+              ? `✅ Erro corrigido! Esta questão sai da sua revisão. +${XP_POR_REVISAO} XP${
+                  correcao.corrigiu?.bonus
+                    ? ` e +${correcao.corrigiu.bonus} pts de bônus no ranking.`
+                    : correcao.corrigiu?.limiteAtingido
+                      ? `. O bônus no ranking vale para ${LIMITE_REVISAO_DIA} erros por dia: amanhã tem mais.`
+                      : "."
+                }`
               : correcao.fracao > 0
                 ? `Quase: ${Math.round(correcao.fracao * 100)}% certo. Veja o gabarito.`
                 : "❌ Ainda não. Veja o gabarito e tente de novo numa próxima rodada."}
@@ -142,6 +161,8 @@ export function Revisao({ pendentes }: { pendentes: number }) {
                   setCorrecao(r);
                   setFeitas((f) => [...f, questao.id]);
                   if (r.fracao === 1) setAcertos((a) => a + 1);
+                  if (r.corrigiu?.bonus) setBonusRodada((b) => b + r.corrigiu!.bonus);
+                  if (r.corrigiu?.zerou) setZerou(true);
                 } catch {
                   setErro("Falha de conexão. Tente de novo.");
                 }
