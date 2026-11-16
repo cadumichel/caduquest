@@ -7,7 +7,7 @@ import { ERAS } from "@/lib/publico/regras";
 import { QuestaoInterativa } from "@/components/QuestaoInterativa";
 import { AreaTexto, Aviso, Botao, Campo, Cartao, Entrada, Selecao, classeInput } from "@/components/ui";
 import { HABILIDADES } from "@/lib/habilidades";
-import { montarVista, respostaInicial } from "@/lib/questoes/apresentacao";
+import { certasDoTabuleiro, montarVista, respostaInicial } from "@/lib/questoes/apresentacao";
 import { permutacaoAleatoria } from "@/lib/questoes/embaralhar";
 import {
   LIMITE_ENUNCIADO,
@@ -451,6 +451,7 @@ function Previa({
     <PreviaInterna
       key={`${chave}-${semente}`}
       vista={vista}
+      certas={certasDoTabuleiro(conteudo, permutacao)}
       enunciado={enunciado}
       imagemUrl={imagemUrl}
       tempo={tempo}
@@ -462,6 +463,7 @@ function Previa({
 
 function PreviaInterna({
   vista,
+  certas,
   enunciado,
   imagemUrl,
   tempo,
@@ -469,6 +471,8 @@ function PreviaInterna({
   reembaralhar,
 }: {
   vista: ReturnType<typeof montarVista>;
+  /** Tabuleiro: na prévia, a cor e as vidas vêm do gabarito, como no treino. */
+  certas?: number[];
   enunciado: string;
   imagemUrl: string | null;
   tempo: number;
@@ -488,7 +492,7 @@ function PreviaInterna({
         <img src={imagemUrl} alt="" className="mx-auto max-h-64 rounded-xl border border-slate-200" />
       )}
       <p className="whitespace-pre-line font-medium">{enunciado || "Enunciado…"}</p>
-      <QuestaoInterativa vista={vista} resposta={resposta} onChange={setResposta} />
+      <QuestaoInterativa vista={vista} resposta={resposta} onChange={setResposta} certas={certas} />
       <button type="button" onClick={reembaralhar} className="text-sm text-marca-700">
         ↻ Embaralhar de novo
       </button>
