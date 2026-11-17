@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AlunoSessao } from "@/lib/aluno-sessao";
 import { desafioDoAluno } from "@/lib/jogo";
-import { certasDoTabuleiro, montarVista } from "@/lib/questoes/apresentacao";
+import { certasDoTabuleiro, montarVista, segredoPublico, type Segredo } from "@/lib/questoes/apresentacao";
 import { calcularPontos, corrigir } from "@/lib/questoes/correcao";
 import { embaralhar, permutacaoSemRanking, permutacaoValida } from "@/lib/questoes/embaralhar";
 import { schemaResposta, tamanhoPermutacao, type Conteudo, type Vista } from "@/lib/questoes/tipos";
@@ -22,6 +22,8 @@ export type QuestaoTreino = {
   permutacao: number[];
   /** Tabuleiro: opção certa de cada casa (o gabarito do treino já é público). */
   certas?: number[];
+  /** Conversa e conceito secreto: reações e palavra (gabarito já público). */
+  segredo?: Segredo;
 };
 
 export type ItemTreino = { questaoId: string; permutacao: number[]; resposta: unknown };
@@ -76,6 +78,7 @@ export async function iniciarTreino(db: SupabaseClient, aluno: AlunoSessao, desa
       vista: montarVista(conteudo, permutacao),
       permutacao,
       certas: certasDoTabuleiro(conteudo, permutacao),
+      segredo: segredoPublico(conteudo),
     };
   });
   return { questoes, pontosPorAcerto: ok.desafio.pontos_por_acerto };

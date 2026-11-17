@@ -22,6 +22,8 @@ export const TIPOS = [
   "quem_sou_eu",
   "monte_resposta",
   "investigue",
+  "conversa",
+  "conceito_secreto",
 ] as const;
 export type TipoQuestao = (typeof TIPOS)[number];
 
@@ -50,6 +52,8 @@ export const NOME_TIPO: Record<TipoQuestao, string> = {
   quem_sou_eu: "Quem sou eu? (pistas)",
   monte_resposta: "Monte a resposta",
   investigue: "Investigue (com consulta)",
+  conversa: "Conversa com o personagem",
+  conceito_secreto: "Conceito secreto",
 };
 
 /**
@@ -96,6 +100,8 @@ export const TEMPO_PADRAO: Record<TipoQuestao, number> = {
   quem_sou_eu: 90,
   monte_resposta: 120,
   investigue: 180,
+  conversa: 90,
+  conceito_secreto: 60,
 };
 
 export const NOME_DIFICULDADE: Record<number, string> = { 1: "Fácil", 2: "Média", 3: "Difícil" };
@@ -299,7 +305,6 @@ export const conteudoTabuleiro = z.object({
     .max(10, "Use de 3 a 10 casas."),
 });
 
-
 export const conteudoEstimativa = z
   .object({
     // Resposta certa e régua (no ano, negativo = a.C.).
@@ -325,10 +330,16 @@ export const conteudoEstimativa = z
 
 export const conteudoQuemSouEu = z
   .object({
-    candidatos: z.array(texto.max(80, "Candidato longo demais (máx. 80 caracteres).")).min(4, "Use de 4 a 8 candidatos.").max(8, "Use de 4 a 8 candidatos."),
+    candidatos: z
+      .array(texto.max(80, "Candidato longo demais (máx. 80 caracteres)."))
+      .min(4, "Use de 4 a 8 candidatos.")
+      .max(8, "Use de 4 a 8 candidatos."),
     correta: z.number().int().min(0),
     // Da mais difícil para a mais fácil: a primeira aparece logo de cara.
-    pistas: z.array(texto.max(300, "Pista longa demais (máx. 300 caracteres).")).min(3, "Use de 3 a 6 pistas.").max(6, "Use de 3 a 6 pistas."),
+    pistas: z
+      .array(texto.max(300, "Pista longa demais (máx. 300 caracteres)."))
+      .min(3, "Use de 3 a 6 pistas.")
+      .max(6, "Use de 3 a 6 pistas."),
   })
   .refine((c) => c.correta < c.candidatos.length, "Marque o candidato certo.");
 
@@ -358,6 +369,36 @@ export const conteudoInvestigue = z.object({
     .max(10, "Use no máximo 10 respostas aceitas."),
 });
 
+export const conteudoConversa = z.object({
+  // Com quem o aluno conversa (ex.: "Operário em São Paulo, 1917").
+  personagem: texto.max(80, "Nome do personagem longo demais (máx. 80 caracteres)."),
+  // Retrato enviado (caminho no bucket das questões), para quem não tem desenho no app.
+  retrato: z.string().trim().optional(),
+  turnos: z
+    .array(
+      z.object({
+        mensagem: texto.max(300, "Mensagem longa demais (máx. 300 caracteres)."),
+        certa: texto.max(200, "Resposta longa demais (máx. 200 caracteres)."),
+        erradas: z
+          .array(texto.max(200, "Resposta longa demais (máx. 200 caracteres)."))
+          .length(2, "Escreva 2 respostas erradas em cada turno."),
+        // O que o personagem responde depois (aparece só depois da escolha).
+        reacao: z.string().trim().max(300, "Reação longa demais (máx. 300 caracteres).").optional(),
+      }),
+    )
+    .min(3, "Use de 3 a 8 turnos.")
+    .max(8, "Use de 3 a 8 turnos."),
+});
+
+export const conteudoConceitoSecreto = z
+  .object({
+    palavra: texto.max(30, "Palavra longa demais (máx. 30 caracteres)."),
+    definicao: texto.max(300, "Definição longa demais (máx. 300 caracteres)."),
+  })
+  .refine((c) => /^[\p{L}\s'-]+$/u.test(c.palavra), "Use só letras (e espaço ou hífen) na palavra.")
+  .refine((c) => c.palavra.trim().split(/\s+/).length <= 3, "Use no máximo 3 palavras.")
+  .refine((c) => (c.palavra.match(/\p{L}/gu) ?? []).length >= 4, "A palavra precisa ter ao menos 4 letras.");
+
 /** Máximo de letras que o aluno pode digitar no Investigue. */
 export const MAX_DIGITADO = 160;
 
@@ -366,8 +407,13 @@ export const MAX_DIGITADO = 160;
  * Devolve a ordem das duas opções da casa k na tela: [0, 1] (certa à esquerda) ou [1, 0].
  */
 export function ordemDaCasa(permutacao: number[], k: number): number[] {
-  const sub = subPermutacao(permutacao, 2 * k, 2);
-  return sub.length === 2 ? sub : [0, 1];
+  return ordemDoPasso(permutacao, k, 2);
+}
+
+/** Ordem na tela das opções do passo k quando cada passo tem `n` opções (a certa é a 0). */
+export function ordemDoPasso(permutacao: number[], k: number, n: number): number[] {
+  const sub = subPermutacao(permutacao, n * k, n);
+  return sub.length === n ? sub : Array.from({ length: n }, (_, i) => i);
 }
 
 /** Faixas da régua: [início, fim) de cada uma. */
@@ -408,6 +454,8 @@ export const SCHEMA_CONTEUDO = {
   quem_sou_eu: conteudoQuemSouEu,
   monte_resposta: conteudoMonteResposta,
   investigue: conteudoInvestigue,
+  conversa: conteudoConversa,
+  conceito_secreto: conteudoConceitoSecreto,
 } as const;
 
 export type ConteudoMultiplaEscolha = z.infer<typeof conteudoMultiplaEscolha>;
@@ -431,6 +479,8 @@ export type ConteudoEstimativa = z.infer<typeof conteudoEstimativa>;
 export type ConteudoQuemSouEu = z.infer<typeof conteudoQuemSouEu>;
 export type ConteudoMonteResposta = z.infer<typeof conteudoMonteResposta>;
 export type ConteudoInvestigue = z.infer<typeof conteudoInvestigue>;
+export type ConteudoConversa = z.infer<typeof conteudoConversa>;
+export type ConteudoConceitoSecreto = z.infer<typeof conteudoConceitoSecreto>;
 
 export type Conteudo =
   | { tipo: "multipla_escolha"; conteudo: ConteudoMultiplaEscolha }
@@ -453,7 +503,9 @@ export type Conteudo =
   | { tipo: "estimativa"; conteudo: ConteudoEstimativa }
   | { tipo: "quem_sou_eu"; conteudo: ConteudoQuemSouEu }
   | { tipo: "monte_resposta"; conteudo: ConteudoMonteResposta }
-  | { tipo: "investigue"; conteudo: ConteudoInvestigue };
+  | { tipo: "investigue"; conteudo: ConteudoInvestigue }
+  | { tipo: "conversa"; conteudo: ConteudoConversa }
+  | { tipo: "conceito_secreto"; conteudo: ConteudoConceitoSecreto };
 
 export function validarConteudo(tipo: TipoQuestao, conteudo: unknown) {
   return SCHEMA_CONTEUDO[tipo].safeParse(conteudo);
@@ -505,6 +557,10 @@ export function tamanhoPermutacao(c: Conteudo): number {
       return 0;
     case "quem_sou_eu":
       return c.conteudo.candidatos.length;
+    case "conversa":
+      return c.conteudo.turnos.length * 3;
+    case "conceito_secreto":
+      return 0;
     case "monte_resposta":
       return c.conteudo.espacos.length + c.conteudo.distratores.length;
   }
@@ -606,6 +662,16 @@ export function conteudoVazio(tipo: TipoQuestao): Conteudo {
       };
     case "investigue":
       return { tipo, conteudo: { aceitas: [""] } };
+    case "conversa":
+      return {
+        tipo,
+        conteudo: {
+          personagem: "",
+          turnos: [0, 1, 2, 3].map(() => ({ mensagem: "", certa: "", erradas: ["", ""], reacao: "" })),
+        },
+      };
+    case "conceito_secreto":
+      return { tipo, conteudo: { palavra: "", definicao: "" } };
   }
 }
 
@@ -643,7 +709,11 @@ export type Vista =
    */
   | { tipo: "quem_sou_eu"; candidatos: string[]; pistas: string[]; total: number }
   | { tipo: "monte_resposta"; rotulos: string[]; banco: string[] }
-  | { tipo: "investigue" };
+  | { tipo: "investigue" }
+  /** Mensagens do personagem e as 3 respostas de cada turno, na ordem da tela. */
+  | { tipo: "conversa"; personagem: string; avatar: string | null; mensagens: string[]; opcoes: string[][] }
+  /** padrao: "_" no lugar de cada letra; espaço e hífen aparecem. */
+  | { tipo: "conceito_secreto"; definicao: string; padrao: string[] };
 
 /** Resposta do aluno, sempre em índices da ordem exibida. */
 export type Resposta =
@@ -669,7 +739,11 @@ export type Resposta =
   /** pistas = quantas o aluno abriu (no desafio, vale o que o servidor gravou). */
   | { tipo: "quem_sou_eu"; escolha: number | null; pistas: number }
   | { tipo: "monte_resposta"; preenchidas: (number | null)[] }
-  | { tipo: "investigue"; texto: string };
+  | { tipo: "investigue"; texto: string }
+  /** Por turno: posição na tela da resposta escolhida. */
+  | { tipo: "conversa"; escolhas: (number | null)[]; fim?: boolean }
+  /** Letras tentadas, em maiúsculas sem acento (no desafio, vale o que o servidor gravou). */
+  | { tipo: "conceito_secreto"; letras: string[]; fim?: boolean };
 
 export const schemaResposta = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("multipla_escolha"), escolha: z.number().int().nullable() }),
@@ -702,4 +776,14 @@ export const schemaResposta = z.discriminatedUnion("tipo", [
   }),
   z.object({ tipo: z.literal("monte_resposta"), preenchidas: z.array(z.number().int().nullable()).max(10) }),
   z.object({ tipo: z.literal("investigue"), texto: z.string().max(MAX_DIGITADO) }),
+  z.object({
+    tipo: z.literal("conversa"),
+    escolhas: z.array(z.number().int().min(0).max(2).nullable()).max(8),
+    fim: z.boolean().optional(),
+  }),
+  z.object({
+    tipo: z.literal("conceito_secreto"),
+    letras: z.array(z.string().regex(/^[A-Z]$/)).max(26),
+    fim: z.boolean().optional(),
+  }),
 ]);

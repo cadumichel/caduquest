@@ -535,7 +535,9 @@ const schemaQuestao = z.object({
     ),
   quem_sou_eu: z
     .object({
-      candidatos: z.array(z.string()).describe("4 a 8 personagens, eventos, lugares ou conceitos do mesmo período ou tema."),
+      candidatos: z
+        .array(z.string())
+        .describe("4 a 8 personagens, eventos, lugares ou conceitos do mesmo período ou tema."),
       correta: z.number().int().describe("Índice do candidato certo, a partir de 0."),
       pistas: z
         .array(z.string())
@@ -552,7 +554,9 @@ const schemaQuestao = z.object({
       espacos: z
         .array(
           z.object({
-            rotulo: z.string().describe("Função do espaço, até 40 caracteres: 'Fato', 'Causa', 'Consequência', 'Conclusão'..."),
+            rotulo: z
+              .string()
+              .describe("Função do espaço, até 40 caracteres: 'Fato', 'Causa', 'Consequência', 'Conclusão'..."),
             trecho: z.string().describe("Trecho certo para este espaço, até 300 caracteres."),
           }),
         )
@@ -578,6 +582,56 @@ const schemaQuestao = z.object({
     .optional()
     .describe(
       "investigue: questão de pesquisa, só para desafios com consulta (não cai na rodada final do público). O aluno pesquisa e DIGITA a resposta curta: quem pintou, quem escreveu, como se chama (monumento, praça, prédio, obra), onde fica (cidade, país), em que museu está. Mostre a obra ou o lugar em imagem_url ou o trecho no enunciado. Para exigir pesquisa de verdade, prefira perguntas de dois passos que a busca por imagem não resolve num clique (ex.: 'Em que museu está hoje o quadro que representa este momento?'). A resposta precisa ser única e curta (1 a 6 palavras). Use a dica para indicar o caminho da pesquisa.",
+    ),
+  conversa: z
+    .object({
+      personagem: z
+        .string()
+        .describe(
+          "Com quem o aluno conversa: um personagem histórico ('Abraham Lincoln') ou um tipo social da época ('Operário em São Paulo, 1917'). Se o app tiver o desenho dele, ele aparece no chat; senão, mande um retrato em imagem_url (opcional).",
+        ),
+      turnos: z
+        .array(
+          z.object({
+            mensagem: z
+              .string()
+              .describe("O que o personagem diz ou pergunta neste turno, até 300 caracteres, na voz dele."),
+            certa: z.string().describe("A resposta coerente com aquele tempo e lugar, até 200 caracteres."),
+            erradas: z
+              .array(z.string())
+              .describe(
+                "Exatamente 2 respostas erradas de alto nível: anacronismos (instituição, lei ou ideia real mas posterior), visão de outro grupo social, ou fato de outro país ou período.",
+              ),
+            reacao: z
+              .string()
+              .optional()
+              .describe(
+                "O que o personagem responde depois da escolha, até 300 caracteres, explicando por que a certa era a certa. Aparece só depois que o aluno responde.",
+              ),
+          }),
+        )
+        .describe("3 a 8 turnos (o ideal é 4 a 6), na ordem da conversa."),
+    })
+    .optional()
+    .describe(
+      "conversa: chat com uma pessoa da época. Em cada turno o personagem manda uma mensagem e o aluno escolhe entre 3 respostas; vê na hora se acertou e lê a reação. Vidas como no tabuleiro: até 4 turnos, 1; 5 ou 6, 2; 7 ou 8, 3. Cada erro gasta uma vida e, sem vidas, o próximo erro encerra a conversa. Crédito parcial por turno. Trabalha empatia histórica e anacronismo: a certa é a que faz sentido naquele tempo, não a 'mais justa' de hoje. Enunciado curto que situa (ex.: 'São Paulo, julho de 1917. Converse com um operário em greve.').",
+    ),
+  conceito_secreto: z
+    .object({
+      palavra: z
+        .string()
+        .describe(
+          "O conceito, de 1 a 3 palavras, só letras (espaço e hífen valem), ao menos 4 letras. Ex.: 'Pacto colonial'.",
+        ),
+      definicao: z
+        .string()
+        .describe(
+          "Definição precisa, até 300 caracteres, que não use a própria palavra nem palavras da mesma família.",
+        ),
+    })
+    .optional()
+    .describe(
+      "conceito_secreto: o aluno lê a definição e descobre o conceito chutando letras num teclado na tela (como a forca). 6 letras erradas encerram. Descobriu: 100% menos 15% por letra errada; não descobriu: zero. Acentos não contam (A vale Á, Ã...). Prefira conceitos-chave do capítulo, não nomes próprios. Use a dica para uma segunda definição ou um exemplo.",
     ),
 });
 
@@ -924,7 +978,8 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           dados = { ...dados, imagem: caminhoImagem ?? "", ...(posicionar && { posicionar: true }) };
         if (posicionar) pinosPorPosicionar.push(i + 1);
         // No tabuleiro, a imagem é o retrato do peão.
-        if (q.tipo === "tabuleiro" && caminhoImagem) dados = { ...dados, retrato: caminhoImagem };
+        if ((q.tipo === "tabuleiro" || q.tipo === "conversa") && caminhoImagem)
+          dados = { ...dados, retrato: caminhoImagem };
         linhas.push({
           professor_id: professorId,
           tipo: q.tipo,
@@ -937,7 +992,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           dica: q.dica.trim() || null,
           tema: q.tema.trim(),
           fonte: q.fonte?.trim() || null,
-          imagem_path: q.tipo === "mapa" || q.tipo === "tabuleiro" ? null : caminhoImagem,
+          imagem_path: q.tipo === "mapa" || q.tipo === "tabuleiro" || q.tipo === "conversa" ? null : caminhoImagem,
           tempo_limite_s: relampago?.tempo ?? q.tempo_limite_s ?? TEMPO_PADRAO[q.tipo as TipoQuestao],
           ...(relampago && { relampago: true }),
           conteudo: dados,

@@ -16,6 +16,7 @@ import {
   abrirDica,
   andarTabuleiro,
   abrirPista,
+  darPassoDesafio,
   eliminarAlternativa,
   entrarNoJogo,
   sairDoJogo,
@@ -26,7 +27,7 @@ import {
   type ResultadoAjuda,
 } from "@/lib/jogo";
 import { corrigirTreino, iniciarTreino, type ItemTreino } from "@/lib/treino";
-import { certasDoTabuleiro, montarVista } from "@/lib/questoes/apresentacao";
+import { certasDoTabuleiro, montarVista, segredoPublico, type Segredo } from "@/lib/questoes/apresentacao";
 import { corrigir } from "@/lib/questoes/correcao";
 import { permutacaoSemRanking, permutacaoValida } from "@/lib/questoes/embaralhar";
 import { schemaResposta, tamanhoPermutacao, type Conteudo, type Vista } from "@/lib/questoes/tipos";
@@ -117,6 +118,12 @@ export async function andarNoTabuleiroDesafio(desafioId: string, questaoId: stri
   return andarTabuleiro(criarClienteAdmin(), aluno, String(desafioId), String(questaoId), Number(escolha));
 }
 
+/** Conversa e conceito secreto: o servidor confere o passo e devolve o andamento. */
+export async function passoNoDesafio(desafioId: string, questaoId: string, passo: number | string) {
+  const aluno = await exigirAluno();
+  return darPassoDesafio(criarClienteAdmin(), aluno, String(desafioId), String(questaoId), passo);
+}
+
 /** Quem sou eu?: abre a próxima pista (o servidor grava quantas foram abertas). */
 export async function abrirPistaDesafio(desafioId: string, questaoId: string) {
   const aluno = await exigirAluno();
@@ -193,6 +200,8 @@ export type QuestaoRevisao = {
   permutacao: number[];
   /** Tabuleiro: opção certa de cada casa (o gabarito da revisão já é público). */
   certas?: number[];
+  /** Conversa e conceito secreto: reações e palavra (gabarito já público). */
+  segredo?: Segredo;
 };
 
 export type CorrecaoRevisao = {
@@ -232,6 +241,7 @@ export async function proximaRevisao(
       vista: montarVista(conteudo, permutacao),
       permutacao,
       certas: certasDoTabuleiro(conteudo, permutacao),
+      segredo: segredoPublico(conteudo),
     },
     posicao: jaFeitas.size + 1,
     total,

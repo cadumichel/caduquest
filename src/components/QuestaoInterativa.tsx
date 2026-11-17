@@ -24,7 +24,18 @@ import { mapaFixas, type AjudaVista } from "@/lib/questoes/ajudas";
 import type { Resposta, Vista } from "@/lib/questoes/tipos";
 import { vidasDoTabuleiro, type ProgressoTabuleiro } from "@/lib/questoes/tabuleiro";
 import { CaminhoTabuleiro, type EstadoCasa } from "./Tabuleiro";
-import { Estimativa, Investigue, MonteResposta, QuemSouEu, type ResultadoPista } from "./QuestoesNovas";
+import {
+  ConceitoSecreto,
+  Conversa,
+  Estimativa,
+  Investigue,
+  MonteResposta,
+  QuemSouEu,
+  type ResultadoPassoServidor,
+  type ResultadoPista,
+} from "./QuestoesNovas";
+import type { ProgressoPasso } from "@/lib/questoes/passos";
+import type { Segredo } from "@/lib/questoes/apresentacao";
 
 import { Cadeado, cor, LETRAS } from "./questao-comum";
 
@@ -48,6 +59,9 @@ export function QuestaoInterativa({
   progressoTabuleiro,
   andarTabuleiro,
   abrirPista,
+  segredo,
+  progressoPassos,
+  darPasso,
 }: {
   vista: Vista;
   resposta: Resposta;
@@ -62,6 +76,12 @@ export function QuestaoInterativa({
   andarTabuleiro?: (escolha: number) => Promise<ResultadoPasso>;
   /** Quem sou eu? no desafio: o servidor abre a próxima pista e grava quantas foram abertas. */
   abrirPista?: () => Promise<ResultadoPista>;
+  /** Conversa e conceito secreto fora do desafio (treino, revisão, prévia): reações e palavra. */
+  segredo?: Segredo;
+  /** Conversa e conceito secreto no desafio: andamento gravado no servidor. */
+  progressoPassos?: ProgressoPasso;
+  /** Conversa e conceito secreto no desafio: o servidor confere cada turno ou letra. */
+  darPasso?: (passo: number | string) => Promise<ResultadoPassoServidor>;
 }) {
   if (vista.tipo !== resposta.tipo) return null;
   switch (vista.tipo) {
@@ -278,6 +298,33 @@ export function QuestaoInterativa({
       );
     case "investigue":
       return <Investigue vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />;
+    case "conversa":
+      return (
+        <Conversa
+          vista={vista}
+          resposta={resposta as never}
+          onChange={onChange}
+          desabilitada={desabilitada}
+          ajuda={ajuda}
+          certas={certas}
+          segredo={segredo}
+          progresso={progressoPassos}
+          darPasso={darPasso}
+        />
+      );
+    case "conceito_secreto":
+      return (
+        <ConceitoSecreto
+          vista={vista}
+          resposta={resposta as never}
+          onChange={onChange}
+          desabilitada={desabilitada}
+          ajuda={ajuda}
+          segredo={segredo}
+          progresso={progressoPassos}
+          darPasso={darPasso}
+        />
+      );
   }
 }
 

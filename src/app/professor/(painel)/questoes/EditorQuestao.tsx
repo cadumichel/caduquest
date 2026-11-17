@@ -7,7 +7,13 @@ import { ERAS } from "@/lib/publico/regras";
 import { QuestaoInterativa } from "@/components/QuestaoInterativa";
 import { AreaTexto, Aviso, Botao, Campo, Cartao, Entrada, Selecao, classeInput } from "@/components/ui";
 import { HABILIDADES } from "@/lib/habilidades";
-import { certasDoTabuleiro, montarVista, respostaInicial } from "@/lib/questoes/apresentacao";
+import {
+  certasDoTabuleiro,
+  montarVista,
+  respostaInicial,
+  segredoPublico,
+  type Segredo,
+} from "@/lib/questoes/apresentacao";
 import { permutacaoAleatoria } from "@/lib/questoes/embaralhar";
 import {
   LIMITE_ENUNCIADO,
@@ -83,7 +89,8 @@ export function EditorQuestao({
   };
 
   // No mapa e no tabuleiro, a imagem vai dentro do conteúdo (o mapa dos pinos, o retrato do peão).
-  const imagemNoConteudo = conteudo.tipo === "mapa" || conteudo.tipo === "tabuleiro";
+  // Na conversa, também: o retrato do personagem.
+  const imagemNoConteudo = conteudo.tipo === "mapa" || conteudo.tipo === "tabuleiro" || conteudo.tipo === "conversa";
   const temImagem = Boolean(campos.imagem_path) && !imagemNoConteudo;
   const sugestao = sugerirTempoRelampago(campos.enunciado, conteudo, temImagem);
   const problemas = campos.relampago ? problemasRelampago(campos.enunciado, conteudo, campos.tempo_limite_s) : [];
@@ -108,6 +115,8 @@ export function EditorQuestao({
     if (conteudo.tipo === "mapa") setConteudo({ tipo: "mapa", conteudo: { ...conteudo.conteudo, imagem: caminho } });
     else if (conteudo.tipo === "tabuleiro")
       setConteudo({ tipo: "tabuleiro", conteudo: { ...conteudo.conteudo, retrato: caminho } });
+    else if (conteudo.tipo === "conversa")
+      setConteudo({ tipo: "conversa", conteudo: { ...conteudo.conteudo, retrato: caminho } });
     else set("imagem_path", caminho);
   };
 
@@ -201,12 +210,14 @@ export function EditorQuestao({
                 ? "Imagem do mapa"
                 : conteudo.tipo === "tabuleiro"
                   ? "Retrato do personagem (vira o peão)"
-                  : "Imagem (fonte, charge, mapa)"
+                  : conteudo.tipo === "conversa"
+                    ? "Retrato do personagem (aparece na conversa)"
+                    : "Imagem (fonte, charge, mapa)"
             }
             dica={
               conteudo.tipo === "mapa"
                 ? "PNG, JPG ou WEBP até 2 MB, sem os nomes escritos nos lugares cobrados."
-                : conteudo.tipo === "tabuleiro"
+                : conteudo.tipo === "tabuleiro" || conteudo.tipo === "conversa"
                   ? "Só para quem não tem desenho no app: pintura ou foto do rosto, PNG, JPG ou WEBP até 2 MB."
                   : "PNG, JPG ou WEBP até 2 MB. Meta: 40% das questões de cada desafio com imagem."
             }
@@ -226,6 +237,17 @@ export function EditorQuestao({
                   className="text-sm text-red-700"
                   onClick={() =>
                     setConteudo({ tipo: "tabuleiro", conteudo: { ...conteudo.conteudo, retrato: undefined } })
+                  }
+                >
+                  Remover
+                </button>
+              )}
+              {conteudo.tipo === "conversa" && conteudo.conteudo.retrato && (
+                <button
+                  type="button"
+                  className="text-sm text-red-700"
+                  onClick={() =>
+                    setConteudo({ tipo: "conversa", conteudo: { ...conteudo.conteudo, retrato: undefined } })
                   }
                 >
                   Remover
@@ -452,6 +474,7 @@ function Previa({
       key={`${chave}-${semente}`}
       vista={vista}
       certas={certasDoTabuleiro(conteudo, permutacao)}
+      segredo={segredoPublico(conteudo)}
       enunciado={enunciado}
       imagemUrl={imagemUrl}
       tempo={tempo}
@@ -464,6 +487,7 @@ function Previa({
 function PreviaInterna({
   vista,
   certas,
+  segredo,
   enunciado,
   imagemUrl,
   tempo,
@@ -473,6 +497,8 @@ function PreviaInterna({
   vista: ReturnType<typeof montarVista>;
   /** Tabuleiro: na prévia, a cor e as vidas vêm do gabarito, como no treino. */
   certas?: number[];
+  /** Conversa e conceito secreto: reações e palavra, como no treino. */
+  segredo?: Segredo;
   enunciado: string;
   imagemUrl: string | null;
   tempo: number;
@@ -492,7 +518,7 @@ function PreviaInterna({
         <img src={imagemUrl} alt="" className="mx-auto max-h-64 rounded-xl border border-slate-200" />
       )}
       <p className="whitespace-pre-line font-medium">{enunciado || "Enunciado…"}</p>
-      <QuestaoInterativa vista={vista} resposta={resposta} onChange={setResposta} certas={certas} />
+      <QuestaoInterativa vista={vista} resposta={resposta} onChange={setResposta} certas={certas} segredo={segredo} />
       <button type="button" onClick={reembaralhar} className="text-sm text-marca-700">
         ↻ Embaralhar de novo
       </button>
@@ -1304,7 +1330,12 @@ function EditorConteudo({
       return (
         <div className="space-y-3">
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={c.ano} disabled={bloqueado} onChange={(e) => mudar({ ano: e.target.checked })} />
+            <input
+              type="checkbox"
+              checked={c.ano}
+              disabled={bloqueado}
+              onChange={(e) => mudar({ ano: e.target.checked })}
+            />
             A resposta é um ano (negativo = a.C.)
           </label>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1328,8 +1359,8 @@ function EditorConteudo({
             )}
           </div>
           <p className="text-xs text-slate-500">
-            Entre as duas distâncias a nota cai em linha reta. Deixe a resposta longe das pontas da régua e fora do
-            meio exato, para a posição não entregar.
+            Entre as duas distâncias a nota cai em linha reta. Deixe a resposta longe das pontas da régua e fora do meio
+            exato, para a posição não entregar.
           </p>
         </div>
       );
@@ -1492,8 +1523,120 @@ function EditorConteudo({
             />
           </fieldset>
           <p className="text-xs text-slate-500">
-            O app ignora maiúsculas, acentos, pontuação e artigo no começo, e tolera 1 letra trocada em palavras
-            médias e 2 nas longas.
+            O app ignora maiúsculas, acentos, pontuação e artigo no começo, e tolera 1 letra trocada em palavras médias
+            e 2 nas longas.
+          </p>
+        </div>
+      );
+    }
+    case "conversa": {
+      const c = conteudo.conteudo;
+      const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "conversa", conteudo: { ...c, ...novo } });
+      return (
+        <div className="space-y-3">
+          <label className="block space-y-1">
+            <span className="text-sm font-medium text-slate-700">
+              Personagem (se o app tiver o desenho dele, o rosto aparece na conversa)
+            </span>
+            {c.personagem.trim() && !imagemDoPersonagem(c.personagem) && !c.retrato && (
+              <span className="block text-sm text-amber-700">
+                O app não tem desenho deste personagem: envie um retrato no campo de imagem acima (ou fica a inicial).
+              </span>
+            )}
+            <input
+              className={classeInput}
+              placeholder="Ex.: Dom Pedro II"
+              value={c.personagem}
+              disabled={bloqueado}
+              onChange={(e) => mudar({ personagem: e.target.value })}
+            />
+          </label>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Turnos (3 a 8): o que o personagem diz, a resposta certa do aluno e duas erradas. A reação é opcional.
+            </legend>
+            <Linhas
+              itens={c.turnos}
+              min={3}
+              max={8}
+              novo={() => ({ mensagem: "", certa: "", erradas: ["", ""], reacao: "" })}
+              bloqueado={bloqueado}
+              onChange={(turnos) => mudar({ turnos })}
+              render={(t, i, atualizar) => (
+                <div className="flex-1 space-y-1 rounded-lg border border-slate-200 p-2">
+                  <span className="text-xs font-bold text-marca-700">Turno {i + 1}</span>
+                  <textarea
+                    className={classeInput}
+                    rows={2}
+                    placeholder="O personagem diz…"
+                    value={t.mensagem}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...t, mensagem: e.target.value })}
+                  />
+                  <input
+                    className={`${classeInput} border-emerald-300`}
+                    placeholder="Resposta certa do aluno"
+                    value={t.certa}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...t, certa: e.target.value })}
+                  />
+                  {[0, 1].map((j) => (
+                    <input
+                      key={j}
+                      className={classeInput}
+                      placeholder={`Resposta errada ${j + 1}`}
+                      value={t.erradas[j] ?? ""}
+                      disabled={bloqueado}
+                      onChange={(e) =>
+                        atualizar({ ...t, erradas: t.erradas.map((x, k) => (k === j ? e.target.value : x)) })
+                      }
+                    />
+                  ))}
+                  <input
+                    className={classeInput}
+                    placeholder="Reação do personagem depois da resposta (opcional)"
+                    value={t.reacao ?? ""}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...t, reacao: e.target.value })}
+                  />
+                </div>
+              )}
+            />
+          </fieldset>
+          <p className="text-xs text-slate-500">
+            Errar gasta vida (1 vida até 4 turnos, 2 até 6, 3 até 8). Sem vidas, a conversa acaba e vale o que acertou.
+          </p>
+        </div>
+      );
+    }
+    case "conceito_secreto": {
+      const c = conteudo.conteudo;
+      const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "conceito_secreto", conteudo: { ...c, ...novo } });
+      return (
+        <div className="space-y-3">
+          <label className="block space-y-1">
+            <span className="text-sm font-medium text-slate-700">Palavra secreta (até 3 palavras, só letras)</span>
+            <input
+              className={`${classeInput} uppercase tracking-widest`}
+              placeholder="Ex.: Absolutismo"
+              value={c.palavra}
+              disabled={bloqueado}
+              onChange={(e) => mudar({ palavra: e.target.value })}
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-sm font-medium text-slate-700">Definição que o aluno lê (sem a palavra)</span>
+            <textarea
+              className={classeInput}
+              rows={3}
+              value={c.definicao}
+              disabled={bloqueado}
+              onChange={(e) => mudar({ definicao: e.target.value })}
+            />
+          </label>
+          <p className="text-xs text-slate-500">
+            O aluno chuta letras num teclado na tela. Cada letra errada tira 15% da nota; na 6ª, a questão acaba e vale
+            zero.
           </p>
         </div>
       );

@@ -16,6 +16,7 @@ import { retratoDoTabuleiro } from "@/lib/questoes/apresentacao";
 import { formatarEstimativa, notaEstimativa } from "@/lib/questoes/estimativa";
 import { respostaAceita } from "@/lib/questoes/investigue";
 import { fatorPistas } from "@/lib/questoes/pistas";
+import { letraBase, notaConceito, ordemDoTurno, progressoConceito } from "@/lib/questoes/passos";
 
 const LETRAS = "ABCDEF";
 
@@ -521,14 +522,15 @@ export function Gabarito({
             {c.acerto > 0
               ? `Nota cheia de ${fmt(Math.max(c.minimo, c.valor - c.acerto))} a ${fmt(Math.min(c.maximo, c.valor + c.acerto))}`
               : `Nota cheia só em ${fmt(c.valor)}`}
-            {zero.length > 0 && `; vale zero ${zero.join(" e ")}`}
-            . Entre os dois, a nota cai aos poucos.
+            {zero.length > 0 && `; vale zero ${zero.join(" e ")}`}. Entre os dois, a nota cai aos poucos.
           </p>
           {marcado !== undefined && (
             <p
               className={`rounded-lg px-3 py-1.5 ${nota === 1 ? "bg-emerald-50 text-emerald-900" : nota ? "bg-amber-50 text-amber-900" : "bg-red-50 text-red-800"}`}
             >
-              {marcado === null ? `${rotulo}: sem resposta` : `${rotulo}: ${fmt(marcado)} (${Math.round((nota ?? 0) * 100)}% da nota)`}
+              {marcado === null
+                ? `${rotulo}: sem resposta`
+                : `${rotulo}: ${fmt(marcado)} (${Math.round((nota ?? 0) * 100)}% da nota)`}
             </p>
           )}
         </div>
@@ -611,9 +613,97 @@ export function Gabarito({
             <p className="px-3 text-xs text-slate-500">Também valem: {aceitas.slice(1).join(" · ")}</p>
           )}
           {r && (
-            <p className={`rounded-lg px-3 py-1.5 ${certo ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"}`}>
+            <p
+              className={`rounded-lg px-3 py-1.5 ${certo ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"}`}
+            >
               {rotulo}: {r.texto.trim() || "sem resposta"} {certo ? "✓" : "✗"}
             </p>
+          )}
+        </div>
+      );
+    }
+    case "conversa": {
+      const { personagem, turnos } = conteudo.conteudo;
+      const r = resposta?.tipo === "conversa" && permutacao ? resposta : null;
+      // Por turno: índice original escolhido (0 = a certa), ou null se o aluno não chegou nele.
+      const escolhidas = turnos.map((_, k) => {
+        const e = r?.escolhas[k];
+        return e === null || e === undefined || !permutacao ? null : (ordemDoTurno(permutacao, k)[e] ?? null);
+      });
+      const certos = escolhidas.filter((e) => e === 0).length;
+      return (
+        <div className="space-y-2 text-sm">
+          {r && (
+            <p className="font-semibold text-marca-800">
+              {certos} de {turnos.length} respostas certas
+            </p>
+          )}
+          <ol className="space-y-1.5">
+            {turnos.map((t, k) => {
+              const e = escolhidas[k];
+              const certo = e === 0;
+              return (
+                <li
+                  key={k}
+                  className={`rounded-lg px-3 py-1.5 ${!r ? "bg-slate-50" : certo ? "bg-emerald-50" : "bg-red-50"}`}
+                >
+                  <span className="block text-xs font-bold text-marca-700">{personagem}:</span>
+                  <span className="block italic">{t.mensagem}</span>
+                  <span className="mt-1 block font-medium text-emerald-900">
+                    ➜ {t.certa} {r && (certo ? "✓" : "✗")}
+                  </span>
+                  {r && !certo && (
+                    <span className="block text-xs text-red-700">
+                      {rotulo}: {e === null ? "sem resposta" : t.erradas[e - 1]}
+                    </span>
+                  )}
+                  {t.reacao && (
+                    <span className="mt-0.5 block text-xs text-slate-500">
+                      {personagem}: “{t.reacao}”
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      );
+    }
+    case "conceito_secreto": {
+      const c = conteudo.conteudo;
+      const r = resposta?.tipo === "conceito_secreto" ? resposta : null;
+      const p = r ? progressoConceito(c, r.letras) : null;
+      const nota = r ? notaConceito(c, r.letras) : null;
+      const naPalavra = new Set([...c.palavra].map(letraBase).filter(Boolean));
+      return (
+        <div className="space-y-1 text-sm">
+          <p className="rounded-lg bg-emerald-50 px-3 py-1.5 font-medium tracking-widest text-emerald-900 uppercase">
+            {c.palavra} ✓
+          </p>
+          <p className="px-3 text-slate-600">{c.definicao}</p>
+          {r && p && (
+            <>
+              <p className="px-3 text-xs text-slate-500">
+                Letras tentadas:{" "}
+                {r.letras.length
+                  ? r.letras.map((l, i) => (
+                      <span
+                        key={i}
+                        className={naPalavra.has(l) ? "font-bold text-emerald-700" : "text-red-700 line-through"}
+                      >
+                        {l}{" "}
+                      </span>
+                    ))
+                  : "nenhuma"}
+              </p>
+              <p
+                className={`rounded-lg px-3 py-1.5 ${nota === 1 ? "bg-emerald-50 text-emerald-900" : nota ? "bg-amber-50 text-amber-900" : "bg-red-50 text-red-800"}`}
+              >
+                {p.descoberta
+                  ? `${doProfessor ? "Descobriu" : "Você descobriu"} com ${p.erros} ${p.erros === 1 ? "letra errada" : "letras erradas"} (${Math.round((nota ?? 0) * 100)}% da nota)`
+                  : `${rotulo}: palavra não descoberta (${p.erros} ${p.erros === 1 ? "letra errada" : "letras erradas"})`}
+              </p>
+            </>
           )}
         </div>
       );

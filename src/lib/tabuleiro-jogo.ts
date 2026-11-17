@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { andarNoTabuleiro, escolhasGravadas, type ProgressoTabuleiro } from "@/lib/questoes/tabuleiro";
 import type { Conteudo } from "@/lib/questoes/tipos";
 import { pistasGravadas } from "@/lib/questoes/pistas";
+import { darPasso, progressoGravado, type ProgressoPasso } from "@/lib/questoes/passos";
 
 /**
  * Grava a escolha da próxima casa do tabuleiro e devolve o andamento, já com a
@@ -98,4 +99,26 @@ export async function gravarPista(
   );
   if (!ok) return { erro: "Não foi possível abrir a pista agora. Tente de novo." };
   return { pistas: conteudo.conteudo.pistas.slice(0, abertas + 1) };
+}
+
+/**
+ * Conversa e conceito secreto: grava o próximo passo (a resposta do turno ou a
+ * letra) e devolve o andamento. Como no tabuleiro, cada passo só vale uma vez.
+ */
+export async function gravarPasso(
+  db: SupabaseClient,
+  tabela: "respostas" | "respostas_publicas",
+  linha: { id: string; permutacao: number[]; eliminadas?: number[] | null; resposta: unknown },
+  conteudo: Conteudo,
+  passo: unknown,
+): Promise<{ progresso: ProgressoPasso } | { erro: string }> {
+  const r = darPasso(conteudo, linha.permutacao, linha.eliminadas, linha.resposta, passo);
+  if ("erro" in r) return r;
+  const antes = JSON.stringify(linha.resposta ?? null);
+  const ok = await trocarAndamento(db, tabela, linha.id, linha.resposta ?? null, r.gravar, (gravado) => {
+    const a = progressoGravado(conteudo, linha.permutacao, linha.eliminadas, gravado);
+    const b = progressoGravado(conteudo, linha.permutacao, linha.eliminadas, JSON.parse(antes));
+    return JSON.stringify(a) === JSON.stringify(b);
+  });
+  return ok ? { progresso: r.progresso } : { erro: "Não foi possível conferir agora. Tente de novo." };
 }

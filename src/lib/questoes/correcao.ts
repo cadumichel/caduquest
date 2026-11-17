@@ -3,6 +3,7 @@ import { arredondarPontos } from "../pontos";
 import { notaEstimativa } from "./estimativa";
 import { respostaAceita } from "./investigue";
 import { fatorPistas } from "./pistas";
+import { notaConceito, notaConversa } from "./passos";
 
 /**
  * Fração de acerto (0 a 1) de uma resposta.
@@ -194,6 +195,15 @@ export function corrigir(c: Conteudo, permutacao: number[], r: Resposta | null):
     case "investigue": {
       const resp = r as Extract<Resposta, { tipo: "investigue" }>;
       return respostaAceita(resp.texto, c.conteudo.aceitas) ? 1 : 0;
+    }
+    case "conversa": {
+      const resp = r as Extract<Resposta, { tipo: "conversa" }>;
+      return notaConversa(c.conteudo, permutacao, resp.escolhas);
+    }
+    case "conceito_secreto": {
+      // As letras reveladas pela eliminação já entram em letras (respostaComAjuda).
+      const resp = r as Extract<Resposta, { tipo: "conceito_secreto" }>;
+      return notaConceito(c.conteudo, resp.letras);
     }
   }
 }

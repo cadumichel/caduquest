@@ -9,7 +9,8 @@ import {
   respostaParaCorrigir,
   type ProgressoTabuleiro,
 } from "@/lib/questoes/tabuleiro";
-import { gravarPassoTabuleiro, gravarPista } from "@/lib/tabuleiro-jogo";
+import { gravarPasso, gravarPassoTabuleiro, gravarPista } from "@/lib/tabuleiro-jogo";
+import { progressoGravado, type ProgressoPasso } from "@/lib/questoes/passos";
 import { pistasGravadas, vistaComPistas } from "@/lib/questoes/pistas";
 import {
   calcularPontos,
@@ -73,6 +74,8 @@ export type QuestaoServida = {
   dica: string | null;
   /** Tabuleiro: andamento casa a casa (cores e vidas). */
   tabuleiro?: ProgressoTabuleiro;
+  /** Conversa e conceito secreto: andamento gravado no servidor. */
+  passos?: ProgressoPasso;
 };
 
 /** Ajudas que ainda restam ao aluno na temporada. null = indisponível (banco sem as colunas). */
@@ -619,6 +622,7 @@ export async function estadoAtual(
         ...(conteudo.tipo === "tabuleiro" && {
           tabuleiro: progressoTabuleiro(conteudo.conteudo, linha.permutacao, escolhasGravadas(linha.resposta)),
         }),
+        passos: progressoGravado(conteudo, linha.permutacao, linha.eliminadas, linha.resposta),
       },
     };
   }
@@ -758,6 +762,19 @@ export async function andarTabuleiro(
   const atual = await questaoEmAndamento(db, aluno, desafioId, questaoId);
   if ("erro" in atual) return { erro: atual.erro ?? "Esta questão já passou." };
   return gravarPassoTabuleiro(db, "respostas", atual.linha, comoConteudo(atual.questao), escolha);
+}
+
+/** Conversa e conceito secreto: o servidor confere o passo (resposta do turno ou letra) e devolve o andamento. */
+export async function darPassoDesafio(
+  db: SupabaseClient,
+  aluno: AlunoSessao,
+  desafioId: string,
+  questaoId: string,
+  passo: unknown,
+): Promise<{ progresso: ProgressoPasso } | { erro: string }> {
+  const atual = await questaoEmAndamento(db, aluno, desafioId, questaoId);
+  if ("erro" in atual) return { erro: atual.erro ?? "Esta questão já passou." };
+  return gravarPasso(db, "respostas", atual.linha, comoConteudo(atual.questao), passo);
 }
 
 /** Quem sou eu?: abre a próxima pista da questão atual (o servidor grava quantas foram abertas). */

@@ -1,5 +1,6 @@
 import { montarVista } from "./apresentacao";
 import { candidatasEstimativa, janelaEstimativa } from "./estimativa";
+import { ALFABETO, candidatasConceito, letraBase, OPCOES_CONVERSA, ordemDoTurno } from "./passos";
 import { iniciosPerguntas, ordemDaCasa, type Conteudo, type Resposta, type Vista } from "./tipos";
 
 /** Cota de cada aluno por temporada. */
@@ -24,7 +25,9 @@ const ESCOLHA = ["multipla_escolha", "interpretacao", "quem_disse", "intruso", "
  * - quem sou eu: candidato errado que saiu;
  * - monte a resposta: como lacunas (trecho extra que saiu ou espaço travado);
  * - estimativa: início do trecho da régua que sobrou (a régua cai pela metade a cada uma);
- * - investigue: não tem eliminação (não há opções).
+ * - investigue: não tem eliminação (não há opções);
+ * - conversa: resposta errada que saiu (3k + j: opção j do turno k; uma por turno, só no turno atual);
+ * - conceito secreto: letra revelada (0 = A ... 25 = Z).
  */
 export function candidatasEliminacao(c: Conteudo, eliminadas: number[]): number[] {
   const ja = new Set(eliminadas);
@@ -100,6 +103,14 @@ export function candidatasEliminacao(c: Conteudo, eliminadas: number[]): number[
       return candidatasEstimativa(c.conteudo, eliminadas);
     case "investigue":
       return [];
+    case "conversa": {
+      const usados = new Set(eliminadas.map((i) => Math.floor(i / OPCOES_CONVERSA)));
+      return c.conteudo.turnos.flatMap((_, k) =>
+        usados.has(k) ? [] : [OPCOES_CONVERSA * k + 1, OPCOES_CONVERSA * k + 2],
+      );
+    }
+    case "conceito_secreto":
+      return candidatasConceito(c.conteudo, eliminadas);
   }
 }
 
@@ -194,6 +205,26 @@ export function ajudaNaVista(c: Conteudo, permutacao: number[], eliminadas: numb
       return { removidas: [], fixas: [janelaEstimativa(c.conteudo, eliminadas)] };
     case "investigue":
       return AJUDA_VAZIA;
+    case "conversa":
+      // Posição na tela, contando 3 por turno.
+      return {
+        removidas: eliminadas.map((i) => {
+          const k = Math.floor(i / OPCOES_CONVERSA);
+          return OPCOES_CONVERSA * k + ordemDoTurno(permutacao, k).indexOf(i % OPCOES_CONVERSA);
+        }),
+        fixas: [],
+      };
+    case "conceito_secreto": {
+      // [posição na palavra, código da letra como aparece nela]
+      const chars = [...c.conteudo.palavra.trim().toUpperCase()];
+      const letras = new Set(eliminadas.map((i) => ALFABETO[i]));
+      return {
+        removidas: [],
+        fixas: chars.flatMap((ch, pos) =>
+          letras.has(letraBase(ch)) ? [[pos, ch.codePointAt(0)!] as [number, number]] : [],
+        ),
+      };
+    }
   }
 }
 
@@ -257,6 +288,14 @@ export function aplicarAjuda(vista: Vista, r: Resposta, ajuda: AjudaVista): Resp
     }
     case "investigue":
       return r;
+    case "conversa": {
+      const escolhas = r.escolhas.map((e, k) => (e !== null && removida.has(OPCOES_CONVERSA * k + e) ? null : e));
+      return { ...r, escolhas };
+    }
+    case "conceito_secreto": {
+      const reveladas = fixas.map(([, codigo]) => letraBase(String.fromCodePoint(codigo))).filter(Boolean);
+      return { ...r, letras: [...new Set([...r.letras, ...reveladas])] };
+    }
     case "mapa":
       return { ...r, pinos: ligar(r.pinos) };
     case "classificar":
@@ -290,6 +329,8 @@ export function rotuloEliminacao(tipo: Conteudo["tipo"]): string {
   if (tipo === "encontrar_erro") return "Mostrar um trecho certo";
   if (tipo === "tabuleiro") return "Revelar uma casa";
   if (tipo === "estimativa") return "Encolher a régua";
+  if (tipo === "conversa") return "Eliminar uma errada";
+  if (tipo === "conceito_secreto") return "Revelar uma letra";
   if (
     tipo === "causa_consequencia" ||
     tipo === "ponto_de_vista" ||

@@ -10,6 +10,7 @@ import {
   dicaPublica,
   andarTabuleiroPublico,
   abrirPistaPublica,
+  darPassoPublico,
   eliminarPublica,
   estadoPartida,
   responderPartida,
@@ -150,6 +151,12 @@ export async function responderPublico(
 export async function eliminarNaPartida(partidaId: string, questaoId: string): Promise<ResultadoAjudaPublica> {
   const jogador = await exigirJogador();
   return eliminarPublica(criarClienteAdmin(), jogador, String(partidaId), String(questaoId));
+}
+
+/** Conversa e conceito secreto: o servidor confere o passo e devolve o andamento. */
+export async function passoNaPartida(partidaId: string, questaoId: string, passo: number | string) {
+  const jogador = await exigirJogador();
+  return darPassoPublico(criarClienteAdmin(), jogador, String(partidaId), String(questaoId), passo);
 }
 
 /** Quem sou eu?: abre a próxima pista (o servidor grava quantas foram abertas). */

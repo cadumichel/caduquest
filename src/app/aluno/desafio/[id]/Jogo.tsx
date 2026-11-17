@@ -10,6 +10,7 @@ import type { Ajudas, EstadoJogo, ResultadoAjuda } from "@/lib/jogo";
 import { aplicarAjuda, DICAS_POR_TEMPORADA, ELIMINACOES_POR_TEMPORADA, rotuloEliminacao } from "@/lib/questoes/ajudas";
 import { respostaCompleta, respostaInicial } from "@/lib/questoes/apresentacao";
 import { respostaComProgresso } from "@/lib/questoes/tabuleiro";
+import { respostaComPassos } from "@/lib/questoes/passos";
 import { ESCOLHA_UNICA } from "@/lib/questoes/tipos";
 import type { Resposta } from "@/lib/questoes/tipos";
 import { useTelaProtegida } from "@/components/useTelaProtegida";
@@ -24,6 +25,7 @@ import { FimDoDesafio } from "./FimDoDesafio";
 import {
   andarNoTabuleiroDesafio,
   abrirPistaDesafio,
+  passoNoDesafio,
   avisoTolerado,
   carregarJogo,
   eliminar,
@@ -457,7 +459,13 @@ function TelaQuestao({
   const { questao, posicao, total, aviso } = estado;
   useModoFoco();
   const [resposta, setResposta] = useState<Resposta>(() =>
-    respostaComProgresso(aplicarAjuda(questao.vista, respostaInicial(questao.vista), questao.ajuda), questao.tabuleiro),
+    respostaComPassos(
+      respostaComProgresso(
+        aplicarAjuda(questao.vista, respostaInicial(questao.vista), questao.ajuda),
+        questao.tabuleiro,
+      ),
+      questao.passos,
+    ),
   );
   const [restante, setRestante] = useState(questao.restanteMs);
   const saidas = useRef(0);
@@ -628,6 +636,8 @@ function TelaQuestao({
           progressoTabuleiro={questao.tabuleiro}
           andarTabuleiro={(escolha) => andarNoTabuleiroDesafio(desafioId, questao.id, escolha)}
           abrirPista={() => abrirPistaDesafio(desafioId, questao.id)}
+          progressoPassos={questao.passos}
+          darPasso={(passo) => passoNoDesafio(desafioId, questao.id, passo)}
         />
 
         {ajudas && (questao.podeEliminar || questao.temDica) && (

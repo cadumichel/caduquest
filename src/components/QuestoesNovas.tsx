@@ -14,6 +14,14 @@ import { useId, useRef, useState, type ReactNode } from "react";
 import { mapaFixas, type AjudaVista } from "@/lib/questoes/ajudas";
 import { formatarEstimativa, indiceDoValor, totalPassos, valorDoIndice } from "@/lib/questoes/estimativa";
 import { fatorPistas } from "@/lib/questoes/pistas";
+import type { Segredo } from "@/lib/questoes/apresentacao";
+import {
+  letraBase,
+  MAX_ERROS_CONCEITO,
+  progressoConceito,
+  vidasDaConversa,
+  type ProgressoPasso,
+} from "@/lib/questoes/passos";
 import { MAX_DIGITADO, type Resposta, type Vista } from "@/lib/questoes/tipos";
 import { Cadeado, cor } from "./questao-comum";
 
@@ -34,7 +42,13 @@ const porcento = (f: number) => `${Math.round(f * 100)}%`;
  * Estimativa na régua: o aluno arrasta o marcador (ou usa os botões de ajuste
  * fino) até o número. A eliminação encolhe a régua para um trecho que contém a resposta.
  */
-export function Estimativa({ vista, resposta, onChange, desabilitada, ajuda }: Props<Extract<Vista, { tipo: "estimativa" }>>) {
+export function Estimativa({
+  vista,
+  resposta,
+  onChange,
+  desabilitada,
+  ajuda,
+}: Props<Extract<Vista, { tipo: "estimativa" }>>) {
   const janela = ajuda?.fixas[0];
   const minimo = janela ? janela[0] : vista.minimo;
   const maximo = janela ? janela[1] : vista.maximo;
@@ -65,9 +79,7 @@ export function Estimativa({ vista, resposta, onChange, desabilitada, ajuda }: P
         className={`rounded-2xl border-2 p-4 text-center ${marcado === null ? "border-dashed border-slate-300 bg-white" : "border-marca-300 bg-marca-50"}`}
       >
         <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Sua estimativa</p>
-        <p className="mt-1 text-3xl font-black text-marca-900 tabular-nums">
-          {marcado === null ? "—" : fmt(marcado)}
-        </p>
+        <p className="mt-1 text-3xl font-black text-marca-900 tabular-nums">{marcado === null ? "—" : fmt(marcado)}</p>
       </div>
       <div className="px-1">
         <input
@@ -90,16 +102,36 @@ export function Estimativa({ vista, resposta, onChange, desabilitada, ajuda }: P
         </div>
       </div>
       <div className="flex flex-wrap items-center justify-center gap-2">
-        <button type="button" className={botao} disabled={desabilitada} onClick={() => mudar((indice ?? passos / 2) - grande)}>
+        <button
+          type="button"
+          className={botao}
+          disabled={desabilitada}
+          onClick={() => mudar((indice ?? passos / 2) - grande)}
+        >
           ‹‹
         </button>
-        <button type="button" className={botao} disabled={desabilitada} onClick={() => mudar((indice ?? passos / 2) - 1)}>
+        <button
+          type="button"
+          className={botao}
+          disabled={desabilitada}
+          onClick={() => mudar((indice ?? passos / 2) - 1)}
+        >
           ‹ menos
         </button>
-        <button type="button" className={botao} disabled={desabilitada} onClick={() => mudar((indice ?? passos / 2) + 1)}>
+        <button
+          type="button"
+          className={botao}
+          disabled={desabilitada}
+          onClick={() => mudar((indice ?? passos / 2) + 1)}
+        >
           mais ›
         </button>
-        <button type="button" className={botao} disabled={desabilitada} onClick={() => mudar((indice ?? passos / 2) + grande)}>
+        <button
+          type="button"
+          className={botao}
+          disabled={desabilitada}
+          onClick={() => mudar((indice ?? passos / 2) + grande)}
+        >
           ››
         </button>
       </div>
@@ -459,3 +491,390 @@ export function Investigue({ resposta, onChange, desabilitada }: Props<Extract<V
   );
 }
 
+/** Resultado de um passo conferido no servidor (conversa e conceito secreto). */
+export type ResultadoPassoServidor = { progresso: ProgressoPasso } | { erro: string };
+
+/** Retrato redondo do personagem; sem retrato, a inicial. */
+function Rosto({ nome, avatar }: { nome: string; avatar: string | null }) {
+  return avatar ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={avatar} alt="" className="h-10 w-10 shrink-0 rounded-full border-2 border-ouro object-cover" />
+  ) : (
+    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-ouro bg-marca-900 font-black text-white">
+      {nome.trim().charAt(0).toUpperCase() || "?"}
+    </span>
+  );
+}
+
+/**
+ * Conversa com o personagem: chat em turnos. Em cada turno o aluno escolhe uma
+ * de 3 respostas e vê na hora se acertou e o que o personagem respondeu. Errar
+ * gasta vida, como no tabuleiro. No desafio, o servidor confere cada turno.
+ */
+export function Conversa({
+  vista,
+  resposta,
+  onChange,
+  desabilitada,
+  ajuda,
+  certas,
+  segredo,
+  progresso,
+  darPasso,
+}: Props<Extract<Vista, { tipo: "conversa" }>> & {
+  certas?: number[];
+  segredo?: Segredo;
+  progresso?: ProgressoPasso;
+  darPasso?: (passo: number) => Promise<ResultadoPassoServidor>;
+}) {
+  const n = vista.mensagens.length;
+  const vidas = vidasDaConversa(n);
+  const removidas = new Set(ajuda?.removidas ?? []);
+  type Estado = { chave: string; feitas: number[]; certasFeitas: (number | null)[]; reacoes: (string | null)[] };
+  const inicial = (): Omit<Estado, "chave"> => {
+    if (progresso?.tipo === "conversa")
+      return { feitas: progresso.escolhas, certasFeitas: progresso.certas, reacoes: progresso.reacoes };
+    const k = resposta.escolhas.findIndex((e) => e === null);
+    const feitas = resposta.escolhas.slice(0, k === -1 ? n : k) as number[];
+    return {
+      feitas,
+      certasFeitas: feitas.map((_, j) => certas?.[j] ?? null),
+      reacoes: feitas.map((_, j) => segredo?.reacoes?.[j] ?? null),
+    };
+  };
+  const chave = `${vista.personagem}|${vista.mensagens.join("|")}`;
+  const [estado, setEstado] = useState<Estado>(() => ({ chave, ...inicial() }));
+  if (estado.chave !== chave) setEstado({ chave, ...inicial() });
+  const { feitas, certasFeitas, reacoes }: Estado = estado.chave === chave ? estado : { chave, ...inicial() };
+  const [marcada, setMarcada] = useState<number | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const erros = feitas.filter((e, k) => certasFeitas[k] != null && e !== certasFeitas[k]).length;
+  const semVidas = erros > vidas;
+  const encerrada = feitas.length >= n || semVidas;
+  const atual = feitas.length;
+  const acertos = feitas.filter((e, k) => e === certasFeitas[k]).length;
+
+  const registrar = (novas: number[], novasCertas: (number | null)[], novasReacoes: (string | null)[]) => {
+    setEstado({ chave, feitas: novas, certasFeitas: novasCertas, reacoes: novasReacoes });
+    setMarcada(null);
+    const novosErros = novas.filter((e, k) => novasCertas[k] != null && e !== novasCertas[k]).length;
+    onChange({
+      tipo: "conversa",
+      escolhas: vista.mensagens.map((_, k) => (k < novas.length ? novas[k] : null)),
+      fim: novas.length >= n || novosErros > vidas,
+    });
+  };
+
+  const enviar = async () => {
+    if (marcada === null || encerrada) return;
+    setErro(null);
+    if (darPasso) {
+      setEnviando(true);
+      try {
+        const r = await darPasso(marcada);
+        if ("erro" in r) return setErro(r.erro);
+        if (r.progresso.tipo === "conversa") registrar(r.progresso.escolhas, r.progresso.certas, r.progresso.reacoes);
+      } catch {
+        setErro("Falha de conexão. Envie de novo.");
+      } finally {
+        setEnviando(false);
+      }
+      return;
+    }
+    registrar(
+      [...feitas, marcada],
+      [...certasFeitas, certas?.[atual] ?? null],
+      [...reacoes, segredo?.reacoes?.[atual] ?? null],
+    );
+  };
+
+  const bolhaPersonagem = (texto: string, chaveBolha: string) => (
+    <div key={chaveBolha} className="flex items-end gap-2">
+      <Rosto nome={vista.personagem} avatar={vista.avatar} />
+      <p className="max-w-[85%] rounded-2xl rounded-bl-sm bg-white px-4 py-2.5 text-[15px] shadow-sm ring-1 ring-slate-200">
+        {texto}
+      </p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-marca-900 px-3 py-2 text-white">
+        <span className="flex items-center gap-2 font-bold">
+          <Rosto nome={vista.personagem} avatar={vista.avatar} /> {vista.personagem}
+        </span>
+        <span aria-label={`${Math.max(0, vidas - erros)} de ${vidas} vidas`}>
+          {Array.from({ length: vidas }, (_, v) => (
+            <span key={v} className={v < vidas - erros ? "" : "opacity-30 grayscale"}>
+              ❤️
+            </span>
+          ))}
+        </span>
+      </div>
+      <div className="space-y-3 rounded-2xl bg-slate-100 p-3">
+        {vista.mensagens.slice(0, Math.min(n, atual + (encerrada ? 0 : 1))).map((m, k) => {
+          const feita = k < feitas.length;
+          const certa = certasFeitas[k];
+          const acertou = feita && certa != null ? feitas[k] === certa : null;
+          return (
+            <div key={k} className="space-y-2">
+              {bolhaPersonagem(m, `m${k}`)}
+              {feita && (
+                <div className="flex justify-end">
+                  <p
+                    className={`max-w-[85%] rounded-2xl rounded-br-sm px-4 py-2.5 text-[15px] ${
+                      acertou === null
+                        ? "bg-marca-600 text-white"
+                        : acertou
+                          ? "bg-emerald-600 text-white"
+                          : "bg-red-600 text-white"
+                    }`}
+                  >
+                    {vista.opcoes[k][feitas[k]]} {acertou === null ? "" : acertou ? "✓" : "✗"}
+                  </p>
+                </div>
+              )}
+              {feita && acertou === false && certa != null && (
+                <p className="text-right text-xs font-semibold text-red-800">
+                  Resposta certa: {vista.opcoes[k][certa]}
+                </p>
+              )}
+              {feita && reacoes[k] && bolhaPersonagem(reacoes[k]!, `r${k}`)}
+            </div>
+          );
+        })}
+      </div>
+      {!encerrada ? (
+        <section className="space-y-2">
+          <p className="text-sm text-slate-500">Escolha sua resposta e envie.</p>
+          {vista.opcoes[atual].map((texto, i) => {
+            const riscada = removidas.has(3 * atual + i);
+            if (riscada) return <AlternativaRiscada key={`${atual}-${i}`} texto={texto} />;
+            return (
+              <button
+                key={`${atual}-${i}`}
+                type="button"
+                disabled={desabilitada || enviando}
+                onClick={() => setMarcada(i)}
+                aria-pressed={marcada === i}
+                className={`block w-full rounded-2xl border-2 px-4 py-2.5 text-left text-[15px] transition ${
+                  marcada === i ? "border-marca-600 bg-marca-50" : "border-slate-200 bg-white hover:border-marca-200"
+                }`}
+              >
+                {texto}
+              </button>
+            );
+          })}
+          {erro && <p className="text-sm font-semibold text-red-700">{erro}</p>}
+          <div className="flex justify-end">
+            <button
+              type="button"
+              disabled={desabilitada || enviando || marcada === null}
+              onClick={enviar}
+              className="rounded-xl bg-marca-600 px-5 py-2.5 font-bold text-white shadow transition hover:bg-marca-700 disabled:opacity-40"
+            >
+              {enviando ? "Enviando…" : "Enviar ➜"}
+            </button>
+          </div>
+        </section>
+      ) : (
+        <p
+          className={`rounded-2xl border-2 p-4 text-center font-bold ${semVidas ? "border-red-200 bg-red-50 text-red-900" : "border-ouro-claro bg-amber-50 text-marca-900"}`}
+        >
+          {semVidas ? "💔 Acabaram as vidas: a conversa terminou" : "🏁 Fim da conversa"}
+          {certasFeitas.some((c) => c != null) ? `, com ${acertos} de ${n} respostas certas` : ""}. Confirme a resposta
+          para seguir.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function AlternativaRiscada({ texto }: { texto: string }) {
+  return (
+    <p
+      aria-label="Resposta eliminada"
+      className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 px-4 py-2.5 text-[15px] text-slate-400 line-through"
+    >
+      {texto}
+    </p>
+  );
+}
+
+const TECLADO = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
+
+/**
+ * Conceito secreto: definição, quadradinhos da palavra e um teclado na tela.
+ * Cada letra é conferida no servidor no desafio (a palavra nunca vai para a
+ * tela). O teclado do computador não é usado: em sala, apertar tecla zera.
+ */
+export function ConceitoSecreto({
+  vista,
+  resposta,
+  onChange,
+  desabilitada,
+  ajuda,
+  segredo,
+  progresso,
+  darPasso,
+}: Props<Extract<Vista, { tipo: "conceito_secreto" }>> & {
+  segredo?: Segredo;
+  progresso?: ProgressoPasso;
+  darPasso?: (passo: string) => Promise<ResultadoPassoServidor>;
+}) {
+  const chave = vista.padrao.join("") + vista.definicao;
+  const local = (letras: string[]): ProgressoPasso | null =>
+    segredo?.palavra !== undefined
+      ? progressoConceito({ palavra: segredo.palavra, definicao: vista.definicao }, letras)
+      : null;
+  type Estado = { chave: string; p: ProgressoPasso | null };
+  const [estado, setEstado] = useState<Estado>(() => ({
+    chave,
+    p: progresso?.tipo === "conceito_secreto" ? progresso : local(resposta.letras),
+  }));
+  if (estado.chave !== chave)
+    setEstado({ chave, p: progresso?.tipo === "conceito_secreto" ? progresso : local(resposta.letras) });
+  const p = estado.p?.tipo === "conceito_secreto" ? estado.p : null;
+  const [enviando, setEnviando] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+
+  // Letras reveladas pela eliminação: [posição, código da letra].
+  const fixas = mapaFixas(ajuda);
+  const reveladas = vista.padrao.map((ch, i) =>
+    ch !== "_" ? ch : (p?.reveladas[i] ?? (fixas.has(i) ? String.fromCodePoint(fixas.get(i)!) : null)),
+  );
+  const letrasFixas = new Set([...fixas.values()].map((c) => letraBase(String.fromCodePoint(c))));
+  const tentadas = p?.letras ?? resposta.letras;
+  const naPalavra = new Set(reveladas.flatMap((r, i) => (vista.padrao[i] === "_" && r ? [letraBase(r)] : [])));
+  const erros = p?.erros ?? tentadas.filter((l) => !naPalavra.has(l)).length;
+  const descoberta = p?.descoberta ?? false;
+  const encerrado = p?.encerrado ?? false;
+
+  const chutar = async (letra: string) => {
+    if (encerrado || tentadas.includes(letra) || letrasFixas.has(letra)) return;
+    setErro(null);
+    if (darPasso) {
+      setEnviando(letra);
+      try {
+        const r = await darPasso(letra);
+        if ("erro" in r) return setErro(r.erro);
+        if (r.progresso.tipo !== "conceito_secreto") return;
+        setEstado({ chave, p: r.progresso });
+        onChange({ tipo: "conceito_secreto", letras: r.progresso.letras, fim: r.progresso.encerrado });
+      } catch {
+        setErro("Falha de conexão. Toque na letra de novo.");
+      } finally {
+        setEnviando(null);
+      }
+      return;
+    }
+    const letras = [...tentadas, letra];
+    const novo = local(letras);
+    setEstado({ chave, p: novo });
+    onChange({
+      tipo: "conceito_secreto",
+      letras,
+      fim: novo?.tipo === "conceito_secreto" ? novo.encerrado : false,
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="rounded-2xl border-l-4 border-marca-500 bg-marca-50 px-4 py-3 text-[15px] text-marca-950">
+        📖 {vista.definicao}
+      </p>
+      <div className="flex flex-wrap justify-center gap-x-3 gap-y-2" aria-label="Palavra secreta">
+        {vista.padrao
+          .join("")
+          .split(" ")
+          .reduce<{ inicio: number; palavra: string }[]>((acc, palavra) => {
+            const inicio = acc.length ? acc[acc.length - 1].inicio + acc[acc.length - 1].palavra.length + 1 : 0;
+            return [...acc, { inicio, palavra }];
+          }, [])
+          .map(({ inicio, palavra }) => (
+            <span key={inicio} className="flex max-w-full gap-0.5 sm:gap-1">
+              {[...palavra].map((ch, j) => {
+                const i = inicio + j;
+                const r = reveladas[i];
+                if (ch !== "_")
+                  return (
+                    <span key={i} className="w-4 text-center text-2xl font-black">
+                      {ch}
+                    </span>
+                  );
+                return (
+                  <span
+                    key={i}
+                    className={`flex h-11 w-8 min-w-0 shrink items-center justify-center rounded-lg border-b-4 text-xl font-black sm:w-9 ${
+                      r
+                        ? fixas.has(i) && !p?.letras.includes(letraBase(r))
+                          ? "border-amber-400 bg-amber-50 text-amber-900"
+                          : "border-emerald-500 bg-emerald-50 text-emerald-900"
+                        : encerrado && !descoberta
+                          ? "border-red-300 bg-red-50"
+                          : "border-marca-300 bg-white"
+                    }`}
+                  >
+                    {r ?? ""}
+                  </span>
+                );
+              })}
+            </span>
+          ))}
+      </div>
+      <div className="flex items-center justify-center gap-2 text-sm font-semibold text-slate-600">
+        Letras erradas:
+        {Array.from({ length: MAX_ERROS_CONCEITO }, (_, k) => (
+          <span key={k} className={`h-3 w-3 rounded-full ${k < erros ? "bg-red-500" : "bg-slate-200"}`} />
+        ))}
+        <span className="tabular-nums">
+          {erros} de {MAX_ERROS_CONCEITO}
+        </span>
+      </div>
+      {!encerrado ? (
+        <div className="space-y-1.5">
+          {TECLADO.map((linha) => (
+            <div key={linha} className="flex justify-center gap-1">
+              {[...linha].map((l) => {
+                const usada = tentadas.includes(l) || letrasFixas.has(l);
+                const acerto = usada && naPalavra.has(l);
+                return (
+                  <button
+                    key={l}
+                    type="button"
+                    disabled={desabilitada || usada || enviando !== null}
+                    onClick={() => chutar(l)}
+                    className={`h-11 w-8 rounded-lg text-base font-bold shadow-sm transition sm:w-10 ${
+                      usada
+                        ? acerto
+                          ? "bg-emerald-500 text-white"
+                          : "bg-slate-300 text-slate-500 line-through"
+                        : enviando === l
+                          ? "animate-pulse bg-marca-300 text-white"
+                          : "bg-white text-marca-900 ring-1 ring-marca-200 hover:bg-marca-50"
+                    }`}
+                  >
+                    {l}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+          <p className="text-center text-xs text-slate-500">Toque nas letras da tela. Acentos não contam.</p>
+          {erro && <p className="text-center text-sm font-semibold text-red-700">{erro}</p>}
+        </div>
+      ) : (
+        <p
+          className={`rounded-2xl border-2 p-4 text-center font-bold ${descoberta ? "border-ouro-claro bg-amber-50 text-marca-900" : "border-red-200 bg-red-50 text-red-900"}`}
+        >
+          {descoberta
+            ? `🏆 Descobriu, com ${erros} letra${erros === 1 ? "" : "s"} errada${erros === 1 ? "" : "s"}!`
+            : "💔 As letras erradas acabaram."}{" "}
+          Confirme a resposta para seguir.
+        </p>
+      )}
+    </div>
+  );
+}

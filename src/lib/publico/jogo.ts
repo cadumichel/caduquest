@@ -10,7 +10,8 @@ import {
   respostaParaCorrigir,
   type ProgressoTabuleiro,
 } from "@/lib/questoes/tabuleiro";
-import { gravarPassoTabuleiro, gravarPista } from "@/lib/tabuleiro-jogo";
+import { gravarPasso, gravarPassoTabuleiro, gravarPista } from "@/lib/tabuleiro-jogo";
+import { progressoGravado, type ProgressoPasso } from "@/lib/questoes/passos";
 import { pistasGravadas, vistaComPistas } from "@/lib/questoes/pistas";
 import { montarVista } from "@/lib/questoes/apresentacao";
 import { corrigir, tempoAcabou, tempoEsgotado } from "@/lib/questoes/correcao";
@@ -79,6 +80,8 @@ export type QuestaoPublica = {
   dica: string | null;
   /** Tabuleiro: andamento casa a casa (cores e vidas). */
   tabuleiro?: ProgressoTabuleiro;
+  /** Conversa e conceito secreto: andamento gravado no servidor. */
+  passos?: ProgressoPasso;
 };
 
 /** Ajudas que restam na partida. null = sem ajudas (rodada final ou banco sem as colunas). */
@@ -373,6 +376,7 @@ export async function estadoPartida(
         ...(conteudo.tipo === "tabuleiro" && {
           tabuleiro: progressoTabuleiro(conteudo.conteudo, linha.permutacao, escolhasGravadas(linha.resposta)),
         }),
+        passos: progressoGravado(conteudo, linha.permutacao, linha.eliminadas, linha.resposta),
       },
     };
   }
@@ -434,6 +438,33 @@ export async function andarTabuleiroPublico(
     return { erro: "O tempo desta questão acabou." };
   }
   return gravarPassoTabuleiro(db, "respostas_publicas", linha, comoConteudo(questao), escolha);
+}
+
+/** Conversa e conceito secreto: o servidor confere o passo e devolve o andamento. */
+export async function darPassoPublico(
+  db: SupabaseClient,
+  jogador: JogadorSessao,
+  partidaId: string,
+  questaoId: string,
+  passo: unknown,
+): Promise<{ progresso: ProgressoPasso } | { erro: string }> {
+  const partida = await partidaDoJogador(db, jogador.id, partidaId);
+  if (!partida || partida.concluida_em || partida.ordem[partida.indice_atual] !== questaoId) {
+    return { erro: "Esta questão já passou." };
+  }
+  const { data } = await db
+    .from("respostas_publicas")
+    .select("*")
+    .eq("partida_id", partida.id)
+    .eq("questao_id", questaoId)
+    .maybeSingle();
+  const linha = data as RespostaPublica | null;
+  if (!linha || linha.respondida_em) return { erro: "Esta questão já passou." };
+  const questao = await carregarQuestao(db, questaoId);
+  if (tempoEsgotado(new Date(linha.servida_em), new Date(), questao.tempo_limite_s)) {
+    return { erro: "O tempo desta questão acabou." };
+  }
+  return gravarPasso(db, "respostas_publicas", linha, comoConteudo(questao), passo);
 }
 
 /** Quem sou eu?: abre a próxima pista da questão em andamento. */
