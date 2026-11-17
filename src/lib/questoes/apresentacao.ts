@@ -114,6 +114,24 @@ export function montarVista(c: Conteudo, permutacao: number[]): Vista {
         }),
         emojis: c.conteudo.casas.map((casa) => casa.emoji?.trim() || null),
       };
+    case "estimativa": {
+      const { minimo, maximo, passo, unidade, ano } = c.conteudo;
+      return { tipo: c.tipo, minimo, maximo, passo, unidade, ano };
+    }
+    case "quem_sou_eu":
+      return {
+        tipo: c.tipo,
+        candidatos: permutacao.map((i) => c.conteudo.candidatos[i]),
+        pistas: c.conteudo.pistas,
+        total: c.conteudo.pistas.length,
+      };
+    case "monte_resposta": {
+      const { espacos, distratores } = c.conteudo;
+      const banco = [...espacos.map((e) => e.trecho), ...distratores];
+      return { tipo: c.tipo, rotulos: espacos.map((e) => e.rotulo), banco: permutacao.map((i) => banco[i]) };
+    }
+    case "investigue":
+      return { tipo: c.tipo };
   }
 }
 
@@ -150,6 +168,14 @@ export function respostaInicial(vista: Vista): Resposta {
       return { tipo: vista.tipo, pinos: vista.nomes.map(() => null) };
     case "tabuleiro":
       return { tipo: vista.tipo, escolhas: vista.casas.map(() => null) };
+    case "estimativa":
+      return { tipo: vista.tipo, valor: null };
+    case "quem_sou_eu":
+      return { tipo: vista.tipo, escolha: null, pistas: 1 };
+    case "monte_resposta":
+      return { tipo: vista.tipo, preenchidas: vista.rotulos.map(() => null) };
+    case "investigue":
+      return { tipo: vista.tipo, texto: "" };
   }
 }
 
@@ -185,5 +211,13 @@ export function respostaCompleta(r: Resposta): boolean {
       return r.escolhas.every((v) => v !== null);
     case "encontrar_erro":
       return r.marcados.length > 0;
+    case "estimativa":
+      return r.valor !== null;
+    case "quem_sou_eu":
+      return r.escolha !== null;
+    case "monte_resposta":
+      return r.preenchidas.every((v) => v !== null);
+    case "investigue":
+      return r.texto.trim().length > 0;
   }
 }

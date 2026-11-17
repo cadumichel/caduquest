@@ -1,5 +1,8 @@
 import { faixaDoAno, iniciosPerguntas, ordemDaCasa, subPermutacao, type Conteudo, type Resposta } from "./tipos";
 import { arredondarPontos } from "../pontos";
+import { notaEstimativa } from "./estimativa";
+import { respostaAceita } from "./investigue";
+import { fatorPistas } from "./pistas";
 
 /**
  * Fração de acerto (0 a 1) de uma resposta.
@@ -161,6 +164,36 @@ export function corrigir(c: Conteudo, permutacao: number[], r: Resposta | null):
         if (escolha === 0 || escolha === 1) if (ordemDaCasa(permutacao, k)[escolha] === 0) certos++;
       }
       return certos / n;
+    }
+    case "estimativa": {
+      const resp = r as Extract<Resposta, { tipo: "estimativa" }>;
+      return notaEstimativa(c.conteudo, resp.valor);
+    }
+    case "quem_sou_eu": {
+      // Acertou: vale menos a cada pista aberta. Errou: zero.
+      const resp = r as Extract<Resposta, { tipo: "quem_sou_eu" }>;
+      if (original(resp.escolha) !== c.conteudo.correta) return 0;
+      return fatorPistas(resp.pistas, c.conteudo.pistas.length);
+    }
+    case "monte_resposta": {
+      // Como lacunas: compara o texto do trecho posto em cada espaço.
+      const resp = r as Extract<Resposta, { tipo: "monte_resposta" }>;
+      const { espacos, distratores } = c.conteudo;
+      const banco = [...espacos.map((e) => e.trecho), ...distratores];
+      const usados = new Set<number>();
+      let certos = 0;
+      espacos.forEach((espaco, k) => {
+        const exibido = resp.preenchidas[k] ?? null;
+        if (exibido === null || usados.has(exibido)) return;
+        usados.add(exibido);
+        const trecho = banco[original(exibido)];
+        if (trecho !== undefined && normalizar(trecho) === normalizar(espaco.trecho)) certos++;
+      });
+      return certos / espacos.length;
+    }
+    case "investigue": {
+      const resp = r as Extract<Resposta, { tipo: "investigue" }>;
+      return respostaAceita(resp.texto, c.conteudo.aceitas) ? 1 : 0;
     }
   }
 }

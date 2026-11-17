@@ -23,6 +23,7 @@ import { ESCOLHA_UNICA, type Resposta } from "@/lib/questoes/tipos";
 import { textoMarca, type MotivoZerada } from "@/lib/tela-protegida";
 import {
   andarNoTabuleiroPartida,
+  abrirPistaPartida,
   carregarPartida,
   dicaNaPartida,
   eliminarNaPartida,
@@ -347,6 +348,7 @@ function TelaQuestao({
         ajuda={ajuda}
         progressoTabuleiro={questao.tabuleiro}
         andarTabuleiro={(escolha) => andarNoTabuleiroPartida(partidaId, questao.id, escolha)}
+        abrirPista={() => abrirPistaPartida(partidaId, questao.id)}
       />
 
       {!final && ajudas && (questao.podeEliminar || questao.temDica) && (

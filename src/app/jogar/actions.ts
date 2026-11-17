@@ -9,6 +9,7 @@ import {
   comecarPartida,
   dicaPublica,
   andarTabuleiroPublico,
+  abrirPistaPublica,
   eliminarPublica,
   estadoPartida,
   responderPartida,
@@ -149,6 +150,12 @@ export async function responderPublico(
 export async function eliminarNaPartida(partidaId: string, questaoId: string): Promise<ResultadoAjudaPublica> {
   const jogador = await exigirJogador();
   return eliminarPublica(criarClienteAdmin(), jogador, String(partidaId), String(questaoId));
+}
+
+/** Quem sou eu?: abre a próxima pista (o servidor grava quantas foram abertas). */
+export async function abrirPistaPartida(partidaId: string, questaoId: string) {
+  const jogador = await exigirJogador();
+  return abrirPistaPublica(criarClienteAdmin(), jogador, String(partidaId), String(questaoId));
 }
 
 /** Tabuleiro: responde a próxima casa (o servidor confere e devolve a cor e as vidas). */

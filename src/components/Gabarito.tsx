@@ -13,6 +13,9 @@ import { urlImagem } from "@/lib/tipos-banco";
 import { Citacao, Documento, ImagemComPinos } from "./QuestaoInterativa";
 import { CaminhoTabuleiro } from "./Tabuleiro";
 import { retratoDoTabuleiro } from "@/lib/questoes/apresentacao";
+import { formatarEstimativa, notaEstimativa } from "@/lib/questoes/estimativa";
+import { respostaAceita } from "@/lib/questoes/investigue";
+import { fatorPistas } from "@/lib/questoes/pistas";
 
 const LETRAS = "ABCDEF";
 
@@ -497,6 +500,121 @@ export function Gabarito({
               );
             })}
           </ol>
+        </div>
+      );
+    }
+    case "estimativa": {
+      const c = conteudo.conteudo;
+      const fmt = (v: number) => formatarEstimativa(v, c);
+      const marcado = resposta?.tipo === "estimativa" ? resposta.valor : undefined;
+      const nota = marcado === undefined ? null : notaEstimativa(c, marcado);
+      const zero = [
+        c.valor - c.margem > c.minimo ? `abaixo de ${fmt(c.valor - c.margem)}` : null,
+        c.valor + c.margem < c.maximo ? `acima de ${fmt(c.valor + c.margem)}` : null,
+      ].filter(Boolean);
+      return (
+        <div className="space-y-1 text-sm">
+          <p className="rounded-lg bg-emerald-50 px-3 py-1.5 font-medium text-emerald-900">
+            Resposta: {fmt(c.valor)} ✓
+          </p>
+          <p className="px-3 text-slate-600">
+            {c.acerto > 0
+              ? `Nota cheia de ${fmt(Math.max(c.minimo, c.valor - c.acerto))} a ${fmt(Math.min(c.maximo, c.valor + c.acerto))}`
+              : `Nota cheia só em ${fmt(c.valor)}`}
+            {zero.length > 0 && `; vale zero ${zero.join(" e ")}`}
+            . Entre os dois, a nota cai aos poucos.
+          </p>
+          {marcado !== undefined && (
+            <p
+              className={`rounded-lg px-3 py-1.5 ${nota === 1 ? "bg-emerald-50 text-emerald-900" : nota ? "bg-amber-50 text-amber-900" : "bg-red-50 text-red-800"}`}
+            >
+              {marcado === null ? `${rotulo}: sem resposta` : `${rotulo}: ${fmt(marcado)} (${Math.round((nota ?? 0) * 100)}% da nota)`}
+            </p>
+          )}
+        </div>
+      );
+    }
+    case "quem_sou_eu": {
+      const c = conteudo.conteudo;
+      const r = resposta?.tipo === "quem_sou_eu" ? resposta : null;
+      const escolhido = r ? orig(r.escolha) : -1;
+      return (
+        <div className="space-y-2 text-sm">
+          <ol className="space-y-1">
+            {c.pistas.map((p, k) => (
+              <li key={k} className={`flex gap-2 rounded-lg px-3 py-1 ${r && k < r.pistas ? "bg-marca-50" : ""}`}>
+                <span className="w-5 font-bold text-marca-700">{k + 1}</span>
+                <span className="flex-1 italic">{p}</span>
+                <span className="text-xs text-slate-500">{Math.round(fatorPistas(k + 1, c.pistas.length) * 100)}%</span>
+              </li>
+            ))}
+          </ol>
+          {r && (
+            <p className="px-3 text-slate-600">
+              {doProfessor ? "O aluno abriu" : "Você abriu"} {r.pistas} de {c.pistas.length} pistas.
+            </p>
+          )}
+          <ul className="grid grid-cols-2 gap-1 sm:grid-cols-3">
+            {c.candidatos.map((cand, i) => {
+              const certa = i === c.correta;
+              return (
+                <li
+                  key={i}
+                  className={`rounded-lg px-3 py-1.5 ${certa ? "bg-emerald-50 font-medium text-emerald-900" : escolhido === i ? "bg-red-50 text-red-800" : "text-slate-600"}`}
+                >
+                  {cand} {certa && "✓"} {escolhido === i && !certa && `← ${rotulo}`}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      );
+    }
+    case "monte_resposta": {
+      const { espacos, distratores } = conteudo.conteudo;
+      const banco = [...espacos.map((e) => e.trecho), ...distratores];
+      const r = resposta?.tipo === "monte_resposta" ? resposta : null;
+      return (
+        <div className="space-y-2 text-sm">
+          <ol className="space-y-1">
+            {espacos.map((e, k) => {
+              const posto = r ? banco[orig(r.preenchidas[k] ?? null)] : undefined;
+              const certo = posto !== undefined && posto.trim() === e.trecho.trim();
+              return (
+                <li key={k} className={`rounded-lg px-3 py-1.5 ${!r ? "" : certo ? "bg-emerald-50" : "bg-red-50"}`}>
+                  <span className="mr-2 text-xs font-black tracking-wide text-marca-800 uppercase">{e.rotulo}</span>
+                  <span className="font-medium text-emerald-900">{e.trecho}</span> {r && (certo ? "✓" : "✗")}
+                  {r && !certo && <ColocadoAqui rotulo={rotulo} texto={posto} />}
+                </li>
+              );
+            })}
+          </ol>
+          <p className="px-3 text-xs text-slate-500">Não serviam:</p>
+          <ul className="space-y-0.5 px-3 text-xs text-slate-500">
+            {distratores.map((d, i) => (
+              <li key={i} className="line-through">
+                {d}
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    }
+    case "investigue": {
+      const { aceitas } = conteudo.conteudo;
+      const r = resposta?.tipo === "investigue" ? resposta : null;
+      const certo = r ? respostaAceita(r.texto, aceitas) : false;
+      return (
+        <div className="space-y-1 text-sm">
+          <p className="rounded-lg bg-emerald-50 px-3 py-1.5 font-medium text-emerald-900">Resposta: {aceitas[0]} ✓</p>
+          {aceitas.length > 1 && (
+            <p className="px-3 text-xs text-slate-500">Também valem: {aceitas.slice(1).join(" · ")}</p>
+          )}
+          {r && (
+            <p className={`rounded-lg px-3 py-1.5 ${certo ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"}`}>
+              {rotulo}: {r.texto.trim() || "sem resposta"} {certo ? "✓" : "✗"}
+            </p>
+          )}
         </div>
       );
     }

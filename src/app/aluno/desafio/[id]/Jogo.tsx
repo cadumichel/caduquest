@@ -23,6 +23,7 @@ import {
 import { FimDoDesafio } from "./FimDoDesafio";
 import {
   andarNoTabuleiroDesafio,
+  abrirPistaDesafio,
   avisoTolerado,
   carregarJogo,
   eliminar,
@@ -626,6 +627,7 @@ function TelaQuestao({
           ajuda={ajuda}
           progressoTabuleiro={questao.tabuleiro}
           andarTabuleiro={(escolha) => andarNoTabuleiroDesafio(desafioId, questao.id, escolha)}
+          abrirPista={() => abrirPistaDesafio(desafioId, questao.id)}
         />
 
         {ajudas && (questao.podeEliminar || questao.temDica) && (

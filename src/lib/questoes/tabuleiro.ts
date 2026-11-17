@@ -1,4 +1,5 @@
 import { respostaComAjuda } from "./ajudas";
+import { pistasGravadas } from "./pistas";
 import { ordemDaCasa, type Conteudo, type ConteudoTabuleiro, type Resposta } from "./tipos";
 
 /** Máximo de casas de um tabuleiro. */
@@ -82,8 +83,9 @@ export function candidatasAFrente(c: Conteudo, candidatas: number[], resposta: u
 
 /**
  * Resposta que vale na correção. No tabuleiro, vale o andamento gravado no
- * servidor casa a casa (a tela não decide nada); nos outros tipos, a resposta
- * enviada com os itens travados pelas eliminações.
+ * servidor casa a casa (a tela não decide nada); no Quem sou eu?, as pistas
+ * abertas gravadas; nos outros tipos, a resposta enviada com os itens travados
+ * pelas eliminações.
  */
 export function respostaParaCorrigir(
   c: Conteudo,
@@ -93,7 +95,10 @@ export function respostaParaCorrigir(
   respostaEnviada: Resposta | null,
 ): Resposta | null {
   if (c.tipo === "tabuleiro") return respostaDoTabuleiro(c.conteudo, escolhasGravadas(respostaGravada));
-  return respostaComAjuda(c, permutacao, eliminadas, respostaEnviada);
+  const r = respostaComAjuda(c, permutacao, eliminadas, respostaEnviada);
+  // Quem sou eu?: vale o número de pistas que o servidor abriu, não o que a tela diz.
+  if (r?.tipo === "quem_sou_eu") return { ...r, pistas: pistasGravadas(respostaGravada) };
+  return r;
 }
 
 /** Resposta da tela ao voltar para um tabuleiro já começado (andamento gravado no servidor). */

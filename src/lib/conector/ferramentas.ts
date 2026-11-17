@@ -20,6 +20,7 @@ import {
 } from "@/lib/questoes/relampago";
 import {
   NOME_TIPO,
+  SO_COM_CONSULTA,
   TEMPO_MAX_S,
   TEMPO_MIN_S,
   TEMPO_PADRAO,
@@ -513,6 +514,70 @@ const schemaQuestao = z.object({
     .optional()
     .describe(
       "tabuleiro: um personagem percorre de 3 a 10 casas (o ideal é 5 a 8), na ordem da vida dele; em cada casa o aluno escolhe entre duas opções qual ele fez e vê na hora se acertou. Vidas: até 4 casas, 1; 5 ou 6, 2; 7 a 10, 3. Cada erro gasta uma vida e, sem vidas, o próximo erro encerra o caminho ali. Crédito parcial por casa. Use o enunciado para situar (ex.: 'Leve Abraham Lincoln até o fim do caminho.'). Personagem sem desenho no app: mande em imagem_url um retrato dele (pintura ou foto em que o rosto apareça bem, da Wikimedia Commons); o app recorta em círculo e usa como peão, no lugar da imagem acima do enunciado.",
+    ),
+  estimativa: z
+    .object({
+      valor: z.number().describe("Resposta certa (no ano, negativo para a.C.)."),
+      minimo: z.number().describe("Início da régua."),
+      maximo: z.number().describe("Fim da régua."),
+      passo: z
+        .number()
+        .optional()
+        .describe("De quanto em quanto o marcador anda (padrão 1). A régua precisa ter de 4 a 5.000 passos."),
+      unidade: z.string().optional().describe("Ex.: '%', 'milhões', 'km'. Vazio em ano."),
+      ano: z.boolean().optional().describe("true quando a resposta é um ano (mostra '27 a.C.')."),
+      acerto: z.number().describe("Distância da resposta com nota cheia (ex.: 2 anos)."),
+      margem: z.number().describe("Distância a partir da qual vale zero (maior que acerto, ex.: 20 anos)."),
+    })
+    .optional()
+    .describe(
+      "estimativa: o aluno arrasta um marcador numa régua até o número ou o ano, sem alternativas; nota cheia até 'acerto' de distância, zero a partir de 'margem' e, entre as duas, a nota cai em linha reta. Bom para ordem de grandeza (porcentagens de população, quantidades, distâncias) e cronologia aproximada. A régua não pode começar ou terminar perto da resposta (ela ficaria óbvia): deixe a resposta longe das pontas, nunca no meio exato. Ajuste acerto e margem à dificuldade: num ano muito conhecido, acerto 0 e margem 10; numa porcentagem estimada, acerto 3 e margem 20. Explique na explicação o número exato e de onde ele vem.",
+    ),
+  quem_sou_eu: z
+    .object({
+      candidatos: z.array(z.string()).describe("4 a 8 personagens, eventos, lugares ou conceitos do mesmo período ou tema."),
+      correta: z.number().int().describe("Índice do candidato certo, a partir de 0."),
+      pistas: z
+        .array(z.string())
+        .describe(
+          "3 a 6 pistas em primeira pessoa ('Nasci...', 'Fui...'), da mais difícil para a mais fácil. A primeira só serve a quem conhece bem; a última quase entrega.",
+        ),
+    })
+    .optional()
+    .describe(
+      "quem_sou_eu: os candidatos aparecem desde o início; as pistas abrem uma a uma e o aluno arrisca uma vez só. Quem acerta com menos pistas ganha mais (com 5 pistas: 100%, 80%, 60%, 40%, 20%). Cada pista deve servir a um só candidato quando somada às anteriores, mas as primeiras devem servir também a outros candidatos (é isso que faz o aluno esperar). Distratores de alto nível: contemporâneos, do mesmo grupo ou com trajetória parecida. Enunciado curto, ex.: 'Quem sou eu?' ou 'Que revolta sou eu?'.",
+    ),
+  monte_resposta: z
+    .object({
+      espacos: z
+        .array(
+          z.object({
+            rotulo: z.string().describe("Função do espaço, até 40 caracteres: 'Fato', 'Causa', 'Consequência', 'Conclusão'..."),
+            trecho: z.string().describe("Trecho certo para este espaço, até 300 caracteres."),
+          }),
+        )
+        .describe("2 a 4 espaços, na ordem da resposta."),
+      distratores: z
+        .array(z.string())
+        .describe(
+          "2 a 5 trechos que parecem servir e não servem: verdadeiros mas fora da pergunta, causa invertida, anacronismo, nexo falso, generalização.",
+        ),
+    })
+    .optional()
+    .describe(
+      "monte_resposta: uma pergunta discursiva (no enunciado) que o aluno responde arrastando trechos para espaços com função definida, como numa resposta de prova. Cada trecho certo só pode servir no seu espaço (escreva a função de forma que não haja dúvida). Os trechos têm tamanho e estilo parecidos. Crédito parcial por espaço.",
+    ),
+  investigue: z
+    .object({
+      aceitas: z
+        .array(z.string())
+        .describe(
+          "1 a 10 respostas aceitas: a principal primeiro, depois variações (nome completo, nome curto, grafia antiga, sigla). O app ignora maiúsculas, acentos, pontuação e artigo inicial e tolera 1 ou 2 letras trocadas.",
+        ),
+    })
+    .optional()
+    .describe(
+      "investigue: questão de pesquisa, só para desafios com consulta (não cai na rodada final do público). O aluno pesquisa e DIGITA a resposta curta: quem pintou, quem escreveu, como se chama (monumento, praça, prédio, obra), onde fica (cidade, país), em que museu está. Mostre a obra ou o lugar em imagem_url ou o trecho no enunciado. Para exigir pesquisa de verdade, prefira perguntas de dois passos que a busca por imagem não resolve num clique (ex.: 'Em que museu está hoje o quadro que representa este momento?'). A resposta precisa ser única e curta (1 a 6 palavras). Use a dica para indicar o caminho da pesquisa.",
     ),
 });
 
@@ -1072,9 +1137,18 @@ export function registrarFerramentas(server: McpServer, origem: string) {
       const semTema = erroTema
         ? []
         : (comTema ?? []).filter((q) => !(q.tema as string | null)?.trim()).map((q) => q.id);
+      // Investigue pede pesquisa: num desafio sem consulta, vira questão de memória.
+      const dePesquisa = bloqueada
+        ? args.questoes.filter((id) =>
+            SO_COM_CONSULTA.includes((porId.get(id) as { tipo?: TipoQuestao } | undefined)?.tipo as TipoQuestao),
+          )
+        : [];
       if (!args.confirmar)
         return resultado({
           previa,
+          ...(dePesquisa.length && {
+            aviso_pesquisa: `${dePesquisa.length} questão(ões) Investigue pedem pesquisa, mas este desafio é sem consulta: o aluno vai ter de responder de memória. Sugira tirá-las ou criar o desafio com consulta.`,
+          }),
           ...(semTema.length && {
             sem_tema: semTema,
             aviso_tema: `${semTema.length} questão(ões) sem tema não recebem verificação de leitura. Escreva os temas com definir_temas antes de confirmar.`,

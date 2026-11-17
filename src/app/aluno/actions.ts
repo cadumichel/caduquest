@@ -15,6 +15,7 @@ import { fundoLiberado, FUNDOS } from "@/lib/visual-perfil";
 import {
   abrirDica,
   andarTabuleiro,
+  abrirPista,
   eliminarAlternativa,
   entrarNoJogo,
   sairDoJogo,
@@ -114,6 +115,12 @@ export async function eliminar(desafioId: string, questaoId: string): Promise<Re
 export async function andarNoTabuleiroDesafio(desafioId: string, questaoId: string, escolha: number) {
   const aluno = await exigirAluno();
   return andarTabuleiro(criarClienteAdmin(), aluno, String(desafioId), String(questaoId), Number(escolha));
+}
+
+/** Quem sou eu?: abre a próxima pista (o servidor grava quantas foram abertas). */
+export async function abrirPistaDesafio(desafioId: string, questaoId: string) {
+  const aluno = await exigirAluno();
+  return abrirPista(criarClienteAdmin(), aluno, String(desafioId), String(questaoId));
 }
 
 /** Ajuda da temporada: mostra a dica da questão atual. */

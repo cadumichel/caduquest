@@ -13,6 +13,7 @@ import type { Padroes } from "@/lib/padroes";
 import {
   NOME_DIFICULDADE,
   NOME_TIPO,
+  SO_COM_CONSULTA,
   TEMPO_MAX_S,
   TEMPO_MIN_S,
   type Conteudo,
@@ -336,6 +337,12 @@ export function MontarDesafio({
                 />
               </Campo>
               <EscolhaPesquisa bloqueada={saidaZera} onChange={setSaidaZera} />
+              {saidaZera && questoes.some((q) => escolhidas.includes(q.id) && SO_COM_CONSULTA.includes(q.tipo)) && (
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  Há questões Investigue, que pedem pesquisa, num desafio sem consulta: o aluno vai ter de responder de
+                  memória. Tire-as ou deixe o desafio com consulta.
+                </p>
+              )}
               <CamposRegras
                 valor={regras}
                 onChange={setRegras}

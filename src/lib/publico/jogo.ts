@@ -10,7 +10,8 @@ import {
   respostaParaCorrigir,
   type ProgressoTabuleiro,
 } from "@/lib/questoes/tabuleiro";
-import { gravarPassoTabuleiro } from "@/lib/tabuleiro-jogo";
+import { gravarPassoTabuleiro, gravarPista } from "@/lib/tabuleiro-jogo";
+import { pistasGravadas, vistaComPistas } from "@/lib/questoes/pistas";
 import { montarVista } from "@/lib/questoes/apresentacao";
 import { corrigir, tempoAcabou, tempoEsgotado } from "@/lib/questoes/correcao";
 import { permutacaoAleatoria } from "@/lib/questoes/embaralhar";
@@ -359,7 +360,8 @@ export async function estadoPartida(
         id: questao.id,
         enunciado: questao.enunciado,
         imagemUrl: urlImagem(questao.imagem_path),
-        vista: montarVista(conteudo, linha.permutacao),
+        // Quem sou eu?: só as pistas já abertas vão para a tela.
+        vista: vistaComPistas(montarVista(conteudo, linha.permutacao), pistasGravadas(linha.resposta)),
         tempoLimite: questao.tempo_limite_s,
         restanteMs: Math.max(0, questao.tempo_limite_s * 1000 - decorrido),
         relampago: Boolean(questao.relampago),
@@ -432,6 +434,32 @@ export async function andarTabuleiroPublico(
     return { erro: "O tempo desta questão acabou." };
   }
   return gravarPassoTabuleiro(db, "respostas_publicas", linha, comoConteudo(questao), escolha);
+}
+
+/** Quem sou eu?: abre a próxima pista da questão em andamento. */
+export async function abrirPistaPublica(
+  db: SupabaseClient,
+  jogador: JogadorSessao,
+  partidaId: string,
+  questaoId: string,
+): Promise<{ pistas: string[] } | { erro: string }> {
+  const partida = await partidaDoJogador(db, jogador.id, partidaId);
+  if (!partida || partida.concluida_em || partida.ordem[partida.indice_atual] !== questaoId) {
+    return { erro: "Esta questão já passou." };
+  }
+  const { data } = await db
+    .from("respostas_publicas")
+    .select("*")
+    .eq("partida_id", partida.id)
+    .eq("questao_id", questaoId)
+    .maybeSingle();
+  const linha = data as RespostaPublica | null;
+  if (!linha || linha.respondida_em) return { erro: "Esta questão já passou." };
+  const questao = await carregarQuestao(db, questaoId);
+  if (tempoEsgotado(new Date(linha.servida_em), new Date(), questao.tempo_limite_s)) {
+    return { erro: "O tempo desta questão acabou." };
+  }
+  return gravarPista(db, "respostas_publicas", linha, comoConteudo(questao));
 }
 
 /** Questão em andamento da partida, se ainda dá para usar ajuda nela. */

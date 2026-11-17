@@ -9,7 +9,8 @@ import {
   respostaParaCorrigir,
   type ProgressoTabuleiro,
 } from "@/lib/questoes/tabuleiro";
-import { gravarPassoTabuleiro } from "@/lib/tabuleiro-jogo";
+import { gravarPassoTabuleiro, gravarPista } from "@/lib/tabuleiro-jogo";
+import { pistasGravadas, vistaComPistas } from "@/lib/questoes/pistas";
 import {
   calcularPontos,
   corrigir,
@@ -601,7 +602,8 @@ export async function estadoAtual(
         id: questao.id,
         enunciado: questao.enunciado,
         imagemUrl: urlImagem(questao.imagem_path),
-        vista: montarVista(conteudo, linha.permutacao),
+        // Quem sou eu?: só as pistas já abertas vão para a tela.
+        vista: vistaComPistas(montarVista(conteudo, linha.permutacao), pistasGravadas(linha.resposta)),
         tempoLimite,
         relampago: Boolean(questao.relampago),
         restanteMs: Math.max(0, tempoLimite * 1000 - decorrido),
@@ -756,6 +758,18 @@ export async function andarTabuleiro(
   const atual = await questaoEmAndamento(db, aluno, desafioId, questaoId);
   if ("erro" in atual) return { erro: atual.erro ?? "Esta questão já passou." };
   return gravarPassoTabuleiro(db, "respostas", atual.linha, comoConteudo(atual.questao), escolha);
+}
+
+/** Quem sou eu?: abre a próxima pista da questão atual (o servidor grava quantas foram abertas). */
+export async function abrirPista(
+  db: SupabaseClient,
+  aluno: AlunoSessao,
+  desafioId: string,
+  questaoId: string,
+): Promise<{ pistas: string[] } | { erro: string }> {
+  const atual = await questaoEmAndamento(db, aluno, desafioId, questaoId);
+  if ("erro" in atual) return { erro: atual.erro ?? "Esta questão já passou." };
+  return gravarPista(db, "respostas", atual.linha, comoConteudo(atual.questao));
 }
 
 /** Mostra a dica da questão atual. Gasta 1 da cota só na primeira vez em cada questão. */

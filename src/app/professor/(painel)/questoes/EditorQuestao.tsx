@@ -1286,6 +1286,218 @@ function EditorConteudo({
         </div>
       );
     }
+    case "estimativa": {
+      const c = conteudo.conteudo;
+      const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "estimativa", conteudo: { ...c, ...novo } });
+      const numero = (v: string) => (v === "" || v === "-" ? 0 : Number(v));
+      const campo = (rotulo: string, chave: "valor" | "minimo" | "maximo" | "passo" | "acerto" | "margem") => (
+        <Campo rotulo={rotulo}>
+          <Entrada
+            type="number"
+            step="any"
+            value={c[chave]}
+            disabled={bloqueado}
+            onChange={(e) => mudar({ [chave]: numero(e.target.value) })}
+          />
+        </Campo>
+      );
+      return (
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={c.ano} disabled={bloqueado} onChange={(e) => mudar({ ano: e.target.checked })} />
+            A resposta é um ano (negativo = a.C.)
+          </label>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {campo("Resposta certa", "valor")}
+            {campo("Régua começa em", "minimo")}
+            {campo("Termina em", "maximo")}
+            {campo("Anda de", "passo")}
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {campo("Nota cheia até (±)", "acerto")}
+            {campo("Zero a partir de (±)", "margem")}
+            {!c.ano && (
+              <Campo rotulo="Unidade">
+                <Entrada
+                  value={c.unidade}
+                  placeholder="%, milhões, km…"
+                  disabled={bloqueado}
+                  onChange={(e) => mudar({ unidade: e.target.value })}
+                />
+              </Campo>
+            )}
+          </div>
+          <p className="text-xs text-slate-500">
+            Entre as duas distâncias a nota cai em linha reta. Deixe a resposta longe das pontas da régua e fora do
+            meio exato, para a posição não entregar.
+          </p>
+        </div>
+      );
+    }
+    case "quem_sou_eu": {
+      const c = conteudo.conteudo;
+      const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "quem_sou_eu", conteudo: { ...c, ...novo } });
+      return (
+        <div className="space-y-4">
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Pistas (3 a 6), da mais difícil para a mais fácil. A primeira aparece logo de cara.
+            </legend>
+            <Linhas
+              itens={c.pistas}
+              min={3}
+              max={6}
+              novo={() => ""}
+              bloqueado={bloqueado}
+              onChange={(pistas) => mudar({ pistas })}
+              render={(p, i, atualizar) => (
+                <>
+                  <span className="w-6 text-sm font-bold text-marca-700">{i + 1}</span>
+                  <input
+                    className={classeInput}
+                    placeholder={i === 0 ? "Ex.: Estudei mineralogia na Europa…" : "Pista"}
+                    value={p}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar(e.target.value)}
+                  />
+                </>
+              )}
+            />
+          </fieldset>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">Candidatos (4 a 8). Marque o certo.</legend>
+            <Linhas
+              itens={c.candidatos}
+              min={4}
+              max={8}
+              novo={() => ""}
+              bloqueado={bloqueado}
+              onChange={(candidatos) => mudar({ candidatos, correta: Math.min(c.correta, candidatos.length - 1) })}
+              render={(cand, i, atualizar) => (
+                <>
+                  <input
+                    type="radio"
+                    name="correta"
+                    checked={c.correta === i}
+                    disabled={bloqueado}
+                    onChange={() => mudar({ correta: i })}
+                  />
+                  <input
+                    className={classeInput}
+                    value={cand}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar(e.target.value)}
+                  />
+                </>
+              )}
+            />
+          </fieldset>
+        </div>
+      );
+    }
+    case "monte_resposta": {
+      const c = conteudo.conteudo;
+      const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "monte_resposta", conteudo: { ...c, ...novo } });
+      return (
+        <div className="space-y-4">
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Espaços da resposta (2 a 4), na ordem, com o trecho certo de cada um
+            </legend>
+            <Linhas
+              itens={c.espacos}
+              min={2}
+              max={4}
+              novo={() => ({ rotulo: "", trecho: "" })}
+              bloqueado={bloqueado}
+              onChange={(espacos) => mudar({ espacos })}
+              render={(e, _i, atualizar) => (
+                <div className="flex flex-1 flex-col gap-1 sm:flex-row">
+                  <input
+                    className={`${classeInput} sm:w-40`}
+                    placeholder="Função (Fato, Causa…)"
+                    value={e.rotulo}
+                    disabled={bloqueado}
+                    onChange={(ev) => atualizar({ ...e, rotulo: ev.target.value })}
+                  />
+                  <textarea
+                    className={classeInput}
+                    rows={2}
+                    placeholder="Trecho certo"
+                    value={e.trecho}
+                    disabled={bloqueado}
+                    onChange={(ev) => atualizar({ ...e, trecho: ev.target.value })}
+                  />
+                </div>
+              )}
+            />
+          </fieldset>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Trechos que parecem servir e não servem (2 a 5)
+            </legend>
+            <Linhas
+              itens={c.distratores}
+              min={2}
+              max={5}
+              novo={() => ""}
+              bloqueado={bloqueado}
+              onChange={(distratores) => mudar({ distratores })}
+              render={(d, _i, atualizar) => (
+                <textarea
+                  className={classeInput}
+                  rows={2}
+                  value={d}
+                  disabled={bloqueado}
+                  onChange={(e) => atualizar(e.target.value)}
+                />
+              )}
+            />
+          </fieldset>
+          <p className="text-xs text-slate-500">
+            A pergunta vai no enunciado. Escreva a função de cada espaço de forma que cada trecho certo só sirva no seu.
+          </p>
+        </div>
+      );
+    }
+    case "investigue": {
+      const c = conteudo.conteudo;
+      return (
+        <div className="space-y-3">
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Questão de pesquisa: use só em desafio com consulta. Ela não cai na rodada final do desafio público.
+          </p>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Respostas aceitas: a principal primeiro, depois variações (nome completo, grafia antiga, sigla)
+            </legend>
+            <Linhas
+              itens={c.aceitas}
+              min={1}
+              max={10}
+              novo={() => ""}
+              bloqueado={bloqueado}
+              onChange={(aceitas) => onChange({ tipo: "investigue", conteudo: { aceitas } })}
+              render={(a, i, atualizar) => (
+                <>
+                  <span className="w-6 text-xs font-bold text-marca-700">{i === 0 ? "★" : ""}</span>
+                  <input
+                    className={classeInput}
+                    value={a}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar(e.target.value)}
+                  />
+                </>
+              )}
+            />
+          </fieldset>
+          <p className="text-xs text-slate-500">
+            O app ignora maiúsculas, acentos, pontuação e artigo no começo, e tolera 1 letra trocada em palavras
+            médias e 2 nas longas.
+          </p>
+        </div>
+      );
+    }
     case "mapa":
       return <EditorMapa conteudo={conteudo.conteudo} onChange={onChange} bloqueado={bloqueado} />;
     case "tabuleiro": {

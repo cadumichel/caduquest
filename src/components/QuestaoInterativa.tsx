@@ -24,25 +24,9 @@ import { mapaFixas, type AjudaVista } from "@/lib/questoes/ajudas";
 import type { Resposta, Vista } from "@/lib/questoes/tipos";
 import { vidasDoTabuleiro, type ProgressoTabuleiro } from "@/lib/questoes/tabuleiro";
 import { CaminhoTabuleiro, type EstadoCasa } from "./Tabuleiro";
+import { Estimativa, Investigue, MonteResposta, QuemSouEu, type ResultadoPista } from "./QuestoesNovas";
 
-const LETRAS = "ABCDEF";
-/**
- * Cores das caixas de ordenar e dos pares ligados: bolinha forte e fundo claro
- * (texto escuro continua legível). Sem âmbar, que marca o item revelado pela
- * eliminação. A cor acompanha a frase ou o par do aluno, nunca a resposta certa.
- */
-const CORES = [
-  { ponto: "bg-sky-500", borda: "border-sky-300", fundo: "bg-sky-100" },
-  { ponto: "bg-orange-500", borda: "border-orange-300", fundo: "bg-orange-100" },
-  { ponto: "bg-emerald-500", borda: "border-emerald-300", fundo: "bg-emerald-100" },
-  { ponto: "bg-pink-500", borda: "border-pink-300", fundo: "bg-pink-100" },
-  { ponto: "bg-lime-600", borda: "border-lime-300", fundo: "bg-lime-100" },
-  { ponto: "bg-violet-500", borda: "border-violet-300", fundo: "bg-violet-100" },
-];
-const cor = (i: number) => {
-  const c = CORES[i % CORES.length];
-  return { ...c, caixa: `${c.borda} ${c.fundo}` };
-};
+import { Cadeado, cor, LETRAS } from "./questao-comum";
 
 type Props<V extends Vista> = {
   vista: V;
@@ -52,15 +36,6 @@ type Props<V extends Vista> = {
   /** Opções riscadas e itens travados pelas eliminações. */
   ajuda?: AjudaVista;
 };
-
-/** Selo dos itens que a eliminação travou no lugar certo. */
-function Cadeado() {
-  return (
-    <span aria-label="Revelado pela eliminação" title="Revelado pela eliminação" className="shrink-0 text-sm">
-      🔒
-    </span>
-  );
-}
 
 /** Área de resposta de uma questão, igual no desafio e na prévia do professor. */
 export function QuestaoInterativa({
@@ -72,6 +47,7 @@ export function QuestaoInterativa({
   certas,
   progressoTabuleiro,
   andarTabuleiro,
+  abrirPista,
 }: {
   vista: Vista;
   resposta: Resposta;
@@ -84,6 +60,8 @@ export function QuestaoInterativa({
   progressoTabuleiro?: ProgressoTabuleiro;
   /** Tabuleiro no desafio: o servidor confere cada casa e devolve a cor e as vidas. */
   andarTabuleiro?: (escolha: number) => Promise<ResultadoPasso>;
+  /** Quem sou eu? no desafio: o servidor abre a próxima pista e grava quantas foram abertas. */
+  abrirPista?: () => Promise<ResultadoPista>;
 }) {
   if (vista.tipo !== resposta.tipo) return null;
   switch (vista.tipo) {
@@ -267,6 +245,39 @@ export function QuestaoInterativa({
           andar={andarTabuleiro}
         />
       );
+    case "estimativa":
+      return (
+        <Estimativa
+          vista={vista}
+          resposta={resposta as never}
+          onChange={onChange}
+          desabilitada={desabilitada}
+          ajuda={ajuda}
+        />
+      );
+    case "quem_sou_eu":
+      return (
+        <QuemSouEu
+          vista={vista}
+          resposta={resposta as never}
+          onChange={onChange}
+          desabilitada={desabilitada}
+          ajuda={ajuda}
+          abrirPista={abrirPista}
+        />
+      );
+    case "monte_resposta":
+      return (
+        <MonteResposta
+          vista={vista}
+          resposta={resposta as never}
+          onChange={onChange}
+          desabilitada={desabilitada}
+          ajuda={ajuda}
+        />
+      );
+    case "investigue":
+      return <Investigue vista={vista} resposta={resposta as never} onChange={onChange} desabilitada={desabilitada} />;
   }
 }
 

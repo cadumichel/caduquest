@@ -1,4 +1,5 @@
 import { montarVista } from "./apresentacao";
+import { candidatasEstimativa, janelaEstimativa } from "./estimativa";
 import { iniciosPerguntas, ordemDaCasa, type Conteudo, type Resposta, type Vista } from "./tipos";
 
 /** Cota de cada aluno por temporada. */
@@ -8,7 +9,7 @@ export const DICAS_POR_TEMPORADA = 3;
 export const MINIMO_ALTERNATIVAS = 2;
 
 /** Tipos de uma resposta só, em que a eliminação tira uma alternativa errada. */
-const ESCOLHA = ["multipla_escolha", "interpretacao", "quem_disse", "intruso"] as const;
+const ESCOLHA = ["multipla_escolha", "interpretacao", "quem_disse", "intruso", "quem_sou_eu"] as const;
 
 /**
  * Cada eliminação gravada é um número, no espaço "original" do conteúdo:
@@ -19,7 +20,11 @@ const ESCOLHA = ["multipla_escolha", "interpretacao", "quem_disse", "intruso"] a
  *   a perspectiva do relato k, a palavra da lacuna k);
  * - V ou F, pares, classificar, linha do tempo, ordenar, régua, mapa: item travado no lugar certo;
  * - tabuleiro: casa travada com a opção certa;
- * - encontrar o erro: trecho certo, marcado como sem erro.
+ * - encontrar o erro: trecho certo, marcado como sem erro;
+ * - quem sou eu: candidato errado que saiu;
+ * - monte a resposta: como lacunas (trecho extra que saiu ou espaço travado);
+ * - estimativa: início do trecho da régua que sobrou (a régua cai pela metade a cada uma);
+ * - investigue: não tem eliminação (não há opções).
  */
 export function candidatasEliminacao(c: Conteudo, eliminadas: number[]): number[] {
   const ja = new Set(eliminadas);
@@ -39,13 +44,16 @@ export function candidatasEliminacao(c: Conteudo, eliminadas: number[]): number[
     case "multipla_escolha":
     case "interpretacao":
     case "quem_disse":
-    case "intruso": {
+    case "intruso":
+    case "quem_sou_eu": {
       const total =
         c.tipo === "quem_disse"
           ? c.conteudo.autores.length
           : c.tipo === "intruso"
             ? c.conteudo.itens.length
-            : c.conteudo.alternativas.length;
+            : c.tipo === "quem_sou_eu"
+              ? c.conteudo.candidatos.length
+              : c.conteudo.alternativas.length;
       const certa = c.tipo === "intruso" ? c.conteudo.intruso : c.conteudo.correta;
       if (total - ja.size <= MINIMO_ALTERNATIVAS) return [];
       return faixa(0, total).filter((i) => i !== certa && !ja.has(i));
@@ -86,6 +94,12 @@ export function candidatasEliminacao(c: Conteudo, eliminadas: number[]): number[
       const certos = faixa(0, trechos.length).filter((i) => !trechos[i].errado && !ja.has(i));
       return certos.length >= MINIMO_ALTERNATIVAS ? certos : [];
     }
+    case "monte_resposta":
+      return extrasDepoisTravar(c.conteudo.espacos.length, c.conteudo.distratores.length);
+    case "estimativa":
+      return candidatasEstimativa(c.conteudo, eliminadas);
+    case "investigue":
+      return [];
   }
 }
 
@@ -101,6 +115,7 @@ export function eliminadasNaVista(permutacao: number[], eliminadas: number[]): n
  *   Na fonte primária, a posição soma as alternativas das perguntas anteriores.
  * - fixas: pares [item, valor] travados com a resposta certa. Item e valor seguem a resposta
  *   de cada tipo (ver aplicarAjuda); no V ou F o valor é 1 (V) ou 0 (F); no encontrar o erro, 0 (sem erro).
+ *   Na estimativa, um par só: [início, fim] do trecho da régua que sobrou.
  */
 export type AjudaVista = { removidas: number[]; fixas: [number, number][] };
 
@@ -117,6 +132,7 @@ export function ajudaNaVista(c: Conteudo, permutacao: number[], eliminadas: numb
     case "interpretacao":
     case "quem_disse":
     case "intruso":
+    case "quem_sou_eu":
       return { removidas: eliminadasNaVista(permutacao, eliminadas), fixas: [] };
     case "fonte_primaria": {
       const inicios = iniciosPerguntas(c.conteudo);
@@ -128,13 +144,16 @@ export function ajudaNaVista(c: Conteudo, permutacao: number[], eliminadas: numb
     }
     case "causa_consequencia":
     case "ponto_de_vista":
-    case "completar_lacunas": {
+    case "completar_lacunas":
+    case "monte_resposta": {
       const n =
         c.tipo === "causa_consequencia"
           ? c.conteudo.relacoes.length
           : c.tipo === "ponto_de_vista"
             ? c.conteudo.relatos.length
-            : c.conteudo.lacunas.length;
+            : c.tipo === "monte_resposta"
+              ? c.conteudo.espacos.length
+              : c.conteudo.lacunas.length;
       return {
         removidas: eliminadasNaVista(
           permutacao,
@@ -171,6 +190,10 @@ export function ajudaNaVista(c: Conteudo, permutacao: number[], eliminadas: numb
     case "tabuleiro":
       // [casa, posição da opção certa na tela]
       return { removidas: [], fixas: eliminadas.map((k) => [k, ordemDaCasa(permutacao, k).indexOf(0)]) };
+    case "estimativa":
+      return { removidas: [], fixas: [janelaEstimativa(c.conteudo, eliminadas)] };
+    case "investigue":
+      return AJUDA_VAZIA;
   }
 }
 
@@ -205,6 +228,7 @@ export function aplicarAjuda(vista: Vista, r: Resposta, ajuda: AjudaVista): Resp
     case "interpretacao":
     case "quem_disse":
     case "intruso":
+    case "quem_sou_eu":
       return r.escolha !== null && removida.has(r.escolha) ? { ...r, escolha: null } : r;
     case "fonte_primaria": {
       if (vista.tipo !== "fonte_primaria") return r;
@@ -223,7 +247,16 @@ export function aplicarAjuda(vista: Vista, r: Resposta, ajuda: AjudaVista): Resp
     case "ponto_de_vista":
       return { ...r, ligacoes: ligar(r.ligacoes) };
     case "completar_lacunas":
+    case "monte_resposta":
       return { ...r, preenchidas: ligar(r.preenchidas) };
+    case "estimativa": {
+      // O marcador fica dentro do trecho que sobrou.
+      const janela = fixas[0];
+      if (!janela || r.valor === null) return r;
+      return { ...r, valor: Math.max(janela[0], Math.min(janela[1], r.valor)) };
+    }
+    case "investigue":
+      return r;
     case "mapa":
       return { ...r, pinos: ligar(r.pinos) };
     case "classificar":
@@ -256,7 +289,13 @@ export function rotuloEliminacao(tipo: Conteudo["tipo"]): string {
   if ((ESCOLHA as readonly string[]).includes(tipo) || tipo === "fonte_primaria") return "Eliminar uma errada";
   if (tipo === "encontrar_erro") return "Mostrar um trecho certo";
   if (tipo === "tabuleiro") return "Revelar uma casa";
-  if (tipo === "causa_consequencia" || tipo === "ponto_de_vista" || tipo === "completar_lacunas") {
+  if (tipo === "estimativa") return "Encolher a régua";
+  if (
+    tipo === "causa_consequencia" ||
+    tipo === "ponto_de_vista" ||
+    tipo === "completar_lacunas" ||
+    tipo === "monte_resposta"
+  ) {
     return "Eliminar ou revelar";
   }
   return "Revelar um item";
