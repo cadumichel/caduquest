@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
 import { medalhasDaTurmaDoAluno, temporadaAtualDoAluno } from "@/lib/aluno-dados";
 import { exigirAluno } from "@/lib/aluno-sessao";
@@ -157,6 +158,18 @@ export default async function Perfil() {
       <MapaHabilidades habilidades={progresso.habilidades} />
 
       <Historico historico={progresso.historico} />
+
+      <Link
+        href="/aluno/perfil/historico"
+        className="flex items-center gap-3 rounded-3xl border border-marca-100 bg-marca-50 p-4 shadow-sm transition hover:bg-marca-100"
+      >
+        <span className="text-3xl">🗂️</span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-extrabold text-marca-900">Meu histórico</span>
+          <span className="block text-sm text-slate-600">Todos os desafios que você fez, com pontos e acertos.</span>
+        </span>
+        <span className="text-xl font-bold text-marca-700">›</span>
+      </Link>
 
       <Conquistas conquistas={conquistas} />
 
