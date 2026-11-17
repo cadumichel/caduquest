@@ -27,6 +27,8 @@ import { CaminhoTabuleiro, type EstadoCasa } from "./Tabuleiro";
 import {
   ConceitoSecreto,
   Conversa,
+  DetalheImagem,
+  EnquantoIsso,
   Estimativa,
   Investigue,
   MonteResposta,
@@ -323,6 +325,26 @@ export function QuestaoInterativa({
           segredo={segredo}
           progresso={progressoPassos}
           darPasso={darPasso}
+        />
+      );
+    case "detalhe_imagem":
+      return (
+        <DetalheImagem
+          vista={vista}
+          resposta={resposta as never}
+          onChange={onChange}
+          desabilitada={desabilitada}
+          ajuda={ajuda}
+        />
+      );
+    case "enquanto_isso":
+      return (
+        <EnquantoIsso
+          vista={vista}
+          resposta={resposta as never}
+          onChange={onChange}
+          desabilitada={desabilitada}
+          ajuda={ajuda}
         />
       );
   }

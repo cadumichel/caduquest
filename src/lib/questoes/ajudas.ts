@@ -1,4 +1,5 @@
 import { montarVista } from "./apresentacao";
+import { candidatasDetalhe, celulaDoEvento, quartoDoPonto } from "./detalhe";
 import { candidatasEstimativa, janelaEstimativa } from "./estimativa";
 import { ALFABETO, candidatasConceito, letraBase, OPCOES_CONVERSA, ordemDoTurno } from "./passos";
 import { iniciosPerguntas, ordemDaCasa, type Conteudo, type Resposta, type Vista } from "./tipos";
@@ -27,7 +28,9 @@ const ESCOLHA = ["multipla_escolha", "interpretacao", "quem_disse", "intruso", "
  * - estimativa: início do trecho da régua que sobrou (a régua cai pela metade a cada uma);
  * - investigue: não tem eliminação (não há opções);
  * - conversa: resposta errada que saiu (3k + j: opção j do turno k; uma por turno, só no turno atual);
- * - conceito secreto: letra revelada (0 = A ... 25 = Z).
+ * - conceito secreto: letra revelada (0 = A ... 25 = Z);
+ * - detalhe na imagem: quarto da imagem escondido (0 a 3; nunca o da área certa);
+ * - enquanto isso: evento travado na célula certa.
  */
 export function candidatasEliminacao(c: Conteudo, eliminadas: number[]): number[] {
   const ja = new Set(eliminadas);
@@ -111,6 +114,10 @@ export function candidatasEliminacao(c: Conteudo, eliminadas: number[]): number[
     }
     case "conceito_secreto":
       return candidatasConceito(c.conteudo, eliminadas);
+    case "detalhe_imagem":
+      return candidatasDetalhe(c.conteudo, eliminadas);
+    case "enquanto_isso":
+      return travaveis(c.conteudo.eventos.length);
   }
 }
 
@@ -225,6 +232,15 @@ export function ajudaNaVista(c: Conteudo, permutacao: number[], eliminadas: numb
         ),
       };
     }
+    case "detalhe_imagem":
+      // Quartos escondidos (não dependem da permutação).
+      return { removidas: [...eliminadas], fixas: [] };
+    case "enquanto_isso":
+      // [evento na tela, célula certa]
+      return {
+        removidas: [],
+        fixas: eliminadas.map((i) => [tela(i), celulaDoEvento(c.conteudo, c.conteudo.eventos[i])]),
+      };
   }
 }
 
@@ -298,6 +314,10 @@ export function aplicarAjuda(vista: Vista, r: Resposta, ajuda: AjudaVista): Resp
     }
     case "mapa":
       return { ...r, pinos: ligar(r.pinos) };
+    case "detalhe_imagem":
+      return r.ponto && removida.has(quartoDoPonto(r.ponto)) ? { ...r, ponto: null } : r;
+    case "enquanto_isso":
+      return { ...r, celulas: marcar(r.celulas, (v) => v) };
     case "classificar":
       return { ...r, grupos: marcar(r.grupos, (v) => v) };
     case "linha_do_tempo_datas":
@@ -331,6 +351,7 @@ export function rotuloEliminacao(tipo: Conteudo["tipo"]): string {
   if (tipo === "estimativa") return "Encolher a régua";
   if (tipo === "conversa") return "Eliminar uma errada";
   if (tipo === "conceito_secreto") return "Revelar uma letra";
+  if (tipo === "detalhe_imagem") return "Esconder parte da imagem";
   if (
     tipo === "causa_consequencia" ||
     tipo === "ponto_de_vista" ||

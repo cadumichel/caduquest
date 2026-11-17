@@ -633,6 +633,38 @@ const schemaQuestao = z.object({
     .describe(
       "conceito_secreto: o aluno lê a definição e descobre o conceito chutando letras num teclado na tela (como a forca). 6 letras erradas encerram. Descobriu: 100% menos 15% por letra errada; não descobriu: zero. Acentos não contam (A vale Á, Ã...). Prefira conceitos-chave do capítulo, não nomes próprios. Use a dica para uma segunda definição ou um exemplo.",
     ),
+  detalhe_imagem: z
+    .object({
+      x: z.number().optional().describe("Centro da área certa, em % da largura (0 a 100), só se souber com segurança."),
+      y: z.number().optional().describe("Centro da área certa, em % da altura (0 a 100), só se souber com segurança."),
+      raio: z.number().optional().describe("Raio da área certa em % da largura (2 a 30; padrão 10)."),
+    })
+    .optional()
+    .describe(
+      "detalhe_imagem: exige imagem_url (pintura, charge, foto ou gravura) e o aluno toca no ponto da imagem que responde ao enunciado (ex.: 'Toque no elemento que mostra que a cena é uma propaganda do governo'). Pergunte por um detalhe que exija interpretação, não por algo óbvio. Quase sempre omita x e y: a questão entra como rascunho e o professor toca na imagem, no app, para marcar a área certa. Avise o professor disso. Na explicação, descreva o detalhe (onde fica e o que significa).",
+    ),
+  enquanto_isso: z
+    .object({
+      linhas: z
+        .array(z.string())
+        .describe("Exatamente 2 linhas do tempo paralelas, até 40 caracteres (ex.: ['Brasil', 'Europa'])."),
+      periodos: z
+        .array(z.string())
+        .describe("2 a 5 períodos, na ordem, até 40 caracteres (ex.: ['1750–1800', '1800–1850', '1850–1900'])."),
+      eventos: z
+        .array(
+          z.object({
+            texto: z.string().describe("O evento, sem a data, até 150 caracteres."),
+            linha: z.number().int().describe("0 = primeira linha, 1 = segunda."),
+            periodo: z.number().int().describe("Índice do período, a partir de 0."),
+          }),
+        )
+        .describe("4 a 10 eventos, nas duas linhas e espalhados pelos períodos."),
+    })
+    .optional()
+    .describe(
+      "enquanto_isso: grade com 2 linhas do tempo paralelas (ex.: Brasil e Europa) e 2 a 5 períodos; o aluno arrasta ou toca cada evento até a célula certa. Por evento, a linha certa vale meio ponto e o período certo, a outra metade. Trabalha simultaneidade: escolha eventos que se relacionam entre as linhas (ex.: Revolução do Porto e Independência do Brasil) e evite eventos que o nome entrega a linha.",
+    ),
 });
 
 function conteudoBruto(q: z.infer<typeof schemaQuestao>) {
@@ -654,6 +686,14 @@ function conteudoBruto(q: z.infer<typeof schemaQuestao>) {
             ? { nome: m.nome, x: 10 + i * 15, y: 92 } // em fila no rodapé, esperando o professor
             : m,
         ),
+      };
+    case "detalhe_imagem":
+      // A imagem e a marca "posicionar" entram depois da validação.
+      return {
+        imagem: "-",
+        x: q.detalhe_imagem?.x ?? 50,
+        y: q.detalhe_imagem?.y ?? 50,
+        raio: q.detalhe_imagem?.raio ?? 10,
       };
     default:
       // Tipos novos: o campo com o nome do tipo já vem no formato gravado.
@@ -908,7 +948,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         "Antes de gravar, mostre as questões ao professor e grave só depois que ele aprovar.",
         "Toda questão leva uma dica (campo dica) e um tema curto (campo tema), escritos junto com ela.",
         `Questões relâmpago (relampago=true): quando o professor pedir relâmpago, escreva perguntas diretas, sem texto motivador, e chame checar_relampago antes de mostrá-las: mostre o tempo sugerido pelo app (${RELAMPAGO_MIN_S} a ${RELAMPAGO_MAX_S} s) ao lado de cada uma para o professor ajustar, e grave com o tempo que ele aprovar (ou omita tempo_limite_s para usar o sugerido).`,
-        `Desafio público (era_publica): questões abertas a qualquer pessoa, de todas as idades, alunos ou não. Cada partida sorteia ${QUESTOES_POR_PARTIDA} questões da era; as ${QUESTOES_FINAIS} últimas são a rodada final, sem consulta, e qualquer questão pode cair nela. Escreva questões contextuais e conceituais: a resposta nunca é um nome, uma data ou um número decorado, e sim a interpretação de um contexto, de uma fonte ou de um conceito, que alguém sem a apostila consiga raciocinar. Linguagem acessível, sem citar capítulos ou apostilas. Varie os formatos do lote (todos os tipos valem, menos mapa sem posições). Use listar_desafios_publicos para ver quantas questões cada era já tem (o ideal é 30 por era).`,
+        `Desafio público (era_publica): questões abertas a qualquer pessoa, de todas as idades, alunos ou não. Cada partida sorteia ${QUESTOES_POR_PARTIDA} questões da era; as ${QUESTOES_FINAIS} últimas são a rodada final, sem consulta, e qualquer questão pode cair nela. Escreva questões contextuais e conceituais: a resposta nunca é um nome, uma data ou um número decorado, e sim a interpretação de um contexto, de uma fonte ou de um conceito, que alguém sem a apostila consiga raciocinar. Linguagem acessível, sem citar capítulos ou apostilas. Varie os formatos do lote (todos os tipos valem, menos mapa ou detalhe na imagem sem posições). Use listar_desafios_publicos para ver quantas questões cada era já tem (o ideal é 30 por era).`,
         "Sempre envie junto, em curiosidades, 2 a 4 curiosidades históricas curtas e verdadeiras sobre os capítulos do lote, sem o professor precisar pedir: elas viram a Curiosidade do dia na tela dos alunos.",
       ].join(" "),
       inputSchema: z.object({
@@ -962,6 +1002,9 @@ export function registrarFerramentas(server: McpServer, origem: string) {
             ? "Fonte primária sem documento: envie o trecho em documento ou a imagem em imagem_url."
             : null) ??
           (q.tipo === "mapa" && !imagem ? "Mapa sem imagem: envie o mapa em imagem_url." : null) ??
+          (q.tipo === "detalhe_imagem" && !imagem
+            ? "Detalhe na imagem sem imagem: envie a imagem em imagem_url."
+            : null) ??
           (q.tipo === "tabuleiro" && !imagem && !imagemDoPersonagem(q.tabuleiro?.personagem ?? "")
             ? `O app não tem desenho de ${q.tabuleiro?.personagem}: envie um retrato dele em imagem_url (pintura ou foto do rosto, da Wikimedia Commons).`
             : null);
@@ -973,8 +1016,9 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         let dados = conteudo.data;
         // No mapa, a imagem fica dentro do conteúdo, embaixo dos pinos.
         const posicionar =
-          q.tipo === "mapa" && (q.mapa?.marcadores ?? []).some((m) => m.x === undefined || m.y === undefined);
-        if (q.tipo === "mapa")
+          (q.tipo === "mapa" && (q.mapa?.marcadores ?? []).some((m) => m.x === undefined || m.y === undefined)) ||
+          (q.tipo === "detalhe_imagem" && (q.detalhe_imagem?.x === undefined || q.detalhe_imagem?.y === undefined));
+        if (q.tipo === "mapa" || q.tipo === "detalhe_imagem")
           dados = { ...dados, imagem: caminhoImagem ?? "", ...(posicionar && { posicionar: true }) };
         if (posicionar) pinosPorPosicionar.push(i + 1);
         // No tabuleiro, a imagem é o retrato do peão.
@@ -992,7 +1036,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           dica: q.dica.trim() || null,
           tema: q.tema.trim(),
           fonte: q.fonte?.trim() || null,
-          imagem_path: q.tipo === "mapa" || q.tipo === "tabuleiro" || q.tipo === "conversa" ? null : caminhoImagem,
+          imagem_path: ["mapa", "tabuleiro", "conversa", "detalhe_imagem"].includes(q.tipo) ? null : caminhoImagem,
           tempo_limite_s: relampago?.tempo ?? q.tempo_limite_s ?? TEMPO_PADRAO[q.tipo as TipoQuestao],
           ...(relampago && { relampago: true }),
           conteudo: dados,
@@ -1031,7 +1075,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           .map((l) => ({ enunciado: l.enunciado.slice(0, 80), tempo_s: l.tempo_limite_s })),
         recusadas,
         ...(pinosPorPosicionar.length && {
-          aviso: `Questões de mapa nas posições ${pinosPorPosicionar.join(", ")} ficaram em rascunho: o professor precisa abrir cada uma no app e tocar no mapa para pôr os pinos no lugar.`,
+          aviso: `Questões de mapa ou de detalhe na imagem nas posições ${pinosPorPosicionar.join(", ")} ficaram em rascunho: o professor precisa abrir cada uma no app e tocar na imagem para pôr os pinos ou a área certa no lugar.`,
         }),
         revisar_em: capitulos.map(
           (c) =>

@@ -14,6 +14,7 @@ import { useId, useRef, useState, type ReactNode } from "react";
 import { mapaFixas, type AjudaVista } from "@/lib/questoes/ajudas";
 import { formatarEstimativa, indiceDoValor, totalPassos, valorDoIndice } from "@/lib/questoes/estimativa";
 import { fatorPistas } from "@/lib/questoes/pistas";
+import { quartoDoPonto } from "@/lib/questoes/detalhe";
 import type { Segredo } from "@/lib/questoes/apresentacao";
 import {
   letraBase,
@@ -875,6 +876,196 @@ export function ConceitoSecreto({
           Confirme a resposta para seguir.
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * Detalhe na imagem: o aluno toca no ponto da imagem que responde ao enunciado.
+ * A imagem é um botão (o toque nela nunca conta como clique fora). A eliminação
+ * esconde quartos da imagem que não têm a área certa.
+ */
+export function DetalheImagem({
+  vista,
+  resposta,
+  onChange,
+  desabilitada,
+  ajuda,
+}: Props<Extract<Vista, { tipo: "detalhe_imagem" }>>) {
+  const escondidos = new Set(ajuda?.removidas ?? []);
+  const tocar = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (desabilitada) return;
+    const caixa = e.currentTarget.getBoundingClientRect();
+    const x = Math.round(((e.clientX - caixa.left) / caixa.width) * 1000) / 10;
+    const y = Math.round(((e.clientY - caixa.top) / caixa.height) * 1000) / 10;
+    const ponto = { x: Math.max(0, Math.min(100, x)), y: Math.max(0, Math.min(100, y)) };
+    if (escondidos.has(quartoDoPonto(ponto))) return;
+    onChange({ tipo: "detalhe_imagem", ponto });
+  };
+  return (
+    <div className="space-y-2">
+      <p className="text-sm text-slate-500">
+        Toque no ponto da imagem que responde à pergunta. Pode tocar de novo para mudar.
+      </p>
+      <button
+        type="button"
+        disabled={desabilitada}
+        onClick={tocar}
+        aria-label="Imagem: toque no ponto da resposta"
+        className="relative mx-auto block w-fit cursor-crosshair overflow-hidden rounded-xl border border-slate-200 disabled:cursor-default"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={vista.imagem} alt="" draggable={false} className="block max-h-[65vh] w-auto select-none" />
+        {[0, 1, 2, 3].map((q) =>
+          escondidos.has(q) ? (
+            <span
+              key={q}
+              style={{ left: q % 2 ? "50%" : 0, top: q < 2 ? 0 : "50%" }}
+              className="absolute flex h-1/2 w-1/2 items-center justify-center bg-slate-900/80 text-xs font-semibold text-white"
+            >
+              Não está aqui
+            </span>
+          ) : null,
+        )}
+        {resposta.ponto && (
+          <span
+            style={{ left: `${resposta.ponto.x}%`, top: `${resposta.ponto.y}%` }}
+            className="pointer-events-none absolute flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-4 border-white bg-marca-600/70 shadow-lg ring-2 ring-marca-700"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-white" />
+          </span>
+        )}
+      </button>
+      <p className="text-center text-sm font-medium text-marca-700">
+        {resposta.ponto ? "Ponto marcado ✓" : "Nenhum ponto marcado"}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Enquanto isso…: duas linhas do tempo paralelas. O aluno toca num evento e
+ * depois na célula (linha × período). A eliminação trava um evento na célula certa.
+ */
+export function EnquantoIsso({
+  vista,
+  resposta,
+  onChange,
+  desabilitada,
+  ajuda,
+}: Props<Extract<Vista, { tipo: "enquanto_isso" }>>) {
+  const fixas = mapaFixas(ajuda);
+  const p = vista.periodos.length;
+  const [ativo, setAtivo] = useState<number | null>(() => {
+    const primeiro = vista.eventos.findIndex((_, i) => !fixas.has(i) && resposta.celulas[i] === null);
+    return primeiro >= 0 ? primeiro : null;
+  });
+  const colocar = (celula: number) => {
+    if (ativo === null || fixas.has(ativo)) return;
+    const celulas = [...resposta.celulas];
+    celulas[ativo] = celula;
+    onChange({ tipo: "enquanto_isso", celulas });
+    const proximo = celulas.findIndex((c, i) => c === null && i !== ativo);
+    setAtivo(proximo >= 0 ? proximo : null);
+  };
+  const tirar = (evento: number) => {
+    if (fixas.has(evento) || desabilitada) return;
+    const celulas = [...resposta.celulas];
+    celulas[evento] = null;
+    onChange({ tipo: "enquanto_isso", celulas });
+    setAtivo(evento);
+  };
+  const soltos = vista.eventos.map((_, i) => i).filter((i) => resposta.celulas[i] === null);
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-500">
+        Toque num evento e depois na linha e no período em que ele aconteceu. Toque num evento já colocado para tirá-lo.
+      </p>
+      <div className="flex min-h-12 flex-wrap gap-2 rounded-xl border-2 border-dashed border-slate-300 p-2">
+        {soltos.length === 0 && <span className="self-center px-1 text-sm text-slate-400">Todos colocados ✓</span>}
+        {soltos.map((i) => (
+          <button
+            key={i}
+            type="button"
+            disabled={desabilitada}
+            onClick={() => setAtivo(i)}
+            className={`rounded-lg border-2 px-3 py-1.5 text-left text-sm ${
+              ativo === i ? "border-marca-600 bg-marca-50 font-medium" : "border-slate-200 bg-white"
+            }`}
+          >
+            {vista.eventos[i]}
+          </button>
+        ))}
+      </div>
+      <div className="max-w-full overflow-x-auto pb-1">
+        <div
+          className="grid gap-1.5"
+          style={{
+            gridTemplateColumns: `auto repeat(${p}, minmax(0, 1fr))`,
+            minWidth: `${3.5 + p * 5}rem`,
+          }}
+        >
+          <span />
+          {vista.periodos.map((per, k) => (
+            <span
+              key={k}
+              className="rounded-lg bg-marca-800 px-1 py-1.5 text-center text-xs font-bold text-white tabular-nums"
+            >
+              {per}
+            </span>
+          ))}
+          {vista.linhas.map((linha, l) => (
+            <div key={l} className="contents">
+              <span
+                className={`flex items-center justify-center rounded-lg px-1.5 text-center text-xs font-black break-words sm:text-sm ${
+                  l === 0 ? "bg-amber-100 text-amber-900" : "bg-sky-100 text-sky-900"
+                }`}
+              >
+                {linha}
+              </span>
+              {vista.periodos.map((_, k) => {
+                const celula = l * p + k;
+                return (
+                  <div
+                    key={k}
+                    className={`relative min-h-20 rounded-xl border-2 ${
+                      ativo !== null ? "border-marca-300 bg-marca-50/60" : "border-slate-200 bg-white"
+                    } ${l === 0 ? "border-t-amber-300" : "border-t-sky-300"}`}
+                  >
+                    <button
+                      type="button"
+                      aria-label={`${linha}, ${vista.periodos[k]}`}
+                      disabled={desabilitada || ativo === null}
+                      onClick={() => colocar(celula)}
+                      className="absolute inset-0 rounded-xl disabled:cursor-default"
+                    />
+                    <div className="pointer-events-none relative flex flex-col gap-1 p-1">
+                      {vista.eventos.map((texto, i) =>
+                        resposta.celulas[i] === celula ? (
+                          <button
+                            key={i}
+                            type="button"
+                            disabled={desabilitada || fixas.has(i)}
+                            onClick={() => tirar(i)}
+                            className={`pointer-events-auto rounded-lg px-1.5 py-1 text-left text-xs leading-snug break-words hyphens-auto ${
+                              fixas.has(i)
+                                ? "border-2 border-amber-300 bg-amber-50 text-amber-900"
+                                : "bg-marca-600 text-white"
+                            }`}
+                          >
+                            {fixas.has(i) && "🔒 "}
+                            {texto}
+                          </button>
+                        ) : null,
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

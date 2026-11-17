@@ -16,6 +16,7 @@ import { retratoDoTabuleiro } from "@/lib/questoes/apresentacao";
 import { formatarEstimativa, notaEstimativa } from "@/lib/questoes/estimativa";
 import { respostaAceita } from "@/lib/questoes/investigue";
 import { fatorPistas } from "@/lib/questoes/pistas";
+import { celulaDoEvento, dentroDaArea, notaEvento, raioNaAltura } from "@/lib/questoes/detalhe";
 import { letraBase, notaConceito, ordemDoTurno, progressoConceito } from "@/lib/questoes/passos";
 
 const LETRAS = "ABCDEF";
@@ -705,6 +706,109 @@ export function Gabarito({
               </p>
             </>
           )}
+        </div>
+      );
+    }
+    case "detalhe_imagem": {
+      const c = conteudo.conteudo;
+      const ponto = resposta?.tipo === "detalhe_imagem" ? resposta.ponto : undefined;
+      const certo = ponto ? dentroDaArea(c, ponto) : false;
+      const ry = raioNaAltura(c);
+      return (
+        <div className="space-y-2 text-sm">
+          <div className="relative mx-auto w-fit overflow-hidden rounded-xl border border-slate-200">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={urlImagem(c.imagem) ?? ""} alt="" className="block max-h-80 w-auto" />
+            <span
+              style={{ left: `${c.x - c.raio}%`, top: `${c.y - ry}%`, width: `${2 * c.raio}%`, height: `${2 * ry}%` }}
+              className="absolute rounded-[50%] border-4 border-emerald-400 bg-emerald-400/20"
+            />
+            {ponto && (
+              <span
+                style={{ left: `${ponto.x}%`, top: `${ponto.y}%` }}
+                className={`absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white ${certo ? "bg-emerald-600" : "bg-red-600"}`}
+              />
+            )}
+          </div>
+          <p className="px-3 text-slate-600">O círculo verde mostra a área certa.</p>
+          {ponto !== undefined && (
+            <p
+              className={`rounded-lg px-3 py-1.5 ${certo ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"}`}
+            >
+              {ponto === null
+                ? `${rotulo}: sem resposta`
+                : certo
+                  ? `${rotulo}: dentro da área ✓`
+                  : `${rotulo}: fora da área (ponto vermelho) ✗`}
+            </p>
+          )}
+        </div>
+      );
+    }
+    case "enquanto_isso": {
+      const c = conteudo.conteudo;
+      const r = resposta?.tipo === "enquanto_isso" && permutacao ? resposta : null;
+      const p = c.periodos.length;
+      // Célula que o aluno escolheu para cada evento original.
+      const escolhida = c.eventos.map((_, orig) => {
+        if (!r || !permutacao) return undefined;
+        const tela = permutacao.indexOf(orig);
+        return tela < 0 ? null : (r.celulas[tela] ?? null);
+      });
+      const onde = (cel: number) => `${c.linhas[Math.floor(cel / p)]}, ${c.periodos[cel % p]}`;
+      return (
+        <div className="space-y-2 text-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[26rem] border-separate border-spacing-1 text-xs">
+              <thead>
+                <tr>
+                  <th />
+                  {c.periodos.map((per, k) => (
+                    <th key={k} className="rounded bg-marca-800 px-1 py-1 text-white">
+                      {per}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {c.linhas.map((linha, l) => (
+                  <tr key={l}>
+                    <th className="rounded bg-slate-100 px-1">{linha}</th>
+                    {c.periodos.map((_, k) => (
+                      <td key={k} className="rounded bg-white p-1 align-top ring-1 ring-slate-200">
+                        {c.eventos.map((e, i) => {
+                          if (celulaDoEvento(c, e) !== l * p + k) return null;
+                          const nota = escolhida[i] === undefined ? null : notaEvento(c, e, escolhida[i] ?? null);
+                          return (
+                            <span
+                              key={i}
+                              className={`mb-1 block rounded px-1.5 py-0.5 ${nota === null ? "bg-emerald-50 text-emerald-900" : nota === 1 ? "bg-emerald-100 text-emerald-900" : nota ? "bg-amber-100 text-amber-900" : "bg-red-100 text-red-800"}`}
+                            >
+                              {e.texto} {nota === 1 ? "✓" : nota === 0.5 ? "½" : nota === 0 ? "✗" : ""}
+                            </span>
+                          );
+                        })}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {r && (
+            <ul className="space-y-0.5 px-3 text-xs text-red-700">
+              {c.eventos.map((e, i) =>
+                escolhida[i] !== celulaDoEvento(c, e) ? (
+                  <li key={i}>
+                    {e.texto} ({rotulo}: {escolhida[i] == null ? "sem resposta" : onde(escolhida[i]!)})
+                  </li>
+                ) : null,
+              )}
+            </ul>
+          )}
+          <p className="px-3 text-xs text-slate-500">
+            Por evento: linha certa vale meio ponto; período certo, a outra metade.
+          </p>
         </div>
       );
     }

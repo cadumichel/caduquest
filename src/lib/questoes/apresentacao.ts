@@ -160,6 +160,16 @@ export function montarVista(c: Conteudo, permutacao: number[]): Vista {
       };
     case "conceito_secreto":
       return { tipo: c.tipo, definicao: c.conteudo.definicao, padrao: padraoDaPalavra(c.conteudo.palavra) };
+    case "detalhe_imagem":
+      // Só a imagem: a área certa nunca vai para a tela.
+      return { tipo: c.tipo, imagem: urlImagem(c.conteudo.imagem) ?? "" };
+    case "enquanto_isso":
+      return {
+        tipo: c.tipo,
+        linhas: c.conteudo.linhas,
+        periodos: c.conteudo.periodos,
+        eventos: permutacao.map((i) => c.conteudo.eventos[i].texto),
+      };
   }
 }
 
@@ -208,6 +218,10 @@ export function respostaInicial(vista: Vista): Resposta {
       return { tipo: vista.tipo, escolhas: vista.mensagens.map(() => null) };
     case "conceito_secreto":
       return { tipo: vista.tipo, letras: [] };
+    case "detalhe_imagem":
+      return { tipo: vista.tipo, ponto: null };
+    case "enquanto_isso":
+      return { tipo: vista.tipo, celulas: vista.eventos.map(() => null) };
   }
 }
 
@@ -255,5 +269,9 @@ export function respostaCompleta(r: Resposta): boolean {
     case "conceito_secreto":
       // Acabou quando a tela marca o fim (ou o tempo esgota).
       return Boolean(r.fim);
+    case "detalhe_imagem":
+      return r.ponto !== null;
+    case "enquanto_isso":
+      return r.celulas.every((v) => v !== null);
   }
 }

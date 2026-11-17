@@ -24,6 +24,8 @@ export const TIPOS = [
   "investigue",
   "conversa",
   "conceito_secreto",
+  "detalhe_imagem",
+  "enquanto_isso",
 ] as const;
 export type TipoQuestao = (typeof TIPOS)[number];
 
@@ -54,6 +56,8 @@ export const NOME_TIPO: Record<TipoQuestao, string> = {
   investigue: "Investigue (com consulta)",
   conversa: "Conversa com o personagem",
   conceito_secreto: "Conceito secreto",
+  detalhe_imagem: "Detalhe na imagem",
+  enquanto_isso: "Enquanto isso… (duas linhas do tempo)",
 };
 
 /**
@@ -71,6 +75,7 @@ export const ESCOLHA_UNICA: readonly TipoQuestao[] = [
   "quem_sou_eu",
   "estimativa",
   "investigue",
+  "detalhe_imagem",
 ];
 
 /** Tempo limite padrão por tipo, em segundos (escopo: 20 a 60 s). */
@@ -102,6 +107,8 @@ export const TEMPO_PADRAO: Record<TipoQuestao, number> = {
   investigue: 180,
   conversa: 90,
   conceito_secreto: 60,
+  detalhe_imagem: 45,
+  enquanto_isso: 90,
 };
 
 export const NOME_DIFICULDADE: Record<number, string> = { 1: "Fácil", 2: "Média", 3: "Difícil" };
@@ -399,6 +406,50 @@ export const conteudoConceitoSecreto = z
   .refine((c) => c.palavra.trim().split(/\s+/).length <= 3, "Use no máximo 3 palavras.")
   .refine((c) => (c.palavra.match(/\p{L}/gu) ?? []).length >= 4, "A palavra precisa ter ao menos 4 letras.");
 
+export const conteudoDetalheImagem = z
+  .object({
+    // Caminho no bucket das questões, como no mapa.
+    imagem: z.string().trim().min(1, "Envie a imagem."),
+    // Centro da área certa, em % da largura e da altura da imagem.
+    x: z.number().min(0).max(100),
+    y: z.number().min(0).max(100),
+    // Raio da área, em % da largura da imagem.
+    raio: z.number().min(2, "Área pequena demais.").max(30, "Área grande demais."),
+    // Largura ÷ altura da imagem, para a área ser um círculo de verdade (1 = quadrada).
+    proporcao: z.number().min(0.2).max(5).optional(),
+    // Área criada pelo conector, ainda fora do lugar.
+    posicionar: z.boolean().optional(),
+  })
+  .refine((c) => !c.posicionar, "Toque na imagem para marcar a área certa.");
+
+export const conteudoEnquantoIsso = z
+  .object({
+    // As duas linhas do tempo (ex.: Brasil e Europa).
+    linhas: z
+      .array(texto.max(40, "Nome de linha longo demais (máx. 40 caracteres)."))
+      .length(2, "Use 2 linhas (ex.: Brasil e Europa)."),
+    // Colunas da grade, na ordem (ex.: "1500–1600").
+    periodos: z
+      .array(texto.max(40, "Período longo demais (máx. 40 caracteres)."))
+      .min(2, "Use de 2 a 5 períodos.")
+      .max(5, "Use de 2 a 5 períodos."),
+    eventos: z
+      .array(
+        z.object({
+          texto: texto.max(150, "Evento longo demais (máx. 150 caracteres)."),
+          linha: z.number().int().min(0).max(1),
+          periodo: z.number().int().min(0),
+        }),
+      )
+      .min(4, "Use de 4 a 10 eventos.")
+      .max(10, "Use de 4 a 10 eventos."),
+  })
+  .refine((c) => c.eventos.every((e) => e.periodo < c.periodos.length), "Escolha o período de cada evento.")
+  .refine(
+    (c) => [0, 1].every((l) => c.eventos.some((e) => e.linha === l)),
+    "Cada linha precisa de ao menos um evento.",
+  );
+
 /** Máximo de letras que o aluno pode digitar no Investigue. */
 export const MAX_DIGITADO = 160;
 
@@ -456,6 +507,8 @@ export const SCHEMA_CONTEUDO = {
   investigue: conteudoInvestigue,
   conversa: conteudoConversa,
   conceito_secreto: conteudoConceitoSecreto,
+  detalhe_imagem: conteudoDetalheImagem,
+  enquanto_isso: conteudoEnquantoIsso,
 } as const;
 
 export type ConteudoMultiplaEscolha = z.infer<typeof conteudoMultiplaEscolha>;
@@ -481,6 +534,8 @@ export type ConteudoMonteResposta = z.infer<typeof conteudoMonteResposta>;
 export type ConteudoInvestigue = z.infer<typeof conteudoInvestigue>;
 export type ConteudoConversa = z.infer<typeof conteudoConversa>;
 export type ConteudoConceitoSecreto = z.infer<typeof conteudoConceitoSecreto>;
+export type ConteudoDetalheImagem = z.infer<typeof conteudoDetalheImagem>;
+export type ConteudoEnquantoIsso = z.infer<typeof conteudoEnquantoIsso>;
 
 export type Conteudo =
   | { tipo: "multipla_escolha"; conteudo: ConteudoMultiplaEscolha }
@@ -505,7 +560,9 @@ export type Conteudo =
   | { tipo: "monte_resposta"; conteudo: ConteudoMonteResposta }
   | { tipo: "investigue"; conteudo: ConteudoInvestigue }
   | { tipo: "conversa"; conteudo: ConteudoConversa }
-  | { tipo: "conceito_secreto"; conteudo: ConteudoConceitoSecreto };
+  | { tipo: "conceito_secreto"; conteudo: ConteudoConceitoSecreto }
+  | { tipo: "detalhe_imagem"; conteudo: ConteudoDetalheImagem }
+  | { tipo: "enquanto_isso"; conteudo: ConteudoEnquantoIsso };
 
 export function validarConteudo(tipo: TipoQuestao, conteudo: unknown) {
   return SCHEMA_CONTEUDO[tipo].safeParse(conteudo);
@@ -560,7 +617,10 @@ export function tamanhoPermutacao(c: Conteudo): number {
     case "conversa":
       return c.conteudo.turnos.length * 3;
     case "conceito_secreto":
+    case "detalhe_imagem":
       return 0;
+    case "enquanto_isso":
+      return c.conteudo.eventos.length;
     case "monte_resposta":
       return c.conteudo.espacos.length + c.conteudo.distratores.length;
   }
@@ -672,6 +732,17 @@ export function conteudoVazio(tipo: TipoQuestao): Conteudo {
       };
     case "conceito_secreto":
       return { tipo, conteudo: { palavra: "", definicao: "" } };
+    case "detalhe_imagem":
+      return { tipo, conteudo: { imagem: "", x: 50, y: 50, raio: 10 } };
+    case "enquanto_isso":
+      return {
+        tipo,
+        conteudo: {
+          linhas: ["", ""],
+          periodos: ["", "", ""],
+          eventos: [0, 1, 2, 3].map((i) => ({ texto: "", linha: i % 2, periodo: Math.floor(i / 2) })),
+        },
+      };
   }
 }
 
@@ -713,7 +784,10 @@ export type Vista =
   /** Mensagens do personagem e as 3 respostas de cada turno, na ordem da tela. */
   | { tipo: "conversa"; personagem: string; avatar: string | null; mensagens: string[]; opcoes: string[][] }
   /** padrao: "_" no lugar de cada letra; espaço e hífen aparecem. */
-  | { tipo: "conceito_secreto"; definicao: string; padrao: string[] };
+  | { tipo: "conceito_secreto"; definicao: string; padrao: string[] }
+  | { tipo: "detalhe_imagem"; imagem: string }
+  /** Eventos na ordem da tela; cada um vai para uma célula (linha × período). */
+  | { tipo: "enquanto_isso"; linhas: string[]; periodos: string[]; eventos: string[] };
 
 /** Resposta do aluno, sempre em índices da ordem exibida. */
 export type Resposta =
@@ -743,7 +817,11 @@ export type Resposta =
   /** Por turno: posição na tela da resposta escolhida. */
   | { tipo: "conversa"; escolhas: (number | null)[]; fim?: boolean }
   /** Letras tentadas, em maiúsculas sem acento (no desafio, vale o que o servidor gravou). */
-  | { tipo: "conceito_secreto"; letras: string[]; fim?: boolean };
+  | { tipo: "conceito_secreto"; letras: string[]; fim?: boolean }
+  /** Ponto tocado, em % da largura e da altura da imagem. */
+  | { tipo: "detalhe_imagem"; ponto: { x: number; y: number } | null }
+  /** Por evento na tela: célula escolhida (linha × nº de períodos + período). */
+  | { tipo: "enquanto_isso"; celulas: (number | null)[] };
 
 export const schemaResposta = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("multipla_escolha"), escolha: z.number().int().nullable() }),
@@ -786,4 +864,9 @@ export const schemaResposta = z.discriminatedUnion("tipo", [
     letras: z.array(z.string().regex(/^[A-Z]$/)).max(26),
     fim: z.boolean().optional(),
   }),
+  z.object({
+    tipo: z.literal("detalhe_imagem"),
+    ponto: z.object({ x: z.number().min(0).max(100), y: z.number().min(0).max(100) }).nullable(),
+  }),
+  z.object({ tipo: z.literal("enquanto_isso"), celulas: z.array(z.number().int().min(0).max(9).nullable()).max(10) }),
 ]);

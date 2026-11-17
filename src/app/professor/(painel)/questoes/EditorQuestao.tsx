@@ -90,7 +90,11 @@ export function EditorQuestao({
 
   // No mapa e no tabuleiro, a imagem vai dentro do conteúdo (o mapa dos pinos, o retrato do peão).
   // Na conversa, também: o retrato do personagem.
-  const imagemNoConteudo = conteudo.tipo === "mapa" || conteudo.tipo === "tabuleiro" || conteudo.tipo === "conversa";
+  const imagemNoConteudo =
+    conteudo.tipo === "mapa" ||
+    conteudo.tipo === "tabuleiro" ||
+    conteudo.tipo === "conversa" ||
+    conteudo.tipo === "detalhe_imagem";
   const temImagem = Boolean(campos.imagem_path) && !imagemNoConteudo;
   const sugestao = sugerirTempoRelampago(campos.enunciado, conteudo, temImagem);
   const problemas = campos.relampago ? problemasRelampago(campos.enunciado, conteudo, campos.tempo_limite_s) : [];
@@ -113,6 +117,11 @@ export function EditorQuestao({
     if (error) return setMensagem({ erro: "Não foi possível enviar a imagem." });
     // No mapa, a imagem fica dentro do conteúdo, embaixo dos pinos.
     if (conteudo.tipo === "mapa") setConteudo({ tipo: "mapa", conteudo: { ...conteudo.conteudo, imagem: caminho } });
+    else if (conteudo.tipo === "detalhe_imagem")
+      setConteudo({
+        tipo: "detalhe_imagem",
+        conteudo: { ...conteudo.conteudo, imagem: caminho, proporcao: undefined },
+      });
     else if (conteudo.tipo === "tabuleiro")
       setConteudo({ tipo: "tabuleiro", conteudo: { ...conteudo.conteudo, retrato: caminho } });
     else if (conteudo.tipo === "conversa")
@@ -208,11 +217,13 @@ export function EditorQuestao({
             rotulo={
               conteudo.tipo === "mapa"
                 ? "Imagem do mapa"
-                : conteudo.tipo === "tabuleiro"
-                  ? "Retrato do personagem (vira o peão)"
-                  : conteudo.tipo === "conversa"
-                    ? "Retrato do personagem (aparece na conversa)"
-                    : "Imagem (fonte, charge, mapa)"
+                : conteudo.tipo === "detalhe_imagem"
+                  ? "Imagem (pintura, charge, foto): o aluno toca no detalhe"
+                  : conteudo.tipo === "tabuleiro"
+                    ? "Retrato do personagem (vira o peão)"
+                    : conteudo.tipo === "conversa"
+                      ? "Retrato do personagem (aparece na conversa)"
+                      : "Imagem (fonte, charge, mapa)"
             }
             dica={
               conteudo.tipo === "mapa"
@@ -1643,6 +1654,109 @@ function EditorConteudo({
     }
     case "mapa":
       return <EditorMapa conteudo={conteudo.conteudo} onChange={onChange} bloqueado={bloqueado} />;
+    case "detalhe_imagem":
+      return <EditorDetalhe conteudo={conteudo.conteudo} onChange={onChange} bloqueado={bloqueado} />;
+    case "enquanto_isso": {
+      const c = conteudo.conteudo;
+      const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "enquanto_isso", conteudo: { ...c, ...novo } });
+      return (
+        <div className="space-y-3">
+          <fieldset className="grid gap-2 sm:grid-cols-2">
+            <legend className="mb-1 text-sm font-medium text-slate-700">As duas linhas do tempo</legend>
+            {[0, 1].map((l) => (
+              <input
+                key={l}
+                className={classeInput}
+                placeholder={l === 0 ? "Ex.: Brasil" : "Ex.: Europa"}
+                value={c.linhas[l] ?? ""}
+                disabled={bloqueado}
+                onChange={(e) => mudar({ linhas: c.linhas.map((x, k) => (k === l ? e.target.value : x)) })}
+              />
+            ))}
+          </fieldset>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">Períodos (2 a 5), na ordem</legend>
+            <Linhas
+              itens={c.periodos}
+              min={2}
+              max={5}
+              novo={() => ""}
+              bloqueado={bloqueado}
+              onChange={(periodos) =>
+                mudar({
+                  periodos,
+                  eventos: c.eventos.map((e) => ({ ...e, periodo: Math.min(e.periodo, periodos.length - 1) })),
+                })
+              }
+              render={(per, i, atualizar) => (
+                <>
+                  <span className="w-5 text-sm font-bold text-marca-700">{i + 1}</span>
+                  <input
+                    className={classeInput}
+                    placeholder="Ex.: 1800–1850"
+                    value={per}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar(e.target.value)}
+                  />
+                </>
+              )}
+            />
+          </fieldset>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Eventos (4 a 10), sem a data: escolha a linha e o período de cada um
+            </legend>
+            <Linhas
+              itens={c.eventos}
+              min={4}
+              max={10}
+              novo={() => ({ texto: "", linha: 0, periodo: 0 })}
+              bloqueado={bloqueado}
+              onChange={(eventos) => mudar({ eventos })}
+              render={(ev, _i, atualizar) => (
+                <>
+                  <input
+                    className={classeInput}
+                    placeholder="Evento"
+                    value={ev.texto}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...ev, texto: e.target.value })}
+                  />
+                  <select
+                    className={`${classeInput} w-28 shrink-0`}
+                    value={ev.linha}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...ev, linha: Number(e.target.value) })}
+                  >
+                    {[0, 1].map((l) => (
+                      <option key={l} value={l}>
+                        {c.linhas[l]?.trim() || `Linha ${l + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className={`${classeInput} w-32 shrink-0`}
+                    value={ev.periodo}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...ev, periodo: Number(e.target.value) })}
+                  >
+                    {c.periodos.map((per, k) => (
+                      <option key={k} value={k}>
+                        {per.trim() || `Período ${k + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+            />
+          </fieldset>
+          <p className="text-xs text-slate-500">
+            Por evento, a linha certa vale meio ponto e o período certo, a outra metade. Evite eventos cujo nome entrega
+            a linha.
+          </p>
+        </div>
+      );
+    }
     case "tabuleiro": {
       const c = conteudo.conteudo;
       const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "tabuleiro", conteudo: { ...c, ...novo } });
@@ -1711,6 +1825,69 @@ function EditorConteudo({
       );
     }
   }
+}
+
+function EditorDetalhe({
+  conteudo: c,
+  onChange,
+  bloqueado,
+}: {
+  conteudo: Extract<Conteudo, { tipo: "detalhe_imagem" }>["conteudo"];
+  onChange: (c: Conteudo) => void;
+  bloqueado: boolean;
+}) {
+  const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "detalhe_imagem", conteudo: { ...c, ...novo } });
+  const tocar = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (bloqueado) return;
+    const caixa = e.currentTarget.getBoundingClientRect();
+    const x = Math.round(((e.clientX - caixa.left) / caixa.width) * 1000) / 10;
+    const y = Math.round(((e.clientY - caixa.top) / caixa.height) * 1000) / 10;
+    onChange({ tipo: "detalhe_imagem", conteudo: { imagem: c.imagem, x, y, raio: c.raio, proporcao: c.proporcao } });
+  };
+  if (!c.imagem) return <Aviso tipo="info">Envie a imagem no campo acima para marcar a área certa.</Aviso>;
+  const ry = c.raio * (c.proporcao ?? 1);
+  return (
+    <div className="space-y-3">
+      {c.posicionar && (
+        <Aviso tipo="info">A área veio do Claude sem posição. Toque na imagem, no centro do detalhe certo.</Aviso>
+      )}
+      <p className="text-sm text-slate-600">
+        Toque no centro do detalhe certo e ajuste o tamanho do círculo. O aluno acerta se tocar dentro dele.
+      </p>
+      <div className="relative mx-auto w-fit cursor-crosshair" onClick={tocar}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={urlImagem(c.imagem) ?? ""}
+          alt=""
+          onLoad={(e) => {
+            const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
+            const proporcao = h ? Math.round((w / h) * 100) / 100 : 1;
+            if (w && h && proporcao !== c.proporcao) mudar({ proporcao });
+          }}
+          className="block max-h-96 w-auto rounded-xl border border-slate-200"
+        />
+        {!c.posicionar && (
+          <span
+            style={{ left: `${c.x - c.raio}%`, top: `${c.y - ry}%`, width: `${2 * c.raio}%`, height: `${2 * ry}%` }}
+            className="pointer-events-none absolute rounded-[50%] border-4 border-emerald-400 bg-emerald-400/25"
+          />
+        )}
+      </div>
+      <label className="flex items-center gap-3 text-sm text-slate-700">
+        Tamanho da área
+        <input
+          type="range"
+          min={2}
+          max={30}
+          step={1}
+          value={c.raio}
+          disabled={bloqueado}
+          onChange={(e) => mudar({ raio: Number(e.target.value) })}
+          className="flex-1 accent-marca-600"
+        />
+      </label>
+    </div>
+  );
 }
 
 function EditorMapa({

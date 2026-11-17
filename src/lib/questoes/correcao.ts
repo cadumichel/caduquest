@@ -1,3 +1,4 @@
+import { dentroDaArea, notaEvento } from "./detalhe";
 import { faixaDoAno, iniciosPerguntas, ordemDaCasa, subPermutacao, type Conteudo, type Resposta } from "./tipos";
 import { arredondarPontos } from "../pontos";
 import { notaEstimativa } from "./estimativa";
@@ -204,6 +205,21 @@ export function corrigir(c: Conteudo, permutacao: number[], r: Resposta | null):
       // As letras reveladas pela eliminação já entram em letras (respostaComAjuda).
       const resp = r as Extract<Resposta, { tipo: "conceito_secreto" }>;
       return notaConceito(c.conteudo, resp.letras);
+    }
+    case "detalhe_imagem": {
+      const resp = r as Extract<Resposta, { tipo: "detalhe_imagem" }>;
+      return dentroDaArea(c.conteudo, resp.ponto) ? 1 : 0;
+    }
+    case "enquanto_isso": {
+      // Por evento: meio ponto pela linha certa e meio pelo período certo.
+      const resp = r as Extract<Resposta, { tipo: "enquanto_isso" }>;
+      const { eventos } = c.conteudo;
+      const soma = permutacao.reduce(
+        (t, orig, exibido) =>
+          t + (eventos[orig] ? notaEvento(c.conteudo, eventos[orig], resp.celulas[exibido] ?? null) : 0),
+        0,
+      );
+      return soma / eventos.length;
     }
   }
 }
