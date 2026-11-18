@@ -92,7 +92,13 @@ export async function entrar(_: EstadoEntrar, form: FormData): Promise<EstadoEnt
       })
       .select("id, versao_sessao")
       .single();
-    if (error || !novo) return { erro: "Esse apelido já está em uso na turma. Escolha outro." };
+    if (error || !novo) {
+      // Só a duplicidade de apelido (unique) vira "apelido em uso"; qualquer outra
+      // falha do banco não pode se disfarçar de apelido repetido.
+      if (error?.code === "23505") return { erro: "Esse apelido já está em uso na turma. Escolha outro." };
+      console.error("cadastro de aluno falhou", error?.code, error?.message);
+      return { erro: "Não foi possível criar sua conta agora. Tente de novo ou avise o professor." };
+    }
     alunoId = novo.id;
     versao = novo.versao_sessao;
   } else {
