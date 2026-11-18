@@ -5,6 +5,7 @@ import {
   ORDEM_BASICOS,
   ORDEM_ESPECIAIS,
 } from "@/lib/personagens";
+import { BONUS_REVISAO, LIMITE_REVISAO_DIA } from "@/lib/revisao-bonus";
 import { XP_POR_ACERTO, XP_POR_DESAFIO, XP_POR_QUESTAO, XP_POR_REVISAO, xpDoNivel } from "@/lib/progresso";
 
 /** Explica ao aluno como ganhar XP, subir de nível e liberar personagens. */
@@ -23,7 +24,10 @@ export function ComoGanharXp() {
             <li>+{XP_POR_QUESTAO} XP por questão respondida</li>
             <li>+{XP_POR_ACERTO} XP por questão certa (acerto parcial vale parte)</li>
             <li>+{XP_POR_DESAFIO} XP por desafio terminado</li>
-            <li>+{XP_POR_REVISAO} XP por questão que você acerta na revisão dos erros</li>
+            <li>
+              +{XP_POR_REVISAO} XP por questão que você acerta na revisão dos erros (e ainda +{BONUS_REVISAO} pts de
+              bônus no ranking, até {LIMITE_REVISAO_DIA} por dia)
+            </li>
           </ul>
           <p className="mt-1">
             Exemplo: um desafio de 10 questões com 7 certas dá{" "}

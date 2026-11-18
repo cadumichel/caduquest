@@ -13,6 +13,10 @@ export type LinhaRanking = {
   bonus: number;
   /** Bônus da meta coletiva da turma, já somado em pontos. */
   bonusTurma: number;
+  /** Bônus dos erros corrigidos na revisão, já somado em pontos. */
+  bonusRevisao: number;
+  /** Erros corrigidos que valeram bônus nesta temporada. */
+  errosCorrigidos: number;
   /** Ofensiva atual (desafios seguidos concluídos). */
   sequencia: number;
   desafiosCompletos: number;
@@ -30,13 +34,15 @@ type Entrada = {
   questoes: number;
   bonus?: number;
   bonusTurma?: number;
+  bonusRevisao?: number;
+  errosCorrigidos?: number;
   sequencia?: number;
   desafiosCompletos?: number;
   maiorSequencia?: number;
 };
 
 /**
- * Ranking da temporada: soma de pontos (com o bônus de constância); desempate pela
+ * Ranking da temporada: soma de pontos (com os bônus de constância, da meta e da revisão); desempate pela
  * maior taxa de acerto e depois por mais desafios concluídos na ofensiva.
  * Empate completo divide a posição (1, 2, 2, 4).
  */
@@ -46,11 +52,13 @@ export function montarRanking(entradas: Entrada[]): LinhaRanking[] {
     apelido: e.apelido,
     avatar: e.avatar ?? 0,
     cor: e.cor ?? 0,
-    pontos: arredondarPontos(e.pontos + (e.bonus ?? 0) + (e.bonusTurma ?? 0)),
+    pontos: arredondarPontos(e.pontos + (e.bonus ?? 0) + (e.bonusTurma ?? 0) + (e.bonusRevisao ?? 0)),
     acerto: e.questoes > 0 ? e.somaFracoes / e.questoes : 0,
     questoes: e.questoes,
     bonus: e.bonus ?? 0,
     bonusTurma: e.bonusTurma ?? 0,
+    bonusRevisao: e.bonusRevisao ?? 0,
+    errosCorrigidos: e.errosCorrigidos ?? 0,
     sequencia: e.sequencia ?? 0,
     desafiosCompletos: e.desafiosCompletos ?? 0,
     maiorSequencia: e.maiorSequencia ?? 0,

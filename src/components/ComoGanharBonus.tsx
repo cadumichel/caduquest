@@ -1,5 +1,6 @@
 import { BONUS_DESAFIO, BONUS_MAXIMO, BONUS_SEQUENCIA } from "@/lib/constancia";
 import { BONUS_META, META_PARTICIPACAO } from "@/lib/ligas";
+import { BONUS_REVISAO, LIMITE_REVISAO_DIA } from "@/lib/revisao-bonus";
 
 /** Quanto vale o n-ésimo desafio seguido da ofensiva (1, 2, 3...). */
 function bonusDoPasso(n: number) {
@@ -57,6 +58,16 @@ export function ComoGanharBonus({ aberto = false, comLiga = true }: { aberto?: b
           </p>
         </div>
         <div>
+          <p className="font-bold text-marca-900">📚 Erro corrigido: aprenda com a revisão de erros</p>
+          <p>
+            Quando o gabarito de um desafio sai, as questões que você errou vão para a Revisão de erros. Cada uma que
+            você acertar lá vale +{BONUS_REVISAO} pontos de bônus, só na primeira vez que acertar cada questão. Vale
+            para até {LIMITE_REVISAO_DIA} erros corrigidos por dia (até +{BONUS_REVISAO * LIMITE_REVISAO_DIA} por dia);
+            passando disso, a questão ainda dá XP. Errar de propósito não compensa: a questão errada no desafio vale bem
+            mais do que o bônus.
+          </p>
+        </div>
+        <div>
           <p className="font-bold text-marca-900">⚡ Bônus por rapidez: só em alguns desafios</p>
           <p>
             Quando o desafio avisa “Bônus por rapidez” antes de começar, cada questão certa vale até 50% a mais se você
@@ -64,7 +75,8 @@ export function ComoGanharBonus({ aberto = false, comLiga = true }: { aberto?: b
           </p>
         </div>
         <p className="rounded-xl bg-white px-3 py-2 text-xs ring-1 ring-sky-200">
-          <b>Onde o bônus aparece:</b> o da ofensiva e o da meta da turma entram só no <b>ranking geral</b>.
+          <b>Onde o bônus aparece:</b> o da ofensiva, o da meta da turma e o dos erros corrigidos entram só no{" "}
+          <b>ranking geral</b>, até o último dia com pontos da temporada.
           {comLiga && (
             <>
               {" "}

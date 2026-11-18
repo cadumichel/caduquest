@@ -30,10 +30,18 @@ import { corrigir } from "@/lib/questoes/correcao";
 import { permutacaoSemRanking, permutacaoValida } from "@/lib/questoes/embaralhar";
 import { schemaResposta, tamanhoPermutacao, type Conteudo, type Vista } from "@/lib/questoes/tipos";
 import { resumoDoDesafio, type ResumoDesafio } from "@/lib/resumo-desafio";
-import { errosParaRevisar, QUESTOES_POR_RODADA, registrarRevisao } from "@/lib/revisao";
+import {
+  acertosDeRevisaoHoje,
+  errosParaRevisar,
+  marcarRevisaoZerada,
+  QUESTOES_POR_RODADA,
+  registrarRevisao,
+} from "@/lib/revisao";
+import { BONUS_REVISAO, LIMITE_REVISAO_DIA } from "@/lib/revisao-bonus";
+import { hojeEmBrasilia } from "@/lib/datas";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { ehMotivoZerada } from "@/lib/tela-protegida";
-import { urlImagem } from "@/lib/tipos-banco";
+import { ultimoDiaComPontos, urlImagem } from "@/lib/tipos-banco";
 
 export async function carregarJogo(desafioId: string, codigo?: string): Promise<EstadoJogo> {
   const aluno = await exigirAluno();
@@ -192,6 +200,11 @@ export type CorrecaoRevisao = {
   fracao: number;
   conteudo: Conteudo;
   explicacao: string | null;
+  /**
+   * Primeiro acerto desta questão: pontos de bônus que entraram no ranking (0 se
+   * o limite do dia já foi atingido ou se hoje não vale pontos) e se zerou a revisão.
+   */
+  corrigiu?: { bonus: number; limiteAtingido: boolean; zerou: boolean };
 };
 
 /**
@@ -239,7 +252,8 @@ export async function responderRevisao(
   const aluno = await exigirAluno();
   const db = criarClienteAdmin();
   // Só vale para uma questão que o aluno errou num desafio encerrado da turma dele.
-  if (!(await errosParaRevisar(db, aluno.id, aluno.turmaId)).includes(questaoId)) {
+  const erros = await errosParaRevisar(db, aluno.id, aluno.turmaId);
+  if (!erros.includes(questaoId)) {
     return { erro: "Esta questão não está na sua revisão." };
   }
   const { data: q } = await db.from("questoes").select("tipo, conteudo, explicacao").eq("id", questaoId).single();
@@ -248,9 +262,27 @@ export async function responderRevisao(
   if (!permutacaoValida(permutacao, tamanhoPermutacao(conteudo))) return { erro: "Resposta inválida." };
   const r = resposta === null ? null : schemaResposta.safeParse(resposta);
   const fracao = corrigir(conteudo, permutacao, r && r.success ? r.data : null);
-  await registrarRevisao(db, aluno.id, questaoId, fracao === 1);
-  revalidatePath("/aluno");
-  return { fracao, conteudo, explicacao: q.explicacao };
+  const primeiroAcerto = await registrarRevisao(db, aluno.id, questaoId, fracao === 1);
+  let corrigiu: CorrecaoRevisao["corrigiu"];
+  if (primeiroAcerto) {
+    // O bônus em si é calculado no ranking, a partir de revisoes.acertou_em; isto só avisa o aluno.
+    const [hoje, temporada] = await Promise.all([
+      acertosDeRevisaoHoje(db, aluno.id),
+      temporadaAtual(db, aluno.turmaId),
+    ]);
+    const dia = hojeEmBrasilia();
+    const valeHoje =
+      !!temporada && !temporada.encerrada_em && temporada.inicio <= dia && dia <= ultimoDiaComPontos(temporada);
+    const zerou = erros.length === 1;
+    if (zerou) await marcarRevisaoZerada(db, aluno.id);
+    corrigiu = {
+      bonus: valeHoje && hoje <= LIMITE_REVISAO_DIA ? BONUS_REVISAO : 0,
+      limiteAtingido: valeHoje && hoje > LIMITE_REVISAO_DIA,
+      zerou,
+    };
+  }
+  revalidatePath("/aluno", "layout");
+  return { fracao, conteudo, explicacao: q.explicacao, corrigiu };
 }
 
 /** Carta coringa: o campeão registra (ou muda) o tema da questão da próxima prova. */

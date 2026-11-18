@@ -67,11 +67,14 @@ export function calcularProgresso({
   desafios,
   questoes,
   revisoesAcertadas,
+  revisaoZerada = false,
 }: {
   respostas: RespostaProgresso[];
   desafios: DesafioProgresso[];
   questoes: Map<string, QuestaoProgresso>;
   revisoesAcertadas: number;
+  /** Já zerou a revisão de erros alguma vez (conquista "Aprendi com o erro"). */
+  revisaoZerada?: boolean;
 }) {
   const concluidos = desafios.filter((d) => d.concluido);
   const xp = Math.round(
@@ -115,6 +118,7 @@ export function calcularProgresso({
     questoesRespondidas: respostas.length,
     acertoGeral: respostas.length ? respostas.reduce((s, r) => s + r.fracao, 0) / respostas.length : 0,
     revisoesAcertadas,
+    revisaoZerada: revisaoZerada && revisoesAcertadas > 0,
   };
 }
 
@@ -180,6 +184,15 @@ export function calcularConquistas(
   add(
     { id: "revisor", nome: "Revisor", descricao: "Acerte 10 questões na revisão de erros.", icone: "📚" },
     p.revisoesAcertadas >= 10,
+  );
+  add(
+    {
+      id: "aprendi",
+      nome: "Aprendi com o erro",
+      descricao: "Zere a sua revisão de erros: acerte todas as questões que estavam nela.",
+      icone: "🔁",
+    },
+    p.revisaoZerada,
   );
   add(
     {

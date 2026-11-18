@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { calcularProgresso, type DesafioProgresso, type RespostaProgresso } from "@/lib/progresso";
 import { lerPorIds, respostasCorrigidas } from "@/lib/paginar";
-import { revisoesAcertadas } from "@/lib/revisao";
+import { revisaoJaZerada, revisoesAcertadas } from "@/lib/revisao";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { situacaoDesafio } from "@/lib/tipos-banco";
 
@@ -67,10 +67,13 @@ export const progressoDoAluno = cache(async (alunoId: string, turmaId: string) =
     concluidoEm: t.concluida_em,
   }));
 
+  const revisaoZerada = await revisaoJaZerada(db, alunoId, turmaId, revisoes);
+
   return calcularProgresso({
     respostas,
     desafios,
     questoes: new Map(questoesBrutas.map((q) => [q.id, { habilidades: q.habilidades ?? [], capitulo: q.capitulo }])),
     revisoesAcertadas: revisoes,
+    revisaoZerada,
   });
 });
