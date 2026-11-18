@@ -69,6 +69,25 @@ export async function criarTurma(_: EstadoForm, form: FormData): Promise<EstadoF
   return { erro: "Não foi possível gerar um código único. Tente de novo." };
 }
 
+/** Renomeia a turma (e ajusta a série). RLS garante que só o dono altera. Código, alunos e pontos não mudam. */
+export async function renomearTurma(_: EstadoForm, form: FormData): Promise<EstadoForm> {
+  const { supabase } = await exigirProfessor();
+  const id = texto(form, "id");
+  const nome = texto(form, "nome");
+  const serie = texto(form, "serie");
+  if (!nome) return { erro: "Informe o nome da turma." };
+  if (nome.length > 60) return { erro: "Nome muito longo (máximo 60 caracteres)." };
+  if (serie.length > 60) return { erro: "Série muito longa (máximo 60 caracteres)." };
+  const { data, error } = await supabase
+    .from("turmas")
+    .update({ nome, serie: serie || null })
+    .eq("id", id)
+    .select("id");
+  if (error || !data?.length) return { erro: "Não foi possível renomear a turma." };
+  revalidatePath("/professor", "layout");
+  return { ok: "Nome da turma salvo." };
+}
+
 /** Apaga a turma e, em cascata, alunos, temporadas, desafios, tentativas e respostas dela. */
 export async function excluirTurma(turmaId: string, nomeDigitado: string) {
   const { supabase } = await exigirProfessor();
