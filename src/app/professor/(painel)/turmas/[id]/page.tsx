@@ -52,6 +52,7 @@ import {
   reabrirTemporada,
   redefinirPin,
   removerAluno,
+  renomearTurma,
 } from "../../actions";
 
 export const metadata: Metadata = { title: "Turma" };
@@ -356,6 +357,25 @@ export default async function PaginaTurma({ params, searchParams }: PageProps<"/
 
       {aba === "ajustes" && (
         <div className="space-y-5">
+          <Cartao className="space-y-3">
+            <div>
+              <Subtitulo>Nome da turma</Subtitulo>
+              <p className="text-sm text-slate-600">
+                Muda só o nome que aparece no painel e para os alunos. Código, alunos, pontos e desafios continuam
+                iguais.
+              </p>
+            </div>
+            <FormAcao acao={renomearTurma} className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+              <input type="hidden" name="id" value={id} />
+              <Campo rotulo="Nome">
+                <Entrada name="nome" defaultValue={turma.nome} maxLength={60} required />
+              </Campo>
+              <Campo rotulo="Série">
+                <Entrada name="serie" defaultValue={turma.serie ?? ""} placeholder="8º ano" maxLength={60} />
+              </Campo>
+              <BotaoEnviar variante="secundario">Salvar nome</BotaoEnviar>
+            </FormAcao>
+          </Cartao>
           <Cartao className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <Subtitulo>Código de acesso</Subtitulo>
