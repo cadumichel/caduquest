@@ -122,6 +122,12 @@ export async function rankingDaTemporada(
   return (await situacaoDaTemporada(db, temporada, verComo)).ranking;
 }
 
+/**
+ * Visão da turma toda (ranking no projetor): mesmas regras da visão do aluno, sem ser nenhum aluno.
+ * O desafio que alguém ainda está respondendo só entra quando termina, e o aluno de teste fica de fora.
+ */
+export const VISAO_DA_TURMA = "visao-da-turma";
+
 /** Ranking, liga da semana e meta coletiva da turma, com as mesmas consultas. */
 /**
  * Alunos de teste ficam de fora. `verComo` é o aluno que está olhando: se ele

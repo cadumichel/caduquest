@@ -140,6 +140,14 @@ export default async function PaginaTurma({ params, searchParams }: PageProps<"/
                   <span className="font-semibold text-marca-700">👀 Ver como aluno</span>
                 </button>
               </form>
+              <Link
+                href={`/professor/projetor/${id}${temporada ? `?temporada=${temporada.id}` : ""}`}
+                className="rounded-xl border border-marca-200 bg-white px-3 py-2 text-left hover:border-marca-400 hover:bg-marca-50"
+                title="Abre o ranking da turma em tela cheia, com letras grandes. Atualiza sozinho a cada minuto."
+              >
+                <span className="block text-xs text-slate-500">Mostra o top 10, como os alunos veem</span>
+                <span className="font-semibold text-marca-700">📺 Ranking no projetor</span>
+              </Link>
               <CodigoNoQuadro codigo={turma.codigo} turma={turma.nome} />
             </div>
           }
