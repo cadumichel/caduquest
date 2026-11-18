@@ -83,6 +83,8 @@ export function useTelaProtegida({
     if (!bloquearTeclado) return;
     const aoTeclar = (e: KeyboardEvent) => {
       if (enviado.current || dialogoProprio.current || !teclaConta(e.key)) return;
+      // Campo de resposta digitada (Investigue): digitar ali é responder.
+      if ((e.target as Element | null)?.closest?.("[data-digitacao]")) return;
       e.preventDefault();
       zerar("teclado");
     };

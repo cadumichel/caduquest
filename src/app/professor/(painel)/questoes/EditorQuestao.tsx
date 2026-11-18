@@ -7,7 +7,13 @@ import { ERAS } from "@/lib/publico/regras";
 import { QuestaoInterativa } from "@/components/QuestaoInterativa";
 import { AreaTexto, Aviso, Botao, Campo, Cartao, Entrada, Selecao, classeInput } from "@/components/ui";
 import { HABILIDADES } from "@/lib/habilidades";
-import { certasDoTabuleiro, montarVista, respostaInicial } from "@/lib/questoes/apresentacao";
+import {
+  certasDoTabuleiro,
+  montarVista,
+  respostaInicial,
+  segredoPublico,
+  type Segredo,
+} from "@/lib/questoes/apresentacao";
 import { permutacaoAleatoria } from "@/lib/questoes/embaralhar";
 import {
   LIMITE_ENUNCIADO,
@@ -83,7 +89,12 @@ export function EditorQuestao({
   };
 
   // No mapa e no tabuleiro, a imagem vai dentro do conteúdo (o mapa dos pinos, o retrato do peão).
-  const imagemNoConteudo = conteudo.tipo === "mapa" || conteudo.tipo === "tabuleiro";
+  // Na conversa, também: o retrato do personagem.
+  const imagemNoConteudo =
+    conteudo.tipo === "mapa" ||
+    conteudo.tipo === "tabuleiro" ||
+    conteudo.tipo === "conversa" ||
+    conteudo.tipo === "detalhe_imagem";
   const temImagem = Boolean(campos.imagem_path) && !imagemNoConteudo;
   const sugestao = sugerirTempoRelampago(campos.enunciado, conteudo, temImagem);
   const problemas = campos.relampago ? problemasRelampago(campos.enunciado, conteudo, campos.tempo_limite_s) : [];
@@ -106,8 +117,15 @@ export function EditorQuestao({
     if (error) return setMensagem({ erro: "Não foi possível enviar a imagem." });
     // No mapa, a imagem fica dentro do conteúdo, embaixo dos pinos.
     if (conteudo.tipo === "mapa") setConteudo({ tipo: "mapa", conteudo: { ...conteudo.conteudo, imagem: caminho } });
+    else if (conteudo.tipo === "detalhe_imagem")
+      setConteudo({
+        tipo: "detalhe_imagem",
+        conteudo: { ...conteudo.conteudo, imagem: caminho, proporcao: undefined },
+      });
     else if (conteudo.tipo === "tabuleiro")
       setConteudo({ tipo: "tabuleiro", conteudo: { ...conteudo.conteudo, retrato: caminho } });
+    else if (conteudo.tipo === "conversa")
+      setConteudo({ tipo: "conversa", conteudo: { ...conteudo.conteudo, retrato: caminho } });
     else set("imagem_path", caminho);
   };
 
@@ -199,14 +217,18 @@ export function EditorQuestao({
             rotulo={
               conteudo.tipo === "mapa"
                 ? "Imagem do mapa"
-                : conteudo.tipo === "tabuleiro"
-                  ? "Retrato do personagem (vira o peão)"
-                  : "Imagem (fonte, charge, mapa)"
+                : conteudo.tipo === "detalhe_imagem"
+                  ? "Imagem (pintura, charge, foto): o aluno toca no detalhe"
+                  : conteudo.tipo === "tabuleiro"
+                    ? "Retrato do personagem (vira o peão)"
+                    : conteudo.tipo === "conversa"
+                      ? "Retrato do personagem (aparece na conversa)"
+                      : "Imagem (fonte, charge, mapa)"
             }
             dica={
               conteudo.tipo === "mapa"
                 ? "PNG, JPG ou WEBP até 2 MB, sem os nomes escritos nos lugares cobrados."
-                : conteudo.tipo === "tabuleiro"
+                : conteudo.tipo === "tabuleiro" || conteudo.tipo === "conversa"
                   ? "Só para quem não tem desenho no app: pintura ou foto do rosto, PNG, JPG ou WEBP até 2 MB."
                   : "PNG, JPG ou WEBP até 2 MB. Meta: 40% das questões de cada desafio com imagem."
             }
@@ -226,6 +248,17 @@ export function EditorQuestao({
                   className="text-sm text-red-700"
                   onClick={() =>
                     setConteudo({ tipo: "tabuleiro", conteudo: { ...conteudo.conteudo, retrato: undefined } })
+                  }
+                >
+                  Remover
+                </button>
+              )}
+              {conteudo.tipo === "conversa" && conteudo.conteudo.retrato && (
+                <button
+                  type="button"
+                  className="text-sm text-red-700"
+                  onClick={() =>
+                    setConteudo({ tipo: "conversa", conteudo: { ...conteudo.conteudo, retrato: undefined } })
                   }
                 >
                   Remover
@@ -452,6 +485,7 @@ function Previa({
       key={`${chave}-${semente}`}
       vista={vista}
       certas={certasDoTabuleiro(conteudo, permutacao)}
+      segredo={segredoPublico(conteudo)}
       enunciado={enunciado}
       imagemUrl={imagemUrl}
       tempo={tempo}
@@ -464,6 +498,7 @@ function Previa({
 function PreviaInterna({
   vista,
   certas,
+  segredo,
   enunciado,
   imagemUrl,
   tempo,
@@ -473,6 +508,8 @@ function PreviaInterna({
   vista: ReturnType<typeof montarVista>;
   /** Tabuleiro: na prévia, a cor e as vidas vêm do gabarito, como no treino. */
   certas?: number[];
+  /** Conversa e conceito secreto: reações e palavra, como no treino. */
+  segredo?: Segredo;
   enunciado: string;
   imagemUrl: string | null;
   tempo: number;
@@ -492,7 +529,7 @@ function PreviaInterna({
         <img src={imagemUrl} alt="" className="mx-auto max-h-64 rounded-xl border border-slate-200" />
       )}
       <p className="whitespace-pre-line font-medium">{enunciado || "Enunciado…"}</p>
-      <QuestaoInterativa vista={vista} resposta={resposta} onChange={setResposta} certas={certas} />
+      <QuestaoInterativa vista={vista} resposta={resposta} onChange={setResposta} certas={certas} segredo={segredo} />
       <button type="button" onClick={reembaralhar} className="text-sm text-marca-700">
         ↻ Embaralhar de novo
       </button>
@@ -1286,8 +1323,440 @@ function EditorConteudo({
         </div>
       );
     }
+    case "estimativa": {
+      const c = conteudo.conteudo;
+      const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "estimativa", conteudo: { ...c, ...novo } });
+      const numero = (v: string) => (v === "" || v === "-" ? 0 : Number(v));
+      const campo = (rotulo: string, chave: "valor" | "minimo" | "maximo" | "passo" | "acerto" | "margem") => (
+        <Campo rotulo={rotulo}>
+          <Entrada
+            type="number"
+            step="any"
+            value={c[chave]}
+            disabled={bloqueado}
+            onChange={(e) => mudar({ [chave]: numero(e.target.value) })}
+          />
+        </Campo>
+      );
+      return (
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={c.ano}
+              disabled={bloqueado}
+              onChange={(e) => mudar({ ano: e.target.checked })}
+            />
+            A resposta é um ano (negativo = a.C.)
+          </label>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {campo("Resposta certa", "valor")}
+            {campo("Régua começa em", "minimo")}
+            {campo("Termina em", "maximo")}
+            {campo("Anda de", "passo")}
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {campo("Nota cheia até (±)", "acerto")}
+            {campo("Zero a partir de (±)", "margem")}
+            {!c.ano && (
+              <Campo rotulo="Unidade">
+                <Entrada
+                  value={c.unidade}
+                  placeholder="%, milhões, km…"
+                  disabled={bloqueado}
+                  onChange={(e) => mudar({ unidade: e.target.value })}
+                />
+              </Campo>
+            )}
+          </div>
+          <p className="text-xs text-slate-500">
+            Entre as duas distâncias a nota cai em linha reta. Deixe a resposta longe das pontas da régua e fora do meio
+            exato, para a posição não entregar.
+          </p>
+        </div>
+      );
+    }
+    case "quem_sou_eu": {
+      const c = conteudo.conteudo;
+      const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "quem_sou_eu", conteudo: { ...c, ...novo } });
+      return (
+        <div className="space-y-4">
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Pistas (3 a 6), da mais difícil para a mais fácil. A primeira aparece logo de cara.
+            </legend>
+            <Linhas
+              itens={c.pistas}
+              min={3}
+              max={6}
+              novo={() => ""}
+              bloqueado={bloqueado}
+              onChange={(pistas) => mudar({ pistas })}
+              render={(p, i, atualizar) => (
+                <>
+                  <span className="w-6 text-sm font-bold text-marca-700">{i + 1}</span>
+                  <input
+                    className={classeInput}
+                    placeholder={i === 0 ? "Ex.: Estudei mineralogia na Europa…" : "Pista"}
+                    value={p}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar(e.target.value)}
+                  />
+                </>
+              )}
+            />
+          </fieldset>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">Candidatos (4 a 8). Marque o certo.</legend>
+            <Linhas
+              itens={c.candidatos}
+              min={4}
+              max={8}
+              novo={() => ""}
+              bloqueado={bloqueado}
+              onChange={(candidatos) => mudar({ candidatos, correta: Math.min(c.correta, candidatos.length - 1) })}
+              render={(cand, i, atualizar) => (
+                <>
+                  <input
+                    type="radio"
+                    name="correta"
+                    checked={c.correta === i}
+                    disabled={bloqueado}
+                    onChange={() => mudar({ correta: i })}
+                  />
+                  <input
+                    className={classeInput}
+                    value={cand}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar(e.target.value)}
+                  />
+                </>
+              )}
+            />
+          </fieldset>
+        </div>
+      );
+    }
+    case "monte_resposta": {
+      const c = conteudo.conteudo;
+      const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "monte_resposta", conteudo: { ...c, ...novo } });
+      return (
+        <div className="space-y-4">
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Espaços da resposta (2 a 4), na ordem, com o trecho certo de cada um
+            </legend>
+            <Linhas
+              itens={c.espacos}
+              min={2}
+              max={4}
+              novo={() => ({ rotulo: "", trecho: "" })}
+              bloqueado={bloqueado}
+              onChange={(espacos) => mudar({ espacos })}
+              render={(e, _i, atualizar) => (
+                <div className="flex flex-1 flex-col gap-1 sm:flex-row">
+                  <input
+                    className={`${classeInput} sm:w-40`}
+                    placeholder="Função (Fato, Causa…)"
+                    value={e.rotulo}
+                    disabled={bloqueado}
+                    onChange={(ev) => atualizar({ ...e, rotulo: ev.target.value })}
+                  />
+                  <textarea
+                    className={classeInput}
+                    rows={2}
+                    placeholder="Trecho certo"
+                    value={e.trecho}
+                    disabled={bloqueado}
+                    onChange={(ev) => atualizar({ ...e, trecho: ev.target.value })}
+                  />
+                </div>
+              )}
+            />
+          </fieldset>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Trechos que parecem servir e não servem (2 a 5)
+            </legend>
+            <Linhas
+              itens={c.distratores}
+              min={2}
+              max={5}
+              novo={() => ""}
+              bloqueado={bloqueado}
+              onChange={(distratores) => mudar({ distratores })}
+              render={(d, _i, atualizar) => (
+                <textarea
+                  className={classeInput}
+                  rows={2}
+                  value={d}
+                  disabled={bloqueado}
+                  onChange={(e) => atualizar(e.target.value)}
+                />
+              )}
+            />
+          </fieldset>
+          <p className="text-xs text-slate-500">
+            A pergunta vai no enunciado. Escreva a função de cada espaço de forma que cada trecho certo só sirva no seu.
+          </p>
+        </div>
+      );
+    }
+    case "investigue": {
+      const c = conteudo.conteudo;
+      return (
+        <div className="space-y-3">
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Questão de pesquisa: use só em desafio com consulta. Ela não cai na rodada final do desafio público.
+          </p>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Respostas aceitas: a principal primeiro, depois variações (nome completo, grafia antiga, sigla)
+            </legend>
+            <Linhas
+              itens={c.aceitas}
+              min={1}
+              max={10}
+              novo={() => ""}
+              bloqueado={bloqueado}
+              onChange={(aceitas) => onChange({ tipo: "investigue", conteudo: { aceitas } })}
+              render={(a, i, atualizar) => (
+                <>
+                  <span className="w-6 text-xs font-bold text-marca-700">{i === 0 ? "★" : ""}</span>
+                  <input
+                    className={classeInput}
+                    value={a}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar(e.target.value)}
+                  />
+                </>
+              )}
+            />
+          </fieldset>
+          <p className="text-xs text-slate-500">
+            O app ignora maiúsculas, acentos, pontuação e artigo no começo, e tolera 1 letra trocada em palavras médias
+            e 2 nas longas.
+          </p>
+        </div>
+      );
+    }
+    case "conversa": {
+      const c = conteudo.conteudo;
+      const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "conversa", conteudo: { ...c, ...novo } });
+      return (
+        <div className="space-y-3">
+          <label className="block space-y-1">
+            <span className="text-sm font-medium text-slate-700">
+              Personagem (se o app tiver o desenho dele, o rosto aparece na conversa)
+            </span>
+            {c.personagem.trim() && !imagemDoPersonagem(c.personagem) && !c.retrato && (
+              <span className="block text-sm text-amber-700">
+                O app não tem desenho deste personagem: envie um retrato no campo de imagem acima (ou fica a inicial).
+              </span>
+            )}
+            <input
+              className={classeInput}
+              placeholder="Ex.: Dom Pedro II"
+              value={c.personagem}
+              disabled={bloqueado}
+              onChange={(e) => mudar({ personagem: e.target.value })}
+            />
+          </label>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Turnos (3 a 8): o que o personagem diz, a resposta certa do aluno e duas erradas. A reação é opcional.
+            </legend>
+            <Linhas
+              itens={c.turnos}
+              min={3}
+              max={8}
+              novo={() => ({ mensagem: "", certa: "", erradas: ["", ""], reacao: "" })}
+              bloqueado={bloqueado}
+              onChange={(turnos) => mudar({ turnos })}
+              render={(t, i, atualizar) => (
+                <div className="flex-1 space-y-1 rounded-lg border border-slate-200 p-2">
+                  <span className="text-xs font-bold text-marca-700">Turno {i + 1}</span>
+                  <textarea
+                    className={classeInput}
+                    rows={2}
+                    placeholder="O personagem diz…"
+                    value={t.mensagem}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...t, mensagem: e.target.value })}
+                  />
+                  <input
+                    className={`${classeInput} border-emerald-300`}
+                    placeholder="Resposta certa do aluno"
+                    value={t.certa}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...t, certa: e.target.value })}
+                  />
+                  {[0, 1].map((j) => (
+                    <input
+                      key={j}
+                      className={classeInput}
+                      placeholder={`Resposta errada ${j + 1}`}
+                      value={t.erradas[j] ?? ""}
+                      disabled={bloqueado}
+                      onChange={(e) =>
+                        atualizar({ ...t, erradas: t.erradas.map((x, k) => (k === j ? e.target.value : x)) })
+                      }
+                    />
+                  ))}
+                  <input
+                    className={classeInput}
+                    placeholder="Reação do personagem depois da resposta (opcional)"
+                    value={t.reacao ?? ""}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...t, reacao: e.target.value })}
+                  />
+                </div>
+              )}
+            />
+          </fieldset>
+          <p className="text-xs text-slate-500">
+            Errar gasta vida (1 vida até 4 turnos, 2 até 6, 3 até 8). Sem vidas, a conversa acaba e vale o que acertou.
+          </p>
+        </div>
+      );
+    }
+    case "conceito_secreto": {
+      const c = conteudo.conteudo;
+      const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "conceito_secreto", conteudo: { ...c, ...novo } });
+      return (
+        <div className="space-y-3">
+          <label className="block space-y-1">
+            <span className="text-sm font-medium text-slate-700">Palavra secreta (até 3 palavras, só letras)</span>
+            <input
+              className={`${classeInput} uppercase tracking-widest`}
+              placeholder="Ex.: Absolutismo"
+              value={c.palavra}
+              disabled={bloqueado}
+              onChange={(e) => mudar({ palavra: e.target.value })}
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-sm font-medium text-slate-700">Definição que o aluno lê (sem a palavra)</span>
+            <textarea
+              className={classeInput}
+              rows={3}
+              value={c.definicao}
+              disabled={bloqueado}
+              onChange={(e) => mudar({ definicao: e.target.value })}
+            />
+          </label>
+          <p className="text-xs text-slate-500">
+            O aluno chuta letras num teclado na tela. Cada letra errada tira 15% da nota; na 6ª, a questão acaba e vale
+            zero.
+          </p>
+        </div>
+      );
+    }
     case "mapa":
       return <EditorMapa conteudo={conteudo.conteudo} onChange={onChange} bloqueado={bloqueado} />;
+    case "detalhe_imagem":
+      return <EditorDetalhe conteudo={conteudo.conteudo} onChange={onChange} bloqueado={bloqueado} />;
+    case "enquanto_isso": {
+      const c = conteudo.conteudo;
+      const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "enquanto_isso", conteudo: { ...c, ...novo } });
+      return (
+        <div className="space-y-3">
+          <fieldset className="grid gap-2 sm:grid-cols-2">
+            <legend className="mb-1 text-sm font-medium text-slate-700">As duas linhas do tempo</legend>
+            {[0, 1].map((l) => (
+              <input
+                key={l}
+                className={classeInput}
+                placeholder={l === 0 ? "Ex.: Brasil" : "Ex.: Europa"}
+                value={c.linhas[l] ?? ""}
+                disabled={bloqueado}
+                onChange={(e) => mudar({ linhas: c.linhas.map((x, k) => (k === l ? e.target.value : x)) })}
+              />
+            ))}
+          </fieldset>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">Períodos (2 a 5), na ordem</legend>
+            <Linhas
+              itens={c.periodos}
+              min={2}
+              max={5}
+              novo={() => ""}
+              bloqueado={bloqueado}
+              onChange={(periodos) =>
+                mudar({
+                  periodos,
+                  eventos: c.eventos.map((e) => ({ ...e, periodo: Math.min(e.periodo, periodos.length - 1) })),
+                })
+              }
+              render={(per, i, atualizar) => (
+                <>
+                  <span className="w-5 text-sm font-bold text-marca-700">{i + 1}</span>
+                  <input
+                    className={classeInput}
+                    placeholder="Ex.: 1800–1850"
+                    value={per}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar(e.target.value)}
+                  />
+                </>
+              )}
+            />
+          </fieldset>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-700">
+              Eventos (4 a 10), sem a data: escolha a linha e o período de cada um
+            </legend>
+            <Linhas
+              itens={c.eventos}
+              min={4}
+              max={10}
+              novo={() => ({ texto: "", linha: 0, periodo: 0 })}
+              bloqueado={bloqueado}
+              onChange={(eventos) => mudar({ eventos })}
+              render={(ev, _i, atualizar) => (
+                <>
+                  <input
+                    className={classeInput}
+                    placeholder="Evento"
+                    value={ev.texto}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...ev, texto: e.target.value })}
+                  />
+                  <select
+                    className={`${classeInput} w-28 shrink-0`}
+                    value={ev.linha}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...ev, linha: Number(e.target.value) })}
+                  >
+                    {[0, 1].map((l) => (
+                      <option key={l} value={l}>
+                        {c.linhas[l]?.trim() || `Linha ${l + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className={`${classeInput} w-32 shrink-0`}
+                    value={ev.periodo}
+                    disabled={bloqueado}
+                    onChange={(e) => atualizar({ ...ev, periodo: Number(e.target.value) })}
+                  >
+                    {c.periodos.map((per, k) => (
+                      <option key={k} value={k}>
+                        {per.trim() || `Período ${k + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+            />
+          </fieldset>
+          <p className="text-xs text-slate-500">
+            Por evento, a linha certa vale meio ponto e o período certo, a outra metade. Evite eventos cujo nome entrega
+            a linha.
+          </p>
+        </div>
+      );
+    }
     case "tabuleiro": {
       const c = conteudo.conteudo;
       const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "tabuleiro", conteudo: { ...c, ...novo } });
@@ -1356,6 +1825,69 @@ function EditorConteudo({
       );
     }
   }
+}
+
+function EditorDetalhe({
+  conteudo: c,
+  onChange,
+  bloqueado,
+}: {
+  conteudo: Extract<Conteudo, { tipo: "detalhe_imagem" }>["conteudo"];
+  onChange: (c: Conteudo) => void;
+  bloqueado: boolean;
+}) {
+  const mudar = (novo: Partial<typeof c>) => onChange({ tipo: "detalhe_imagem", conteudo: { ...c, ...novo } });
+  const tocar = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (bloqueado) return;
+    const caixa = e.currentTarget.getBoundingClientRect();
+    const x = Math.round(((e.clientX - caixa.left) / caixa.width) * 1000) / 10;
+    const y = Math.round(((e.clientY - caixa.top) / caixa.height) * 1000) / 10;
+    onChange({ tipo: "detalhe_imagem", conteudo: { imagem: c.imagem, x, y, raio: c.raio, proporcao: c.proporcao } });
+  };
+  if (!c.imagem) return <Aviso tipo="info">Envie a imagem no campo acima para marcar a área certa.</Aviso>;
+  const ry = c.raio * (c.proporcao ?? 1);
+  return (
+    <div className="space-y-3">
+      {c.posicionar && (
+        <Aviso tipo="info">A área veio do Claude sem posição. Toque na imagem, no centro do detalhe certo.</Aviso>
+      )}
+      <p className="text-sm text-slate-600">
+        Toque no centro do detalhe certo e ajuste o tamanho do círculo. O aluno acerta se tocar dentro dele.
+      </p>
+      <div className="relative mx-auto w-fit cursor-crosshair" onClick={tocar}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={urlImagem(c.imagem) ?? ""}
+          alt=""
+          onLoad={(e) => {
+            const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
+            const proporcao = h ? Math.round((w / h) * 100) / 100 : 1;
+            if (w && h && proporcao !== c.proporcao) mudar({ proporcao });
+          }}
+          className="block max-h-96 w-auto rounded-xl border border-slate-200"
+        />
+        {!c.posicionar && (
+          <span
+            style={{ left: `${c.x - c.raio}%`, top: `${c.y - ry}%`, width: `${2 * c.raio}%`, height: `${2 * ry}%` }}
+            className="pointer-events-none absolute rounded-[50%] border-4 border-emerald-400 bg-emerald-400/25"
+          />
+        )}
+      </div>
+      <label className="flex items-center gap-3 text-sm text-slate-700">
+        Tamanho da área
+        <input
+          type="range"
+          min={2}
+          max={30}
+          step={1}
+          value={c.raio}
+          disabled={bloqueado}
+          onChange={(e) => mudar({ raio: Number(e.target.value) })}
+          className="flex-1 accent-marca-600"
+        />
+      </label>
+    </div>
+  );
 }
 
 function EditorMapa({

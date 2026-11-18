@@ -18,6 +18,14 @@ export const TIPOS = [
   "linha_do_tempo_datas",
   "mapa",
   "tabuleiro",
+  "estimativa",
+  "quem_sou_eu",
+  "monte_resposta",
+  "investigue",
+  "conversa",
+  "conceito_secreto",
+  "detalhe_imagem",
+  "enquanto_isso",
 ] as const;
 export type TipoQuestao = (typeof TIPOS)[number];
 
@@ -42,10 +50,33 @@ export const NOME_TIPO: Record<TipoQuestao, string> = {
   linha_do_tempo_datas: "Linha do tempo com datas",
   mapa: "Mapa clicável",
   tabuleiro: "Tabuleiro",
+  estimativa: "Estimativa na régua",
+  quem_sou_eu: "Quem sou eu? (pistas)",
+  monte_resposta: "Monte a resposta",
+  investigue: "Investigue (com consulta)",
+  conversa: "Conversa com o personagem",
+  conceito_secreto: "Conceito secreto",
+  detalhe_imagem: "Detalhe na imagem",
+  enquanto_isso: "Enquanto isso… (duas linhas do tempo)",
 };
 
+/**
+ * Tipos que pedem pesquisa: só fazem sentido com consulta. Não caem na rodada
+ * final do desafio público e o painel avisa ao pô-los num desafio sem consulta.
+ */
+export const SO_COM_CONSULTA: readonly TipoQuestao[] = ["investigue"];
+
 /** Tipos de uma resposta só: o aluno precisa escolher antes de confirmar. */
-export const ESCOLHA_UNICA: readonly TipoQuestao[] = ["multipla_escolha", "interpretacao", "quem_disse", "intruso"];
+export const ESCOLHA_UNICA: readonly TipoQuestao[] = [
+  "multipla_escolha",
+  "interpretacao",
+  "quem_disse",
+  "intruso",
+  "quem_sou_eu",
+  "estimativa",
+  "investigue",
+  "detalhe_imagem",
+];
 
 /** Tempo limite padrão por tipo, em segundos (escopo: 20 a 60 s). */
 /** Limites do tempo por questão, em segundos (o professor escolhe livremente dentro deles). */
@@ -70,6 +101,14 @@ export const TEMPO_PADRAO: Record<TipoQuestao, number> = {
   linha_do_tempo_datas: 90,
   mapa: 75,
   tabuleiro: 90,
+  estimativa: 40,
+  quem_sou_eu: 90,
+  monte_resposta: 120,
+  investigue: 180,
+  conversa: 90,
+  conceito_secreto: 60,
+  detalhe_imagem: 45,
+  enquanto_isso: 90,
 };
 
 export const NOME_DIFICULDADE: Record<number, string> = { 1: "Fácil", 2: "Média", 3: "Difícil" };
@@ -273,13 +312,159 @@ export const conteudoTabuleiro = z.object({
     .max(10, "Use de 3 a 10 casas."),
 });
 
+export const conteudoEstimativa = z
+  .object({
+    // Resposta certa e régua (no ano, negativo = a.C.).
+    valor: z.number({ error: "Informe a resposta certa." }),
+    minimo: z.number({ error: "Informe o início da régua." }),
+    maximo: z.number({ error: "Informe o fim da régua." }),
+    passo: z.number().positive("O passo da régua precisa ser maior que zero.").default(1),
+    unidade: z.string().trim().max(20, "Unidade longa demais (máx. 20 caracteres).").default(""),
+    // Régua de anos: mostra "27 a.C." e não usa separador de milhar.
+    ano: z.boolean().default(false),
+    // Até esta distância da resposta, nota cheia.
+    acerto: z.number().min(0, "A faixa de acerto não pode ser negativa."),
+    // A partir desta distância, zero. Entre as duas, a nota cai em linha reta.
+    margem: z.number().positive("A margem precisa ser maior que zero."),
+  })
+  .refine((c) => c.maximo > c.minimo, "O fim da régua precisa ser maior que o início.")
+  .refine((c) => c.valor >= c.minimo && c.valor <= c.maximo, "A resposta precisa estar dentro da régua.")
+  .refine((c) => c.margem > c.acerto, "A margem (nota zero) precisa ser maior que a faixa de acerto.")
+  .refine((c) => {
+    const n = (c.maximo - c.minimo) / c.passo;
+    return n >= 4 && n <= 5000;
+  }, "A régua precisa ter de 4 a 5.000 passos: ajuste o início, o fim ou o passo.");
+
+export const conteudoQuemSouEu = z
+  .object({
+    candidatos: z
+      .array(texto.max(80, "Candidato longo demais (máx. 80 caracteres)."))
+      .min(4, "Use de 4 a 8 candidatos.")
+      .max(8, "Use de 4 a 8 candidatos."),
+    correta: z.number().int().min(0),
+    // Da mais difícil para a mais fácil: a primeira aparece logo de cara.
+    pistas: z
+      .array(texto.max(300, "Pista longa demais (máx. 300 caracteres)."))
+      .min(3, "Use de 3 a 6 pistas.")
+      .max(6, "Use de 3 a 6 pistas."),
+  })
+  .refine((c) => c.correta < c.candidatos.length, "Marque o candidato certo.");
+
+export const conteudoMonteResposta = z.object({
+  // Na ordem da resposta: cada espaço tem uma função e o trecho certo dele.
+  espacos: z
+    .array(
+      z.object({
+        rotulo: texto.max(40, "Nome do espaço longo demais (máx. 40 caracteres)."),
+        trecho: texto.max(300, "Trecho longo demais (máx. 300 caracteres)."),
+      }),
+    )
+    .min(2, "Use de 2 a 4 espaços.")
+    .max(4, "Use de 2 a 4 espaços."),
+  // Trechos que parecem servir e não servem.
+  distratores: z
+    .array(texto.max(300, "Trecho longo demais (máx. 300 caracteres)."))
+    .min(2, "Use de 2 a 5 trechos que não servem.")
+    .max(5, "Use de 2 a 5 trechos que não servem."),
+});
+
+export const conteudoInvestigue = z.object({
+  // A primeira é a resposta principal (aparece no gabarito); as outras, variações aceitas.
+  aceitas: z
+    .array(texto.max(120, "Resposta longa demais (máx. 120 caracteres)."))
+    .min(1, "Escreva a resposta certa.")
+    .max(10, "Use no máximo 10 respostas aceitas."),
+});
+
+export const conteudoConversa = z.object({
+  // Com quem o aluno conversa (ex.: "Operário em São Paulo, 1917").
+  personagem: texto.max(80, "Nome do personagem longo demais (máx. 80 caracteres)."),
+  // Retrato enviado (caminho no bucket das questões), para quem não tem desenho no app.
+  retrato: z.string().trim().optional(),
+  turnos: z
+    .array(
+      z.object({
+        mensagem: texto.max(300, "Mensagem longa demais (máx. 300 caracteres)."),
+        certa: texto.max(200, "Resposta longa demais (máx. 200 caracteres)."),
+        erradas: z
+          .array(texto.max(200, "Resposta longa demais (máx. 200 caracteres)."))
+          .length(2, "Escreva 2 respostas erradas em cada turno."),
+        // O que o personagem responde depois (aparece só depois da escolha).
+        reacao: z.string().trim().max(300, "Reação longa demais (máx. 300 caracteres).").optional(),
+      }),
+    )
+    .min(3, "Use de 3 a 8 turnos.")
+    .max(8, "Use de 3 a 8 turnos."),
+});
+
+export const conteudoConceitoSecreto = z
+  .object({
+    palavra: texto.max(30, "Palavra longa demais (máx. 30 caracteres)."),
+    definicao: texto.max(300, "Definição longa demais (máx. 300 caracteres)."),
+  })
+  .refine((c) => /^[\p{L}\s'-]+$/u.test(c.palavra), "Use só letras (e espaço ou hífen) na palavra.")
+  .refine((c) => c.palavra.trim().split(/\s+/).length <= 3, "Use no máximo 3 palavras.")
+  .refine((c) => (c.palavra.match(/\p{L}/gu) ?? []).length >= 4, "A palavra precisa ter ao menos 4 letras.");
+
+export const conteudoDetalheImagem = z
+  .object({
+    // Caminho no bucket das questões, como no mapa.
+    imagem: z.string().trim().min(1, "Envie a imagem."),
+    // Centro da área certa, em % da largura e da altura da imagem.
+    x: z.number().min(0).max(100),
+    y: z.number().min(0).max(100),
+    // Raio da área, em % da largura da imagem.
+    raio: z.number().min(2, "Área pequena demais.").max(30, "Área grande demais."),
+    // Largura ÷ altura da imagem, para a área ser um círculo de verdade (1 = quadrada).
+    proporcao: z.number().min(0.2).max(5).optional(),
+    // Área criada pelo conector, ainda fora do lugar.
+    posicionar: z.boolean().optional(),
+  })
+  .refine((c) => !c.posicionar, "Toque na imagem para marcar a área certa.");
+
+export const conteudoEnquantoIsso = z
+  .object({
+    // As duas linhas do tempo (ex.: Brasil e Europa).
+    linhas: z
+      .array(texto.max(40, "Nome de linha longo demais (máx. 40 caracteres)."))
+      .length(2, "Use 2 linhas (ex.: Brasil e Europa)."),
+    // Colunas da grade, na ordem (ex.: "1500–1600").
+    periodos: z
+      .array(texto.max(40, "Período longo demais (máx. 40 caracteres)."))
+      .min(2, "Use de 2 a 5 períodos.")
+      .max(5, "Use de 2 a 5 períodos."),
+    eventos: z
+      .array(
+        z.object({
+          texto: texto.max(150, "Evento longo demais (máx. 150 caracteres)."),
+          linha: z.number().int().min(0).max(1),
+          periodo: z.number().int().min(0),
+        }),
+      )
+      .min(4, "Use de 4 a 10 eventos.")
+      .max(10, "Use de 4 a 10 eventos."),
+  })
+  .refine((c) => c.eventos.every((e) => e.periodo < c.periodos.length), "Escolha o período de cada evento.")
+  .refine(
+    (c) => [0, 1].every((l) => c.eventos.some((e) => e.linha === l)),
+    "Cada linha precisa de ao menos um evento.",
+  );
+
+/** Máximo de letras que o aluno pode digitar no Investigue. */
+export const MAX_DIGITADO = 160;
+
 /**
  * No tabuleiro, a permutação tem 2 itens por casa (2k = certa, 2k+1 = errada).
  * Devolve a ordem das duas opções da casa k na tela: [0, 1] (certa à esquerda) ou [1, 0].
  */
 export function ordemDaCasa(permutacao: number[], k: number): number[] {
-  const sub = subPermutacao(permutacao, 2 * k, 2);
-  return sub.length === 2 ? sub : [0, 1];
+  return ordemDoPasso(permutacao, k, 2);
+}
+
+/** Ordem na tela das opções do passo k quando cada passo tem `n` opções (a certa é a 0). */
+export function ordemDoPasso(permutacao: number[], k: number, n: number): number[] {
+  const sub = subPermutacao(permutacao, n * k, n);
+  return sub.length === n ? sub : Array.from({ length: n }, (_, i) => i);
 }
 
 /** Faixas da régua: [início, fim) de cada uma. */
@@ -316,6 +501,14 @@ export const SCHEMA_CONTEUDO = {
   linha_do_tempo_datas: conteudoLinhaDoTempoDatas,
   mapa: conteudoMapa,
   tabuleiro: conteudoTabuleiro,
+  estimativa: conteudoEstimativa,
+  quem_sou_eu: conteudoQuemSouEu,
+  monte_resposta: conteudoMonteResposta,
+  investigue: conteudoInvestigue,
+  conversa: conteudoConversa,
+  conceito_secreto: conteudoConceitoSecreto,
+  detalhe_imagem: conteudoDetalheImagem,
+  enquanto_isso: conteudoEnquantoIsso,
 } as const;
 
 export type ConteudoMultiplaEscolha = z.infer<typeof conteudoMultiplaEscolha>;
@@ -335,6 +528,14 @@ export type ConteudoPontoDeVista = z.infer<typeof conteudoPontoDeVista>;
 export type ConteudoLinhaDoTempoDatas = z.infer<typeof conteudoLinhaDoTempoDatas>;
 export type ConteudoMapa = z.infer<typeof conteudoMapa>;
 export type ConteudoTabuleiro = z.infer<typeof conteudoTabuleiro>;
+export type ConteudoEstimativa = z.infer<typeof conteudoEstimativa>;
+export type ConteudoQuemSouEu = z.infer<typeof conteudoQuemSouEu>;
+export type ConteudoMonteResposta = z.infer<typeof conteudoMonteResposta>;
+export type ConteudoInvestigue = z.infer<typeof conteudoInvestigue>;
+export type ConteudoConversa = z.infer<typeof conteudoConversa>;
+export type ConteudoConceitoSecreto = z.infer<typeof conteudoConceitoSecreto>;
+export type ConteudoDetalheImagem = z.infer<typeof conteudoDetalheImagem>;
+export type ConteudoEnquantoIsso = z.infer<typeof conteudoEnquantoIsso>;
 
 export type Conteudo =
   | { tipo: "multipla_escolha"; conteudo: ConteudoMultiplaEscolha }
@@ -353,7 +554,15 @@ export type Conteudo =
   | { tipo: "ponto_de_vista"; conteudo: ConteudoPontoDeVista }
   | { tipo: "linha_do_tempo_datas"; conteudo: ConteudoLinhaDoTempoDatas }
   | { tipo: "mapa"; conteudo: ConteudoMapa }
-  | { tipo: "tabuleiro"; conteudo: ConteudoTabuleiro };
+  | { tipo: "tabuleiro"; conteudo: ConteudoTabuleiro }
+  | { tipo: "estimativa"; conteudo: ConteudoEstimativa }
+  | { tipo: "quem_sou_eu"; conteudo: ConteudoQuemSouEu }
+  | { tipo: "monte_resposta"; conteudo: ConteudoMonteResposta }
+  | { tipo: "investigue"; conteudo: ConteudoInvestigue }
+  | { tipo: "conversa"; conteudo: ConteudoConversa }
+  | { tipo: "conceito_secreto"; conteudo: ConteudoConceitoSecreto }
+  | { tipo: "detalhe_imagem"; conteudo: ConteudoDetalheImagem }
+  | { tipo: "enquanto_isso"; conteudo: ConteudoEnquantoIsso };
 
 export function validarConteudo(tipo: TipoQuestao, conteudo: unknown) {
   return SCHEMA_CONTEUDO[tipo].safeParse(conteudo);
@@ -400,6 +609,20 @@ export function tamanhoPermutacao(c: Conteudo): number {
       return c.conteudo.marcadores.length;
     case "tabuleiro":
       return c.conteudo.casas.length * 2;
+    case "estimativa":
+    case "investigue":
+      return 0;
+    case "quem_sou_eu":
+      return c.conteudo.candidatos.length;
+    case "conversa":
+      return c.conteudo.turnos.length * 3;
+    case "conceito_secreto":
+    case "detalhe_imagem":
+      return 0;
+    case "enquanto_isso":
+      return c.conteudo.eventos.length;
+    case "monte_resposta":
+      return c.conteudo.espacos.length + c.conteudo.distratores.length;
   }
 }
 
@@ -482,6 +705,44 @@ export function conteudoVazio(tipo: TipoQuestao): Conteudo {
         tipo,
         conteudo: { personagem: "", casas: [0, 1, 2, 3, 4].map(() => ({ certa: "", errada: "", emoji: "" })) },
       };
+    case "estimativa":
+      return {
+        tipo,
+        conteudo: { valor: 1822, minimo: 1750, maximo: 1900, passo: 1, unidade: "", ano: true, acerto: 2, margem: 30 },
+      };
+    case "quem_sou_eu":
+      return { tipo, conteudo: { candidatos: ["", "", "", "", "", ""], correta: 0, pistas: ["", "", "", "", ""] } };
+    case "monte_resposta":
+      return {
+        tipo,
+        conteudo: {
+          espacos: ["Fato", "Consequência", "Conclusão"].map((rotulo) => ({ rotulo, trecho: "" })),
+          distratores: ["", "", ""],
+        },
+      };
+    case "investigue":
+      return { tipo, conteudo: { aceitas: [""] } };
+    case "conversa":
+      return {
+        tipo,
+        conteudo: {
+          personagem: "",
+          turnos: [0, 1, 2, 3].map(() => ({ mensagem: "", certa: "", erradas: ["", ""], reacao: "" })),
+        },
+      };
+    case "conceito_secreto":
+      return { tipo, conteudo: { palavra: "", definicao: "" } };
+    case "detalhe_imagem":
+      return { tipo, conteudo: { imagem: "", x: 50, y: 50, raio: 10 } };
+    case "enquanto_isso":
+      return {
+        tipo,
+        conteudo: {
+          linhas: ["", ""],
+          periodos: ["", "", ""],
+          eventos: [0, 1, 2, 3].map((i) => ({ texto: "", linha: i % 2, periodo: Math.floor(i / 2) })),
+        },
+      };
   }
 }
 
@@ -511,7 +772,22 @@ export type Vista =
       casas: [string, string][];
       /** Emoji do assunto de cada casa (null = sem emoji). */
       emojis: (string | null)[];
-    };
+    }
+  | { tipo: "estimativa"; minimo: number; maximo: number; passo: number; unidade: string; ano: boolean }
+  /**
+   * pistas = as que o aluno já pode ler. No desafio, o servidor manda só as abertas
+   * (as outras nem chegam à tela); no treino e na prévia, vêm todas e a tela vai abrindo.
+   */
+  | { tipo: "quem_sou_eu"; candidatos: string[]; pistas: string[]; total: number }
+  | { tipo: "monte_resposta"; rotulos: string[]; banco: string[] }
+  | { tipo: "investigue" }
+  /** Mensagens do personagem e as 3 respostas de cada turno, na ordem da tela. */
+  | { tipo: "conversa"; personagem: string; avatar: string | null; mensagens: string[]; opcoes: string[][] }
+  /** padrao: "_" no lugar de cada letra; espaço e hífen aparecem. */
+  | { tipo: "conceito_secreto"; definicao: string; padrao: string[] }
+  | { tipo: "detalhe_imagem"; imagem: string }
+  /** Eventos na ordem da tela; cada um vai para uma célula (linha × período). */
+  | { tipo: "enquanto_isso"; linhas: string[]; periodos: string[]; eventos: string[] };
 
 /** Resposta do aluno, sempre em índices da ordem exibida. */
 export type Resposta =
@@ -532,7 +808,20 @@ export type Resposta =
   | { tipo: "linha_do_tempo_datas"; faixas: (number | null)[] }
   | { tipo: "mapa"; pinos: (number | null)[] }
   /** Por casa: 0 = opção da esquerda, 1 = da direita (posições da tela). */
-  | { tipo: "tabuleiro"; escolhas: (number | null)[]; fim?: boolean };
+  | { tipo: "tabuleiro"; escolhas: (number | null)[]; fim?: boolean }
+  | { tipo: "estimativa"; valor: number | null }
+  /** pistas = quantas o aluno abriu (no desafio, vale o que o servidor gravou). */
+  | { tipo: "quem_sou_eu"; escolha: number | null; pistas: number }
+  | { tipo: "monte_resposta"; preenchidas: (number | null)[] }
+  | { tipo: "investigue"; texto: string }
+  /** Por turno: posição na tela da resposta escolhida. */
+  | { tipo: "conversa"; escolhas: (number | null)[]; fim?: boolean }
+  /** Letras tentadas, em maiúsculas sem acento (no desafio, vale o que o servidor gravou). */
+  | { tipo: "conceito_secreto"; letras: string[]; fim?: boolean }
+  /** Ponto tocado, em % da largura e da altura da imagem. */
+  | { tipo: "detalhe_imagem"; ponto: { x: number; y: number } | null }
+  /** Por evento na tela: célula escolhida (linha × nº de períodos + período). */
+  | { tipo: "enquanto_isso"; celulas: (number | null)[] };
 
 export const schemaResposta = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("multipla_escolha"), escolha: z.number().int().nullable() }),
@@ -557,4 +846,27 @@ export const schemaResposta = z.discriminatedUnion("tipo", [
     // A tela encerrou o caminho (chegada ou sem vidas): as casas que faltaram valem zero.
     fim: z.boolean().optional(),
   }),
+  z.object({ tipo: z.literal("estimativa"), valor: z.number().finite().nullable() }),
+  z.object({
+    tipo: z.literal("quem_sou_eu"),
+    escolha: z.number().int().nullable(),
+    pistas: z.number().int().min(1).max(10),
+  }),
+  z.object({ tipo: z.literal("monte_resposta"), preenchidas: z.array(z.number().int().nullable()).max(10) }),
+  z.object({ tipo: z.literal("investigue"), texto: z.string().max(MAX_DIGITADO) }),
+  z.object({
+    tipo: z.literal("conversa"),
+    escolhas: z.array(z.number().int().min(0).max(2).nullable()).max(8),
+    fim: z.boolean().optional(),
+  }),
+  z.object({
+    tipo: z.literal("conceito_secreto"),
+    letras: z.array(z.string().regex(/^[A-Z]$/)).max(26),
+    fim: z.boolean().optional(),
+  }),
+  z.object({
+    tipo: z.literal("detalhe_imagem"),
+    ponto: z.object({ x: z.number().min(0).max(100), y: z.number().min(0).max(100) }).nullable(),
+  }),
+  z.object({ tipo: z.literal("enquanto_isso"), celulas: z.array(z.number().int().min(0).max(9).nullable()).max(10) }),
 ]);

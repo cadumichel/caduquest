@@ -143,6 +143,7 @@ export function Revisao({ pendentes }: { pendentes: number }) {
             onChange={setResposta}
             desabilitada={pendente}
             certas={questao.certas}
+            segredo={questao.segredo}
           />
           {erro && <Aviso>{erro}</Aviso>}
           <Botao

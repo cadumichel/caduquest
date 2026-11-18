@@ -1,3 +1,4 @@
+import { SO_COM_CONSULTA, type TipoQuestao } from "../questoes/tipos";
 /**
  * Desafios públicos: qualquer pessoa joga um desafio de História por era.
  * Regras puras (sem banco), para testar.
@@ -167,7 +168,27 @@ export function sortearQuestoes<T extends { id: string; tipo: string }>(
     }
   }
   // A ordem final também é sorteada: o rodízio não deve ditar a sequência.
-  return embaralhar(escolhidas);
+  const tipoDe = new Map(banco.map((q) => [q.id, q.tipo]));
+  return foraDaRodadaFinal(embaralhar(escolhidas), (id) => SO_COM_CONSULTA.includes(tipoDe.get(id) as TipoQuestao));
+}
+
+/**
+ * Questões de pesquisa (só com consulta) não podem cair na rodada final, que é
+ * sem consulta: troca cada uma com a última questão comum das rodadas anteriores.
+ */
+export function foraDaRodadaFinal(ordem: string[], pesquisa: (id: string) => boolean, finais = QUESTOES_FINAIS) {
+  const nova = [...ordem];
+  const inicioFinal = Math.max(0, nova.length - finais);
+  for (let i = inicioFinal; i < nova.length; i++) {
+    if (!pesquisa(nova[i])) continue;
+    for (let j = inicioFinal - 1; j >= 0; j--) {
+      if (!pesquisa(nova[j])) {
+        [nova[i], nova[j]] = [nova[j], nova[i]];
+        break;
+      }
+    }
+  }
+  return nova;
 }
 
 export type PartidaRanking = {

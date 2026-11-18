@@ -20,6 +20,7 @@ import {
 } from "@/lib/questoes/relampago";
 import {
   NOME_TIPO,
+  SO_COM_CONSULTA,
   TEMPO_MAX_S,
   TEMPO_MIN_S,
   TEMPO_PADRAO,
@@ -514,6 +515,156 @@ const schemaQuestao = z.object({
     .describe(
       "tabuleiro: um personagem percorre de 3 a 10 casas (o ideal é 5 a 8), na ordem da vida dele; em cada casa o aluno escolhe entre duas opções qual ele fez e vê na hora se acertou. Vidas: até 4 casas, 1; 5 ou 6, 2; 7 a 10, 3. Cada erro gasta uma vida e, sem vidas, o próximo erro encerra o caminho ali. Crédito parcial por casa. Use o enunciado para situar (ex.: 'Leve Abraham Lincoln até o fim do caminho.'). Personagem sem desenho no app: mande em imagem_url um retrato dele (pintura ou foto em que o rosto apareça bem, da Wikimedia Commons); o app recorta em círculo e usa como peão, no lugar da imagem acima do enunciado.",
     ),
+  estimativa: z
+    .object({
+      valor: z.number().describe("Resposta certa (no ano, negativo para a.C.)."),
+      minimo: z.number().describe("Início da régua."),
+      maximo: z.number().describe("Fim da régua."),
+      passo: z
+        .number()
+        .optional()
+        .describe("De quanto em quanto o marcador anda (padrão 1). A régua precisa ter de 4 a 5.000 passos."),
+      unidade: z.string().optional().describe("Ex.: '%', 'milhões', 'km'. Vazio em ano."),
+      ano: z.boolean().optional().describe("true quando a resposta é um ano (mostra '27 a.C.')."),
+      acerto: z.number().describe("Distância da resposta com nota cheia (ex.: 2 anos)."),
+      margem: z.number().describe("Distância a partir da qual vale zero (maior que acerto, ex.: 20 anos)."),
+    })
+    .optional()
+    .describe(
+      "estimativa: o aluno arrasta um marcador numa régua até o número ou o ano, sem alternativas; nota cheia até 'acerto' de distância, zero a partir de 'margem' e, entre as duas, a nota cai em linha reta. Bom para ordem de grandeza (porcentagens de população, quantidades, distâncias) e cronologia aproximada. A régua não pode começar ou terminar perto da resposta (ela ficaria óbvia): deixe a resposta longe das pontas, nunca no meio exato. Ajuste acerto e margem à dificuldade: num ano muito conhecido, acerto 0 e margem 10; numa porcentagem estimada, acerto 3 e margem 20. Explique na explicação o número exato e de onde ele vem.",
+    ),
+  quem_sou_eu: z
+    .object({
+      candidatos: z
+        .array(z.string())
+        .describe("4 a 8 personagens, eventos, lugares ou conceitos do mesmo período ou tema."),
+      correta: z.number().int().describe("Índice do candidato certo, a partir de 0."),
+      pistas: z
+        .array(z.string())
+        .describe(
+          "3 a 6 pistas em primeira pessoa ('Nasci...', 'Fui...'), da mais difícil para a mais fácil. A primeira só serve a quem conhece bem; a última quase entrega.",
+        ),
+    })
+    .optional()
+    .describe(
+      "quem_sou_eu: os candidatos aparecem desde o início; as pistas abrem uma a uma e o aluno arrisca uma vez só. Quem acerta com menos pistas ganha mais (com 5 pistas: 100%, 80%, 60%, 40%, 20%). Cada pista deve servir a um só candidato quando somada às anteriores, mas as primeiras devem servir também a outros candidatos (é isso que faz o aluno esperar). Distratores de alto nível: contemporâneos, do mesmo grupo ou com trajetória parecida. Enunciado curto, ex.: 'Quem sou eu?' ou 'Que revolta sou eu?'.",
+    ),
+  monte_resposta: z
+    .object({
+      espacos: z
+        .array(
+          z.object({
+            rotulo: z
+              .string()
+              .describe("Função do espaço, até 40 caracteres: 'Fato', 'Causa', 'Consequência', 'Conclusão'..."),
+            trecho: z.string().describe("Trecho certo para este espaço, até 300 caracteres."),
+          }),
+        )
+        .describe("2 a 4 espaços, na ordem da resposta."),
+      distratores: z
+        .array(z.string())
+        .describe(
+          "2 a 5 trechos que parecem servir e não servem: verdadeiros mas fora da pergunta, causa invertida, anacronismo, nexo falso, generalização.",
+        ),
+    })
+    .optional()
+    .describe(
+      "monte_resposta: uma pergunta discursiva (no enunciado) que o aluno responde arrastando trechos para espaços com função definida, como numa resposta de prova. Cada trecho certo só pode servir no seu espaço (escreva a função de forma que não haja dúvida). Os trechos têm tamanho e estilo parecidos. Crédito parcial por espaço.",
+    ),
+  investigue: z
+    .object({
+      aceitas: z
+        .array(z.string())
+        .describe(
+          "1 a 10 respostas aceitas: a principal primeiro, depois variações (nome completo, nome curto, grafia antiga, sigla). O app ignora maiúsculas, acentos, pontuação e artigo inicial e tolera 1 ou 2 letras trocadas.",
+        ),
+    })
+    .optional()
+    .describe(
+      "investigue: questão de pesquisa, só para desafios com consulta (não cai na rodada final do público). O aluno pesquisa e DIGITA a resposta curta: quem pintou, quem escreveu, como se chama (monumento, praça, prédio, obra), onde fica (cidade, país), em que museu está. Mostre a obra ou o lugar em imagem_url ou o trecho no enunciado. Para exigir pesquisa de verdade, prefira perguntas de dois passos que a busca por imagem não resolve num clique (ex.: 'Em que museu está hoje o quadro que representa este momento?'). A resposta precisa ser única e curta (1 a 6 palavras). Use a dica para indicar o caminho da pesquisa.",
+    ),
+  conversa: z
+    .object({
+      personagem: z
+        .string()
+        .describe(
+          "Com quem o aluno conversa: um personagem histórico ('Abraham Lincoln') ou um tipo social da época ('Operário em São Paulo, 1917'). Se o app tiver o desenho dele, ele aparece no chat; senão, mande um retrato em imagem_url (opcional).",
+        ),
+      turnos: z
+        .array(
+          z.object({
+            mensagem: z
+              .string()
+              .describe("O que o personagem diz ou pergunta neste turno, até 300 caracteres, na voz dele."),
+            certa: z.string().describe("A resposta coerente com aquele tempo e lugar, até 200 caracteres."),
+            erradas: z
+              .array(z.string())
+              .describe(
+                "Exatamente 2 respostas erradas de alto nível: anacronismos (instituição, lei ou ideia real mas posterior), visão de outro grupo social, ou fato de outro país ou período.",
+              ),
+            reacao: z
+              .string()
+              .optional()
+              .describe(
+                "O que o personagem responde depois da escolha, até 300 caracteres, explicando por que a certa era a certa. Aparece só depois que o aluno responde.",
+              ),
+          }),
+        )
+        .describe("3 a 8 turnos (o ideal é 4 a 6), na ordem da conversa."),
+    })
+    .optional()
+    .describe(
+      "conversa: chat com uma pessoa da época. Em cada turno o personagem manda uma mensagem e o aluno escolhe entre 3 respostas; vê na hora se acertou e lê a reação. Vidas como no tabuleiro: até 4 turnos, 1; 5 ou 6, 2; 7 ou 8, 3. Cada erro gasta uma vida e, sem vidas, o próximo erro encerra a conversa. Crédito parcial por turno. Trabalha empatia histórica e anacronismo: a certa é a que faz sentido naquele tempo, não a 'mais justa' de hoje. Enunciado curto que situa (ex.: 'São Paulo, julho de 1917. Converse com um operário em greve.').",
+    ),
+  conceito_secreto: z
+    .object({
+      palavra: z
+        .string()
+        .describe(
+          "O conceito, de 1 a 3 palavras, só letras (espaço e hífen valem), ao menos 4 letras. Ex.: 'Pacto colonial'.",
+        ),
+      definicao: z
+        .string()
+        .describe(
+          "Definição precisa, até 300 caracteres, que não use a própria palavra nem palavras da mesma família.",
+        ),
+    })
+    .optional()
+    .describe(
+      "conceito_secreto: o aluno lê a definição e descobre o conceito chutando letras num teclado na tela (como a forca). 6 letras erradas encerram. Descobriu: 100% menos 15% por letra errada; não descobriu: zero. Acentos não contam (A vale Á, Ã...). Prefira conceitos-chave do capítulo, não nomes próprios. Use a dica para uma segunda definição ou um exemplo.",
+    ),
+  detalhe_imagem: z
+    .object({
+      x: z.number().optional().describe("Centro da área certa, em % da largura (0 a 100), só se souber com segurança."),
+      y: z.number().optional().describe("Centro da área certa, em % da altura (0 a 100), só se souber com segurança."),
+      raio: z.number().optional().describe("Raio da área certa em % da largura (2 a 30; padrão 10)."),
+    })
+    .optional()
+    .describe(
+      "detalhe_imagem: exige imagem_url (pintura, charge, foto ou gravura) e o aluno toca no ponto da imagem que responde ao enunciado (ex.: 'Toque no elemento que mostra que a cena é uma propaganda do governo'). Pergunte por um detalhe que exija interpretação, não por algo óbvio. Quase sempre omita x e y: a questão entra como rascunho e o professor toca na imagem, no app, para marcar a área certa. Avise o professor disso. Na explicação, descreva o detalhe (onde fica e o que significa).",
+    ),
+  enquanto_isso: z
+    .object({
+      linhas: z
+        .array(z.string())
+        .describe("Exatamente 2 linhas do tempo paralelas, até 40 caracteres (ex.: ['Brasil', 'Europa'])."),
+      periodos: z
+        .array(z.string())
+        .describe("2 a 5 períodos, na ordem, até 40 caracteres (ex.: ['1750–1800', '1800–1850', '1850–1900'])."),
+      eventos: z
+        .array(
+          z.object({
+            texto: z.string().describe("O evento, sem a data, até 150 caracteres."),
+            linha: z.number().int().describe("0 = primeira linha, 1 = segunda."),
+            periodo: z.number().int().describe("Índice do período, a partir de 0."),
+          }),
+        )
+        .describe("4 a 10 eventos, nas duas linhas e espalhados pelos períodos."),
+    })
+    .optional()
+    .describe(
+      "enquanto_isso: grade com 2 linhas do tempo paralelas (ex.: Brasil e Europa) e 2 a 5 períodos; o aluno arrasta ou toca cada evento até a célula certa. Por evento, a linha certa vale meio ponto e o período certo, a outra metade. Trabalha simultaneidade: escolha eventos que se relacionam entre as linhas (ex.: Revolução do Porto e Independência do Brasil) e evite eventos que o nome entrega a linha.",
+    ),
 });
 
 function conteudoBruto(q: z.infer<typeof schemaQuestao>) {
@@ -535,6 +686,14 @@ function conteudoBruto(q: z.infer<typeof schemaQuestao>) {
             ? { nome: m.nome, x: 10 + i * 15, y: 92 } // em fila no rodapé, esperando o professor
             : m,
         ),
+      };
+    case "detalhe_imagem":
+      // A imagem e a marca "posicionar" entram depois da validação.
+      return {
+        imagem: "-",
+        x: q.detalhe_imagem?.x ?? 50,
+        y: q.detalhe_imagem?.y ?? 50,
+        raio: q.detalhe_imagem?.raio ?? 10,
       };
     default:
       // Tipos novos: o campo com o nome do tipo já vem no formato gravado.
@@ -789,7 +948,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         "Antes de gravar, mostre as questões ao professor e grave só depois que ele aprovar.",
         "Toda questão leva uma dica (campo dica) e um tema curto (campo tema), escritos junto com ela.",
         `Questões relâmpago (relampago=true): quando o professor pedir relâmpago, escreva perguntas diretas, sem texto motivador, e chame checar_relampago antes de mostrá-las: mostre o tempo sugerido pelo app (${RELAMPAGO_MIN_S} a ${RELAMPAGO_MAX_S} s) ao lado de cada uma para o professor ajustar, e grave com o tempo que ele aprovar (ou omita tempo_limite_s para usar o sugerido).`,
-        `Desafio público (era_publica): questões abertas a qualquer pessoa, de todas as idades, alunos ou não. Cada partida sorteia ${QUESTOES_POR_PARTIDA} questões da era; as ${QUESTOES_FINAIS} últimas são a rodada final, sem consulta, e qualquer questão pode cair nela. Escreva questões contextuais e conceituais: a resposta nunca é um nome, uma data ou um número decorado, e sim a interpretação de um contexto, de uma fonte ou de um conceito, que alguém sem a apostila consiga raciocinar. Linguagem acessível, sem citar capítulos ou apostilas. Varie os formatos do lote (todos os tipos valem, menos mapa sem posições). Use listar_desafios_publicos para ver quantas questões cada era já tem (o ideal é 30 por era).`,
+        `Desafio público (era_publica): questões abertas a qualquer pessoa, de todas as idades, alunos ou não. Cada partida sorteia ${QUESTOES_POR_PARTIDA} questões da era; as ${QUESTOES_FINAIS} últimas são a rodada final, sem consulta, e qualquer questão pode cair nela. Escreva questões contextuais e conceituais: a resposta nunca é um nome, uma data ou um número decorado, e sim a interpretação de um contexto, de uma fonte ou de um conceito, que alguém sem a apostila consiga raciocinar. Linguagem acessível, sem citar capítulos ou apostilas. Varie os formatos do lote (todos os tipos valem, menos mapa ou detalhe na imagem sem posições). Use listar_desafios_publicos para ver quantas questões cada era já tem (o ideal é 30 por era).`,
         "Sempre envie junto, em curiosidades, 2 a 4 curiosidades históricas curtas e verdadeiras sobre os capítulos do lote, sem o professor precisar pedir: elas viram a Curiosidade do dia na tela dos alunos.",
       ].join(" "),
       inputSchema: z.object({
@@ -843,6 +1002,9 @@ export function registrarFerramentas(server: McpServer, origem: string) {
             ? "Fonte primária sem documento: envie o trecho em documento ou a imagem em imagem_url."
             : null) ??
           (q.tipo === "mapa" && !imagem ? "Mapa sem imagem: envie o mapa em imagem_url." : null) ??
+          (q.tipo === "detalhe_imagem" && !imagem
+            ? "Detalhe na imagem sem imagem: envie a imagem em imagem_url."
+            : null) ??
           (q.tipo === "tabuleiro" && !imagem && !imagemDoPersonagem(q.tabuleiro?.personagem ?? "")
             ? `O app não tem desenho de ${q.tabuleiro?.personagem}: envie um retrato dele em imagem_url (pintura ou foto do rosto, da Wikimedia Commons).`
             : null);
@@ -854,12 +1016,14 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         let dados = conteudo.data;
         // No mapa, a imagem fica dentro do conteúdo, embaixo dos pinos.
         const posicionar =
-          q.tipo === "mapa" && (q.mapa?.marcadores ?? []).some((m) => m.x === undefined || m.y === undefined);
-        if (q.tipo === "mapa")
+          (q.tipo === "mapa" && (q.mapa?.marcadores ?? []).some((m) => m.x === undefined || m.y === undefined)) ||
+          (q.tipo === "detalhe_imagem" && (q.detalhe_imagem?.x === undefined || q.detalhe_imagem?.y === undefined));
+        if (q.tipo === "mapa" || q.tipo === "detalhe_imagem")
           dados = { ...dados, imagem: caminhoImagem ?? "", ...(posicionar && { posicionar: true }) };
         if (posicionar) pinosPorPosicionar.push(i + 1);
         // No tabuleiro, a imagem é o retrato do peão.
-        if (q.tipo === "tabuleiro" && caminhoImagem) dados = { ...dados, retrato: caminhoImagem };
+        if ((q.tipo === "tabuleiro" || q.tipo === "conversa") && caminhoImagem)
+          dados = { ...dados, retrato: caminhoImagem };
         linhas.push({
           professor_id: professorId,
           tipo: q.tipo,
@@ -872,7 +1036,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           dica: q.dica.trim() || null,
           tema: q.tema.trim(),
           fonte: q.fonte?.trim() || null,
-          imagem_path: q.tipo === "mapa" || q.tipo === "tabuleiro" ? null : caminhoImagem,
+          imagem_path: ["mapa", "tabuleiro", "conversa", "detalhe_imagem"].includes(q.tipo) ? null : caminhoImagem,
           tempo_limite_s: relampago?.tempo ?? q.tempo_limite_s ?? TEMPO_PADRAO[q.tipo as TipoQuestao],
           ...(relampago && { relampago: true }),
           conteudo: dados,
@@ -911,7 +1075,7 @@ export function registrarFerramentas(server: McpServer, origem: string) {
           .map((l) => ({ enunciado: l.enunciado.slice(0, 80), tempo_s: l.tempo_limite_s })),
         recusadas,
         ...(pinosPorPosicionar.length && {
-          aviso: `Questões de mapa nas posições ${pinosPorPosicionar.join(", ")} ficaram em rascunho: o professor precisa abrir cada uma no app e tocar no mapa para pôr os pinos no lugar.`,
+          aviso: `Questões de mapa ou de detalhe na imagem nas posições ${pinosPorPosicionar.join(", ")} ficaram em rascunho: o professor precisa abrir cada uma no app e tocar na imagem para pôr os pinos ou a área certa no lugar.`,
         }),
         revisar_em: capitulos.map(
           (c) =>
@@ -1072,9 +1236,18 @@ export function registrarFerramentas(server: McpServer, origem: string) {
       const semTema = erroTema
         ? []
         : (comTema ?? []).filter((q) => !(q.tema as string | null)?.trim()).map((q) => q.id);
+      // Investigue pede pesquisa: num desafio sem consulta, vira questão de memória.
+      const dePesquisa = bloqueada
+        ? args.questoes.filter((id) =>
+            SO_COM_CONSULTA.includes((porId.get(id) as { tipo?: TipoQuestao } | undefined)?.tipo as TipoQuestao),
+          )
+        : [];
       if (!args.confirmar)
         return resultado({
           previa,
+          ...(dePesquisa.length && {
+            aviso_pesquisa: `${dePesquisa.length} questão(ões) Investigue pedem pesquisa, mas este desafio é sem consulta: o aluno vai ter de responder de memória. Sugira tirá-las ou criar o desafio com consulta.`,
+          }),
           ...(semTema.length && {
             sem_tema: semTema,
             aviso_tema: `${semTema.length} questão(ões) sem tema não recebem verificação de leitura. Escreva os temas com definir_temas antes de confirmar.`,

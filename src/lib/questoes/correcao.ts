@@ -1,5 +1,10 @@
+import { dentroDaArea, notaEvento } from "./detalhe";
 import { faixaDoAno, iniciosPerguntas, ordemDaCasa, subPermutacao, type Conteudo, type Resposta } from "./tipos";
 import { arredondarPontos } from "../pontos";
+import { notaEstimativa } from "./estimativa";
+import { respostaAceita } from "./investigue";
+import { fatorPistas } from "./pistas";
+import { notaConceito, notaConversa } from "./passos";
 
 /**
  * Fração de acerto (0 a 1) de uma resposta.
@@ -161,6 +166,60 @@ export function corrigir(c: Conteudo, permutacao: number[], r: Resposta | null):
         if (escolha === 0 || escolha === 1) if (ordemDaCasa(permutacao, k)[escolha] === 0) certos++;
       }
       return certos / n;
+    }
+    case "estimativa": {
+      const resp = r as Extract<Resposta, { tipo: "estimativa" }>;
+      return notaEstimativa(c.conteudo, resp.valor);
+    }
+    case "quem_sou_eu": {
+      // Acertou: vale menos a cada pista aberta. Errou: zero.
+      const resp = r as Extract<Resposta, { tipo: "quem_sou_eu" }>;
+      if (original(resp.escolha) !== c.conteudo.correta) return 0;
+      return fatorPistas(resp.pistas, c.conteudo.pistas.length);
+    }
+    case "monte_resposta": {
+      // Como lacunas: compara o texto do trecho posto em cada espaço.
+      const resp = r as Extract<Resposta, { tipo: "monte_resposta" }>;
+      const { espacos, distratores } = c.conteudo;
+      const banco = [...espacos.map((e) => e.trecho), ...distratores];
+      const usados = new Set<number>();
+      let certos = 0;
+      espacos.forEach((espaco, k) => {
+        const exibido = resp.preenchidas[k] ?? null;
+        if (exibido === null || usados.has(exibido)) return;
+        usados.add(exibido);
+        const trecho = banco[original(exibido)];
+        if (trecho !== undefined && normalizar(trecho) === normalizar(espaco.trecho)) certos++;
+      });
+      return certos / espacos.length;
+    }
+    case "investigue": {
+      const resp = r as Extract<Resposta, { tipo: "investigue" }>;
+      return respostaAceita(resp.texto, c.conteudo.aceitas) ? 1 : 0;
+    }
+    case "conversa": {
+      const resp = r as Extract<Resposta, { tipo: "conversa" }>;
+      return notaConversa(c.conteudo, permutacao, resp.escolhas);
+    }
+    case "conceito_secreto": {
+      // As letras reveladas pela eliminação já entram em letras (respostaComAjuda).
+      const resp = r as Extract<Resposta, { tipo: "conceito_secreto" }>;
+      return notaConceito(c.conteudo, resp.letras);
+    }
+    case "detalhe_imagem": {
+      const resp = r as Extract<Resposta, { tipo: "detalhe_imagem" }>;
+      return dentroDaArea(c.conteudo, resp.ponto) ? 1 : 0;
+    }
+    case "enquanto_isso": {
+      // Por evento: meio ponto pela linha certa e meio pelo período certo.
+      const resp = r as Extract<Resposta, { tipo: "enquanto_isso" }>;
+      const { eventos } = c.conteudo;
+      const soma = permutacao.reduce(
+        (t, orig, exibido) =>
+          t + (eventos[orig] ? notaEvento(c.conteudo, eventos[orig], resp.celulas[exibido] ?? null) : 0),
+        0,
+      );
+      return soma / eventos.length;
     }
   }
 }

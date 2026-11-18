@@ -1,4 +1,5 @@
 import { imagemDoPersonagem } from "../personagens";
+import { ordemDoTurno, padraoDaPalavra } from "./passos";
 import { urlImagem } from "../tipos-banco";
 import {
   faixasDaRegua,
@@ -23,8 +24,22 @@ export function retratoDoTabuleiro(c: { personagem: string; retrato?: string }):
  * Nunca mande isto para o desafio aberto.
  */
 export function certasDoTabuleiro(c: Conteudo, permutacao: number[]): number[] | undefined {
+  if (c.tipo === "conversa") return c.conteudo.turnos.map((_, k) => ordemDoTurno(permutacao, k).indexOf(0));
   if (c.tipo !== "tabuleiro") return undefined;
   return c.conteudo.casas.map((_, k) => ordemDaCasa(permutacao, k).indexOf(0));
+}
+
+/**
+ * Segredos que a tela só recebe com o gabarito já público (treino, revisão,
+ * prévia do professor): as reações do personagem na conversa e a palavra do
+ * conceito secreto. No desafio aberto, eles chegam do servidor passo a passo.
+ */
+export type Segredo = { reacoes?: (string | null)[]; palavra?: string };
+
+export function segredoPublico(c: Conteudo): Segredo | undefined {
+  if (c.tipo === "conversa") return { reacoes: c.conteudo.turnos.map((t) => t.reacao?.trim() || null) };
+  if (c.tipo === "conceito_secreto") return { palavra: c.conteudo.palavra };
+  return undefined;
 }
 
 /** Monta a vista do aluno a partir do conteúdo e da permutação sorteada para ele. */
@@ -114,6 +129,47 @@ export function montarVista(c: Conteudo, permutacao: number[]): Vista {
         }),
         emojis: c.conteudo.casas.map((casa) => casa.emoji?.trim() || null),
       };
+    case "estimativa": {
+      const { minimo, maximo, passo, unidade, ano } = c.conteudo;
+      return { tipo: c.tipo, minimo, maximo, passo, unidade, ano };
+    }
+    case "quem_sou_eu":
+      return {
+        tipo: c.tipo,
+        candidatos: permutacao.map((i) => c.conteudo.candidatos[i]),
+        pistas: c.conteudo.pistas,
+        total: c.conteudo.pistas.length,
+      };
+    case "monte_resposta": {
+      const { espacos, distratores } = c.conteudo;
+      const banco = [...espacos.map((e) => e.trecho), ...distratores];
+      return { tipo: c.tipo, rotulos: espacos.map((e) => e.rotulo), banco: permutacao.map((i) => banco[i]) };
+    }
+    case "investigue":
+      return { tipo: c.tipo };
+    case "conversa":
+      return {
+        tipo: c.tipo,
+        personagem: c.conteudo.personagem,
+        avatar: retratoDoTabuleiro(c.conteudo),
+        mensagens: c.conteudo.turnos.map((t) => t.mensagem),
+        opcoes: c.conteudo.turnos.map((t, k) => {
+          const todas = [t.certa, ...t.erradas];
+          return ordemDoTurno(permutacao, k).map((i) => todas[i]);
+        }),
+      };
+    case "conceito_secreto":
+      return { tipo: c.tipo, definicao: c.conteudo.definicao, padrao: padraoDaPalavra(c.conteudo.palavra) };
+    case "detalhe_imagem":
+      // Só a imagem: a área certa nunca vai para a tela.
+      return { tipo: c.tipo, imagem: urlImagem(c.conteudo.imagem) ?? "" };
+    case "enquanto_isso":
+      return {
+        tipo: c.tipo,
+        linhas: c.conteudo.linhas,
+        periodos: c.conteudo.periodos,
+        eventos: permutacao.map((i) => c.conteudo.eventos[i].texto),
+      };
   }
 }
 
@@ -150,6 +206,22 @@ export function respostaInicial(vista: Vista): Resposta {
       return { tipo: vista.tipo, pinos: vista.nomes.map(() => null) };
     case "tabuleiro":
       return { tipo: vista.tipo, escolhas: vista.casas.map(() => null) };
+    case "estimativa":
+      return { tipo: vista.tipo, valor: null };
+    case "quem_sou_eu":
+      return { tipo: vista.tipo, escolha: null, pistas: 1 };
+    case "monte_resposta":
+      return { tipo: vista.tipo, preenchidas: vista.rotulos.map(() => null) };
+    case "investigue":
+      return { tipo: vista.tipo, texto: "" };
+    case "conversa":
+      return { tipo: vista.tipo, escolhas: vista.mensagens.map(() => null) };
+    case "conceito_secreto":
+      return { tipo: vista.tipo, letras: [] };
+    case "detalhe_imagem":
+      return { tipo: vista.tipo, ponto: null };
+    case "enquanto_isso":
+      return { tipo: vista.tipo, celulas: vista.eventos.map(() => null) };
   }
 }
 
@@ -185,5 +257,21 @@ export function respostaCompleta(r: Resposta): boolean {
       return r.escolhas.every((v) => v !== null);
     case "encontrar_erro":
       return r.marcados.length > 0;
+    case "estimativa":
+      return r.valor !== null;
+    case "quem_sou_eu":
+      return r.escolha !== null;
+    case "monte_resposta":
+      return r.preenchidas.every((v) => v !== null);
+    case "investigue":
+      return r.texto.trim().length > 0;
+    case "conversa":
+    case "conceito_secreto":
+      // Acabou quando a tela marca o fim (ou o tempo esgota).
+      return Boolean(r.fim);
+    case "detalhe_imagem":
+      return r.ponto !== null;
+    case "enquanto_isso":
+      return r.celulas.every((v) => v !== null);
   }
 }

@@ -1,4 +1,6 @@
 import { respostaComAjuda } from "./ajudas";
+import { pistasGravadas } from "./pistas";
+import { ALFABETO, escolhasConversaGravadas, letrasGravadas, OPCOES_CONVERSA } from "./passos";
 import { ordemDaCasa, type Conteudo, type ConteudoTabuleiro, type Resposta } from "./tipos";
 
 /** Máximo de casas de um tabuleiro. */
@@ -75,6 +77,18 @@ export function respostaDoTabuleiro(c: ConteudoTabuleiro, escolhas: number[]) {
 
 /** Eliminação no tabuleiro: só vale revelar casas que o aluno ainda não respondeu. */
 export function candidatasAFrente(c: Conteudo, candidatas: number[], resposta: unknown): number[] {
+  // Conversa: só tira resposta errada do turno em que o aluno está.
+  if (c.tipo === "conversa") {
+    const atual = escolhasConversaGravadas(resposta).length;
+    return candidatas.filter((i) => Math.floor(i / OPCOES_CONVERSA) === atual);
+  }
+  // Conceito secreto: não revela letra que o aluno já chutou.
+  if (c.tipo === "conceito_secreto") {
+    const chutadas = new Set(letrasGravadas(resposta));
+    const faltam = candidatas.filter((i) => !chutadas.has(ALFABETO[i]));
+    // Sempre sobram ao menos 2 letras para o aluno descobrir.
+    return faltam.length > 2 ? faltam : [];
+  }
   if (c.tipo !== "tabuleiro") return candidatas;
   const feitas = escolhasGravadas(resposta).length;
   return candidatas.filter((k) => k >= feitas);
@@ -82,8 +96,9 @@ export function candidatasAFrente(c: Conteudo, candidatas: number[], resposta: u
 
 /**
  * Resposta que vale na correção. No tabuleiro, vale o andamento gravado no
- * servidor casa a casa (a tela não decide nada); nos outros tipos, a resposta
- * enviada com os itens travados pelas eliminações.
+ * servidor casa a casa (a tela não decide nada); no Quem sou eu?, as pistas
+ * abertas gravadas; nos outros tipos, a resposta enviada com os itens travados
+ * pelas eliminações.
  */
 export function respostaParaCorrigir(
   c: Conteudo,
@@ -93,7 +108,21 @@ export function respostaParaCorrigir(
   respostaEnviada: Resposta | null,
 ): Resposta | null {
   if (c.tipo === "tabuleiro") return respostaDoTabuleiro(c.conteudo, escolhasGravadas(respostaGravada));
-  return respostaComAjuda(c, permutacao, eliminadas, respostaEnviada);
+  // Conversa e conceito secreto: vale o andamento gravado passo a passo.
+  if (c.tipo === "conversa") {
+    const feitas = escolhasConversaGravadas(respostaGravada);
+    return { tipo: "conversa", escolhas: c.conteudo.turnos.map((_, k) => (k < feitas.length ? feitas[k] : null)) };
+  }
+  if (c.tipo === "conceito_secreto") {
+    return respostaComAjuda(c, permutacao, eliminadas, {
+      tipo: "conceito_secreto",
+      letras: letrasGravadas(respostaGravada),
+    });
+  }
+  const r = respostaComAjuda(c, permutacao, eliminadas, respostaEnviada);
+  // Quem sou eu?: vale o número de pistas que o servidor abriu, não o que a tela diz.
+  if (r?.tipo === "quem_sou_eu") return { ...r, pistas: pistasGravadas(respostaGravada) };
+  return r;
 }
 
 /** Resposta da tela ao voltar para um tabuleiro já começado (andamento gravado no servidor). */

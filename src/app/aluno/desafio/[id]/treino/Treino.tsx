@@ -166,6 +166,7 @@ export function Treino({ desafioId, titulo }: { desafioId: string; titulo: strin
             onChange={setResposta}
             desabilitada={pendente}
             certas={questao.certas}
+            segredo={questao.segredo}
           />
           {erro && <Aviso>{erro}</Aviso>}
           <Botao

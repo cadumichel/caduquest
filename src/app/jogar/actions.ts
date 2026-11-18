@@ -9,6 +9,8 @@ import {
   comecarPartida,
   dicaPublica,
   andarTabuleiroPublico,
+  abrirPistaPublica,
+  darPassoPublico,
   eliminarPublica,
   estadoPartida,
   responderPartida,
@@ -149,6 +151,18 @@ export async function responderPublico(
 export async function eliminarNaPartida(partidaId: string, questaoId: string): Promise<ResultadoAjudaPublica> {
   const jogador = await exigirJogador();
   return eliminarPublica(criarClienteAdmin(), jogador, String(partidaId), String(questaoId));
+}
+
+/** Conversa e conceito secreto: o servidor confere o passo e devolve o andamento. */
+export async function passoNaPartida(partidaId: string, questaoId: string, passo: number | string) {
+  const jogador = await exigirJogador();
+  return darPassoPublico(criarClienteAdmin(), jogador, String(partidaId), String(questaoId), passo);
+}
+
+/** Quem sou eu?: abre a próxima pista (o servidor grava quantas foram abertas). */
+export async function abrirPistaPartida(partidaId: string, questaoId: string) {
+  const jogador = await exigirJogador();
+  return abrirPistaPublica(criarClienteAdmin(), jogador, String(partidaId), String(questaoId));
 }
 
 /** Tabuleiro: responde a próxima casa (o servidor confere e devolve a cor e as vidas). */
