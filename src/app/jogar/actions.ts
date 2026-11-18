@@ -82,7 +82,11 @@ export async function entrarPublico(_: EstadoEntrarPublico, form: FormData): Pro
       })
       .select("id, versao_sessao")
       .single();
-    if (error || !novo) return { erro: "Esse apelido já está em uso. Escolha outro." };
+    if (error || !novo) {
+      if (error?.code === "23505") return { erro: "Esse apelido já está em uso. Escolha outro." };
+      console.error("cadastro público falhou", error?.code, error?.message);
+      return { erro: "Não foi possível criar sua conta agora. Tente de novo em instantes." };
+    }
     jogadorId = novo.id;
     versao = novo.versao_sessao;
   } else {
