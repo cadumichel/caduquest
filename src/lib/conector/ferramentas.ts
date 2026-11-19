@@ -64,6 +64,7 @@ import {
 import { ultimoDiaComPontos, type Temporada } from "@/lib/tipos-banco";
 import { guardarImagemDaUrl } from "./imagem";
 import { imagemDoPersonagem } from "@/lib/personagens";
+import { preservarImagem, SEM_EDICAO_DE_CONTEUDO, soMudaTexto } from "@/lib/questoes/edicao";
 import { professorDoConector } from "./professor";
 
 const resultado = (dados: unknown) => ({
@@ -709,6 +710,25 @@ function avaliarRelampago(q: z.infer<typeof schemaQuestao>, conteudo: unknown) {
   return { tempo, sugerido, problemas: problemasRelampago(q.enunciado, c, tempo) };
 }
 
+/** Campos que editar_questoes aceita: os de adicionar_questoes, menos os que não mudam. */
+const schemaEdicao = schemaQuestao
+  .omit({ tipo: true, capitulo: true, era_publica: true, habilidades: true, imagem_url: true, relampago: true })
+  .partial()
+  .extend({ id: z.string() });
+
+/** Quantas vezes cada questão já foi respondida, nas turmas e no desafio aberto. */
+async function contarRespostas(db: ReturnType<typeof criarClienteAdmin>, ids: string[]) {
+  const contagem = new Map<string, number>();
+  const [turmas, publico] = await Promise.all([
+    db.from("respostas").select("questao_id").in("questao_id", ids).limit(100000),
+    db.from("respostas_publicas").select("questao_id").in("questao_id", ids).limit(100000),
+  ]);
+  for (const r of [...(turmas.data ?? []), ...(publico.data ?? [])]) {
+    contagem.set(r.questao_id, (contagem.get(r.questao_id) ?? 0) + 1);
+  }
+  return contagem;
+}
+
 export function registrarFerramentas(server: McpServer, origem: string) {
   server.registerTool(
     "listar_turmas",
@@ -904,6 +924,166 @@ export function registrarFerramentas(server: McpServer, origem: string) {
         else gravadas.push(id);
       }
       return resultado({ gravadas: gravadas.length, recusadas });
+    },
+  );
+
+  server.registerTool(
+    "ver_questoes",
+    {
+      title: "Ver questões completas",
+      description:
+        "Mostra o conteúdo completo de questões do banco, pelo id (veja listar_questoes): enunciado, alternativas e resposta, itens, explicação, dica, tema e fonte, e quantas vezes cada uma já foi respondida. Use antes de editar_questoes, para reescrever a partir do texto que está gravado.",
+      inputSchema: z.object({ ids: z.array(z.string()).min(1).max(30) }),
+      annotations: { readOnlyHint: true },
+    },
+    async ({ ids }) => {
+      const professorId = await professorDoConector();
+      const db = criarClienteAdmin();
+      const { data, error } = await db
+        .from("questoes")
+        .select("*")
+        .eq("professor_id", professorId)
+        .in("id", ids);
+      if (error) return falha("Não foi possível consultar o banco de questões.");
+      const respondidas = await contarRespostas(db, ids);
+      return resultado({
+        questoes: (data ?? []).map((q) => ({
+          id: q.id,
+          tipo: q.tipo,
+          status: q.status,
+          capitulo: q.capitulo,
+          ...(q.era_publica && { era_publica: q.era_publica }),
+          dificuldade: q.dificuldade,
+          enunciado: q.enunciado,
+          conteudo: q.conteudo,
+          explicacao: q.explicacao,
+          dica: q.dica ?? null,
+          tema: q.tema ?? null,
+          fonte: q.fonte ?? null,
+          respostas: respondidas.get(q.id) ?? 0,
+        })),
+        nao_encontradas: ids.filter((id) => !(data ?? []).some((q) => q.id === id)),
+      });
+    },
+  );
+
+  server.registerTool(
+    "editar_questoes",
+    {
+      title: "Editar questões que já existem",
+      description: [
+        "Reescreve questões que já estão no banco, pelo id (veja ver_questoes). Mande só os campos que mudam: enunciado, explicacao, dica, tema, fonte, dificuldade e os campos do conteúdo do tipo da questão (os mesmos de adicionar_questoes; o tipo, o capítulo, a era e a imagem não mudam).",
+        "O conteúdo, quando enviado, vai inteiro: por exemplo, todas as alternativas e a correta.",
+        "Questão que já foi respondida só pode mudar os textos: mesma quantidade de itens e a resposta certa na mesma posição, para as respostas antigas continuarem valendo.",
+        "Mapa e detalhe na imagem: só os textos de fora do conteúdo (as posições se marcam no app).",
+        "Em duas etapas: confirmar=false mostra o antes e depois sem gravar; mostre ao professor e só chame com confirmar=true depois que ele aprovar.",
+      ].join(" "),
+      inputSchema: z.object({
+        questoes: z.array(schemaEdicao).min(1).max(30),
+        confirmar: z.boolean(),
+      }),
+    },
+    async ({ questoes, confirmar }) => {
+      const professorId = await professorDoConector();
+      const db = criarClienteAdmin();
+      const ids = questoes.map((q) => q.id);
+      const { data: atuais, error } = await db
+        .from("questoes")
+        .select("*")
+        .eq("professor_id", professorId)
+        .in("id", ids);
+      if (error) return falha("Não foi possível consultar o banco de questões.");
+      const respondidas = await contarRespostas(db, ids);
+      const recusadas: { id: string; motivo: string }[] = [];
+      const mudancas: { id: string; antes: Record<string, unknown>; depois: Record<string, unknown> }[] = [];
+
+      for (const e of questoes) {
+        const atual = (atuais ?? []).find((q) => q.id === e.id);
+        if (!atual) {
+          recusadas.push({ id: e.id, motivo: "Questão não encontrada." });
+          continue;
+        }
+        const tipo = atual.tipo as TipoQuestao;
+        const depois: Record<string, unknown> = {};
+        for (const campo of ["enunciado", "explicacao", "dica", "tema", "fonte"] as const) {
+          const valor = e[campo];
+          if (valor !== undefined && valor.trim() !== (atual[campo] ?? "")) depois[campo] = valor.trim() || null;
+        }
+        if (e.dificuldade !== undefined && e.dificuldade !== atual.dificuldade) depois.dificuldade = e.dificuldade;
+        if (depois.enunciado === null) {
+          recusadas.push({ id: e.id, motivo: "Enunciado vazio." });
+          continue;
+        }
+
+        const mandouConteudo =
+          tipo === "multipla_escolha"
+            ? e.alternativas !== undefined || e.correta !== undefined
+            : tipo === "vf_bloco"
+              ? e.afirmativas !== undefined
+              : tipo === "linha_do_tempo"
+                ? e.eventos !== undefined
+                : tipo === "pares"
+                  ? e.pares !== undefined
+                  : (e as Record<string, unknown>)[tipo] !== undefined;
+        if (mandouConteudo) {
+          if ((SEM_EDICAO_DE_CONTEUDO as readonly string[]).includes(tipo)) {
+            recusadas.push({ id: e.id, motivo: "Mapa e detalhe na imagem: o conteúdo se edita no app." });
+            continue;
+          }
+          const bruto = conteudoBruto({ ...e, tipo } as unknown as z.infer<typeof schemaQuestao>);
+          const validado = validarConteudo(tipo, bruto);
+          if (!validado.success) {
+            recusadas.push({ id: e.id, motivo: validado.error.issues[0].message });
+            continue;
+          }
+          const novo = preservarImagem(atual.conteudo, validado.data as Record<string, unknown>);
+          if (
+            tipo === "encontrar_erro" &&
+            (novo as { trechos: { errado: boolean; correcao?: string }[] }).trechos.some(
+              (t) => t.errado && !t.correcao?.trim(),
+            )
+          ) {
+            recusadas.push({ id: e.id, motivo: "Escreva a correção de cada trecho errado." });
+            continue;
+          }
+          const antigoValidado = validarConteudo(tipo, atual.conteudo);
+          const antigo = antigoValidado.success ? antigoValidado.data : atual.conteudo;
+          if ((respondidas.get(e.id) ?? 0) > 0 && !soMudaTexto(antigo, novo)) {
+            recusadas.push({
+              id: e.id,
+              motivo: `Já respondida ${respondidas.get(e.id)} vez(es): mude só os textos, com a mesma quantidade de itens e a resposta certa na mesma posição.`,
+            });
+            continue;
+          }
+          if (JSON.stringify(novo) !== JSON.stringify(atual.conteudo)) depois.conteudo = novo;
+        }
+        if (!Object.keys(depois).length) continue;
+        const antes = Object.fromEntries(
+          Object.keys(depois).map((k) => [k, (atual as Record<string, unknown>)[k] ?? null]),
+        );
+        mudancas.push({ id: e.id, antes, depois });
+      }
+
+      if (!confirmar) {
+        return resultado({
+          previa: true,
+          mudancas,
+          recusadas,
+          aviso: "Nada foi gravado. Mostre o antes e depois ao professor e chame de novo com confirmar=true.",
+        });
+      }
+      const gravadas: string[] = [];
+      for (const m of mudancas) {
+        const { data, error: erro } = await db
+          .from("questoes")
+          .update(m.depois)
+          .eq("id", m.id)
+          .eq("professor_id", professorId)
+          .select("id");
+        if (erro || !data?.length) recusadas.push({ id: m.id, motivo: "Não foi possível gravar esta questão." });
+        else gravadas.push(m.id);
+      }
+      return resultado({ gravadas: gravadas.length, ids: gravadas, recusadas });
     },
   );
 
