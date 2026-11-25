@@ -20,7 +20,8 @@ import { aplicarAjuda, rotuloEliminacao } from "@/lib/questoes/ajudas";
 import { respostaCompleta, respostaInicial } from "@/lib/questoes/apresentacao";
 import { respostaComProgresso } from "@/lib/questoes/tabuleiro";
 import { respostaComPassos } from "@/lib/questoes/passos";
-import { ESCOLHA_UNICA, type Resposta } from "@/lib/questoes/tipos";
+import { EM_ETAPAS, ESCOLHA_UNICA, type Resposta } from "@/lib/questoes/tipos";
+import { EsperaEtapas } from "@/components/EsperaEtapas";
 import { textoMarca, type MotivoZerada } from "@/lib/tela-protegida";
 import {
   andarNoTabuleiroPartida,
@@ -391,24 +392,28 @@ function TelaQuestao({
       )}
 
       {erroRede && <Aviso>Falha de conexão. Toque em confirmar de novo.</Aviso>}
-      <Botao
-        variante="sucesso"
-        className="w-full py-4 text-base shadow-lg"
-        disabled={pendente || (!completa && ESCOLHA_UNICA.includes(resposta.tipo))}
-        onClick={() => {
-          if (!completa) {
-            // O diálogo do navegador tira o foco da página: não conta como saída.
-            dialogoProprio.current = true;
-            const ok = confirm("Há itens sem resposta. Confirmar mesmo assim?");
-            dialogoProprio.current = false;
-            fora.current = false;
-            if (!ok) return;
-          }
-          confirmar(resposta);
-        }}
-      >
-        {pendente ? "Enviando…" : "Confirmar resposta"}
-      </Botao>
+      {EM_ETAPAS.includes(resposta.tipo) && !completa ? (
+        <EsperaEtapas tipo={resposta.tipo} />
+      ) : (
+        <Botao
+          variante="sucesso"
+          className="w-full py-4 text-base shadow-lg"
+          disabled={pendente || (!completa && ESCOLHA_UNICA.includes(resposta.tipo))}
+          onClick={() => {
+            if (!completa) {
+              // O diálogo do navegador tira o foco da página: não conta como saída.
+              dialogoProprio.current = true;
+              const ok = confirm("Há itens sem resposta. Confirmar mesmo assim?");
+              dialogoProprio.current = false;
+              fora.current = false;
+              if (!ok) return;
+            }
+            confirmar(resposta);
+          }}
+        >
+          {pendente ? "Enviando…" : "Confirmar resposta"}
+        </Botao>
+      )}
       {marca && <p className="text-right text-[11px] text-slate-400">{marca}</p>}
       <p className="text-center text-xs text-slate-400">
         <Link href="/jogar">Sair</Link> · o tempo continua correndo

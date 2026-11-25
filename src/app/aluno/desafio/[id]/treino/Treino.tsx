@@ -6,7 +6,8 @@ import { PalcoQuestao, useModoFoco } from "@/components/PalcoQuestao";
 import { QuestaoInterativa } from "@/components/QuestaoInterativa";
 import { Aviso, Botao, BotaoLink } from "@/components/ui";
 import { respostaCompleta, respostaInicial } from "@/lib/questoes/apresentacao";
-import { ESCOLHA_UNICA, type Resposta } from "@/lib/questoes/tipos";
+import { EM_ETAPAS, ESCOLHA_UNICA, type Resposta } from "@/lib/questoes/tipos";
+import { EsperaEtapas } from "@/components/EsperaEtapas";
 import type { CorrecaoTreino, QuestaoTreino } from "@/lib/treino";
 import { comecarTreino, corrigirRespostasTreino } from "../../../actions";
 
@@ -169,14 +170,18 @@ export function Treino({ desafioId, titulo }: { desafioId: string; titulo: strin
             segredo={questao.segredo}
           />
           {erro && <Aviso>{erro}</Aviso>}
-          <Botao
-            variante="sucesso"
-            className="w-full py-4 text-base shadow-lg"
-            disabled={pendente || (!completa && ESCOLHA_UNICA.includes(resposta.tipo))}
-            onClick={() => confirmar(questao, resposta)}
-          >
-            {pendente ? "Corrigindo…" : "Confirmar resposta"}
-          </Botao>
+          {EM_ETAPAS.includes(resposta.tipo) && !completa ? (
+            <EsperaEtapas tipo={resposta.tipo} />
+          ) : (
+            <Botao
+              variante="sucesso"
+              className="w-full py-4 text-base shadow-lg"
+              disabled={pendente || (!completa && ESCOLHA_UNICA.includes(resposta.tipo))}
+              onClick={() => confirmar(questao, resposta)}
+            >
+              {pendente ? "Corrigindo…" : "Confirmar resposta"}
+            </Botao>
+          )}
         </>
       )}
     </PalcoQuestao>

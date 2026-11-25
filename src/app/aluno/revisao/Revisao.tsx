@@ -8,7 +8,8 @@ import { Aviso, Botao, BotaoLink } from "@/components/ui";
 import { respostaCompleta, respostaInicial } from "@/lib/questoes/apresentacao";
 import { XP_POR_REVISAO } from "@/lib/progresso";
 import { LIMITE_REVISAO_DIA } from "@/lib/revisao-bonus";
-import type { Resposta } from "@/lib/questoes/tipos";
+import { EM_ETAPAS, type Resposta } from "@/lib/questoes/tipos";
+import { EsperaEtapas } from "@/components/EsperaEtapas";
 import { proximaRevisao, responderRevisao, type CorrecaoRevisao, type QuestaoRevisao } from "../actions";
 
 type Atual = { questao: QuestaoRevisao; posicao: number; total: number };
@@ -146,32 +147,36 @@ export function Revisao({ pendentes }: { pendentes: number }) {
             segredo={questao.segredo}
           />
           {erro && <Aviso>{erro}</Aviso>}
-          <Botao
-            variante="sucesso"
-            className="w-full py-4 text-base shadow-lg"
-            disabled={pendente || !respostaCompleta(resposta)}
-            onClick={() =>
-              iniciar(async () => {
-                setErro(null);
-                try {
-                  const r = await responderRevisao(questao.id, questao.permutacao, resposta);
-                  if ("erro" in r) {
-                    setErro(r.erro);
-                    return;
+          {EM_ETAPAS.includes(resposta.tipo) && !respostaCompleta(resposta) ? (
+            <EsperaEtapas tipo={resposta.tipo} />
+          ) : (
+            <Botao
+              variante="sucesso"
+              className="w-full py-4 text-base shadow-lg"
+              disabled={pendente || !respostaCompleta(resposta)}
+              onClick={() =>
+                iniciar(async () => {
+                  setErro(null);
+                  try {
+                    const r = await responderRevisao(questao.id, questao.permutacao, resposta);
+                    if ("erro" in r) {
+                      setErro(r.erro);
+                      return;
+                    }
+                    setCorrecao(r);
+                    setFeitas((f) => [...f, questao.id]);
+                    if (r.fracao === 1) setAcertos((a) => a + 1);
+                    if (r.corrigiu?.bonus) setBonusRodada((b) => b + r.corrigiu!.bonus);
+                    if (r.corrigiu?.zerou) setZerou(true);
+                  } catch {
+                    setErro("Falha de conexão. Tente de novo.");
                   }
-                  setCorrecao(r);
-                  setFeitas((f) => [...f, questao.id]);
-                  if (r.fracao === 1) setAcertos((a) => a + 1);
-                  if (r.corrigiu?.bonus) setBonusRodada((b) => b + r.corrigiu!.bonus);
-                  if (r.corrigiu?.zerou) setZerou(true);
-                } catch {
-                  setErro("Falha de conexão. Tente de novo.");
-                }
-              })
-            }
-          >
-            {pendente ? "Corrigindo…" : "Confirmar resposta"}
-          </Botao>
+                })
+              }
+            >
+              {pendente ? "Corrigindo…" : "Confirmar resposta"}
+            </Botao>
+          )}
         </>
       )}
     </PalcoQuestao>

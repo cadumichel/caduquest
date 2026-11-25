@@ -10,6 +10,7 @@ import { HABILIDADES } from "@/lib/habilidades";
 import {
   certasDoTabuleiro,
   montarVista,
+  respostaCompleta,
   respostaInicial,
   segredoPublico,
   type Segredo,
@@ -32,11 +33,13 @@ import {
   TEMPO_MIN_S,
   TEMPO_PADRAO,
   TIPOS,
+  EM_ETAPAS,
   validarConteudo,
   type Conteudo,
   type Resposta,
   type TipoQuestao,
 } from "@/lib/questoes/tipos";
+import { EsperaEtapas } from "@/components/EsperaEtapas";
 import { criarClienteNavegador } from "@/lib/supabase/client";
 import type { Questao } from "@/lib/tipos-banco";
 import { imagemDoPersonagem } from "@/lib/personagens";
@@ -530,6 +533,14 @@ function PreviaInterna({
       )}
       <p className="whitespace-pre-line font-medium">{enunciado || "Enunciado…"}</p>
       <QuestaoInterativa vista={vista} resposta={resposta} onChange={setResposta} certas={certas} segredo={segredo} />
+      {EM_ETAPAS.includes(vista.tipo) &&
+        (respostaCompleta(resposta) ? (
+          <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-900">
+            No desafio, aqui aparece o botão Confirmar resposta.
+          </p>
+        ) : (
+          <EsperaEtapas tipo={vista.tipo} />
+        ))}
       <button type="button" onClick={reembaralhar} className="text-sm text-marca-700">
         ↻ Embaralhar de novo
       </button>
