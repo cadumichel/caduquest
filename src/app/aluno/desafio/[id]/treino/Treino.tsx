@@ -5,9 +5,9 @@ import { Gabarito } from "@/components/Gabarito";
 import { PalcoQuestao, useModoFoco } from "@/components/PalcoQuestao";
 import { QuestaoInterativa } from "@/components/QuestaoInterativa";
 import { Aviso, Botao, BotaoLink } from "@/components/ui";
-import { respostaCompleta, respostaInicial } from "@/lib/questoes/apresentacao";
-import { EM_ETAPAS, ESCOLHA_UNICA, type Resposta } from "@/lib/questoes/tipos";
-import { EsperaEtapas } from "@/components/EsperaEtapas";
+import { respostaInicial } from "@/lib/questoes/apresentacao";
+import { type Resposta } from "@/lib/questoes/tipos";
+import { BotaoPular, ConfirmarResposta } from "@/components/ConfirmarResposta";
 import type { CorrecaoTreino, QuestaoTreino } from "@/lib/treino";
 import { comecarTreino, corrigirRespostasTreino } from "../../../actions";
 
@@ -21,6 +21,7 @@ export function Treino({ desafioId, titulo }: { desafioId: string; titulo: strin
   const [questoes, setQuestoes] = useState<QuestaoTreino[] | null>(null);
   const [indice, setIndice] = useState(0);
   const [resposta, setResposta] = useState<Resposta | null>(null);
+  const [mexeu, setMexeu] = useState(false);
   const [correcao, setCorrecao] = useState<CorrecaoTreino | null>(null);
   const [placar, setPlacar] = useState<Placar>({ acertos: 0, pontos: 0 });
   const [fim, setFim] = useState(false);
@@ -37,6 +38,7 @@ export function Treino({ desafioId, titulo }: { desafioId: string; titulo: strin
         setQuestoes(r.questoes);
         setIndice(0);
         setCorrecao(null);
+        setMexeu(false);
         setPlacar({ acertos: 0, pontos: 0 });
         setFim(false);
         setResposta(r.questoes[0] ? respostaInicial(r.questoes[0].vista) : null);
@@ -53,6 +55,7 @@ export function Treino({ desafioId, titulo }: { desafioId: string; titulo: strin
   const avancar = () => {
     const prox = indice + 1;
     setCorrecao(null);
+    setMexeu(false);
     if (!questoes || prox >= questoes.length) return setFim(true);
     setIndice(prox);
     setResposta(respostaInicial(questoes[prox].vista));
@@ -118,7 +121,6 @@ export function Treino({ desafioId, titulo }: { desafioId: string; titulo: strin
   }
 
   const questao = questoes[indice];
-  const completa = respostaCompleta(resposta);
   return (
     <PalcoQuestao
       enunciado={questao.enunciado}
@@ -134,9 +136,12 @@ export function Treino({ desafioId, titulo }: { desafioId: string; titulo: strin
               </Link>
             </span>
           </div>
-          <p className="rounded-lg bg-slate-100 px-3 py-2 text-center text-xs font-semibold text-slate-600">
-            Sem tempo e sem valer ranking nem XP.
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="flex-1 rounded-lg bg-slate-100 px-3 py-2 text-center text-xs font-semibold text-slate-600">
+              Sem tempo e sem valer ranking nem XP.
+            </p>
+            {!correcao && <BotaoPular disabled={pendente} onPular={avancar} />}
+          </div>
         </>
       }
     >
@@ -164,24 +169,23 @@ export function Treino({ desafioId, titulo }: { desafioId: string; titulo: strin
           <QuestaoInterativa
             vista={questao.vista}
             resposta={resposta}
-            onChange={setResposta}
+            onChange={(r) => {
+              setResposta(r);
+              setMexeu(true);
+            }}
             desabilitada={pendente}
             certas={questao.certas}
             segredo={questao.segredo}
           />
           {erro && <Aviso>{erro}</Aviso>}
-          {EM_ETAPAS.includes(resposta.tipo) && !completa ? (
-            <EsperaEtapas tipo={resposta.tipo} />
-          ) : (
-            <Botao
-              variante="sucesso"
-              className="w-full py-4 text-base shadow-lg"
-              disabled={pendente || (!completa && ESCOLHA_UNICA.includes(resposta.tipo))}
-              onClick={() => confirmar(questao, resposta)}
-            >
-              {pendente ? "Corrigindo…" : "Confirmar resposta"}
-            </Botao>
-          )}
+          <ConfirmarResposta
+            vista={questao.vista}
+            resposta={resposta}
+            mexeu={mexeu}
+            pendente={pendente}
+            rotuloPendente="Corrigindo…"
+            onConfirmar={() => confirmar(questao, resposta)}
+          />
         </>
       )}
     </PalcoQuestao>
