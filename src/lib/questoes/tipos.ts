@@ -66,6 +66,13 @@ export const NOME_TIPO: Record<TipoQuestao, string> = {
  */
 export const SO_COM_CONSULTA: readonly TipoQuestao[] = ["investigue"];
 
+/**
+ * Tipos respondidos em etapas, cada uma com o próprio botão (Enviar, Avançar,
+ * letras). O botão "Confirmar resposta" só aparece quando a última etapa
+ * termina: com os dois na tela, o aluno confirmava antes da hora e perdia a questão.
+ */
+export const EM_ETAPAS: readonly TipoQuestao[] = ["tabuleiro", "conversa", "conceito_secreto"];
+
 /** Tipos de uma resposta só: o aluno precisa escolher antes de confirmar. */
 export const ESCOLHA_UNICA: readonly TipoQuestao[] = [
   "multipla_escolha",

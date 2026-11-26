@@ -649,7 +649,9 @@ export function Conversa({
       </div>
       {!encerrada ? (
         <section className="space-y-2">
-          <p className="text-sm text-slate-500">Escolha sua resposta e envie.</p>
+          <p className="text-sm font-semibold text-marca-800">
+            Fala {atual + 1} de {n}: escolha sua resposta e envie.
+          </p>
           {vista.opcoes[atual].map((texto, i) => {
             const riscada = removidas.has(3 * atual + i);
             if (riscada) return <AlternativaRiscada key={`${atual}-${i}`} texto={texto} />;
