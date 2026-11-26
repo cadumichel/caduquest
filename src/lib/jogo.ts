@@ -259,9 +259,13 @@ async function registrar(
   resposta: Resposta | null,
   saidasTela: number,
   motivo: MotivoZerada | null,
+  pulada = false,
 ): Promise<MotivoZerada | null> {
   // A tela manda a resposta vazia sozinha quando o cronômetro zera.
-  const semResposta = resposta === null && motivo === null;
+  const semResposta = resposta === null && motivo === null && !pulada;
+  // Pulada: o aluno desistiu da questão. Vale zero, sem verificação de leitura;
+  // nas questões em etapas fica gravado o que ele chegou a fazer, mas não pontua.
+  if (pulada) resposta = null;
   // Os itens travados pelas eliminações valem como estão na tela.
   // No tabuleiro, vale o andamento gravado casa a casa.
   resposta = respostaParaCorrigir(comoConteudo(questao), linha.permutacao, linha.eliminadas, linha.resposta, resposta);
@@ -271,11 +275,11 @@ async function registrar(
   const saidaZeraSozinha = regraSaidas(desafio).regra === "proibido" && saidasTela > 0;
   const causa = esgotado || !desafio.saida_zera_questao ? null : (motivo ?? (saidaZeraSozinha ? "saida" : null));
   const zerada = causa !== null;
-  const fracao = esgotado || zerada ? 0 : corrigir(comoConteudo(questao), linha.permutacao, resposta);
+  const fracao = esgotado || zerada || pulada ? 0 : corrigir(comoConteudo(questao), linha.permutacao, resposta);
   // Sorteada para a verificação de leitura: vale zero até o aluno acertar o tema.
   // Respondeu de verdade (sem tempo esgotado nem zerada), mesmo errando: senão
   // aparecer ou não a verificação entregaria se a resposta estava certa.
-  const verificar = !esgotado && !zerada && precisaVerificar(tentativa, questao);
+  const verificar = !esgotado && !zerada && !pulada && precisaVerificar(tentativa, questao);
   const { data: gravada } = await db
     .from("respostas")
     .update({
@@ -637,6 +641,7 @@ export async function responderQuestao(
   resposta: Resposta | null,
   saidasTela: number,
   motivo: MotivoZerada | null = null,
+  pulada = false,
 ): Promise<EstadoJogo> {
   const desafio = await desafioDoAluno(db, aluno, desafioId);
   if (!desafio) return { fase: "erro", mensagem: "Desafio não encontrado." };
@@ -672,7 +677,7 @@ export async function responderQuestao(
         const { data: a } = await db.from("alunos").select("teclado_liberado").eq("id", aluno.id).single();
         if (a?.teclado_liberado) motivo = null;
       }
-      zerada = await registrar(db, desafio, t, linha as RespostaBanco, questao, resposta, saidasTela, motivo);
+      zerada = await registrar(db, desafio, t, linha as RespostaBanco, questao, resposta, saidasTela, motivo, pulada);
     }
   }
   const estado = await estadoAtual(db, aluno, desafioId, undefined, desafio);

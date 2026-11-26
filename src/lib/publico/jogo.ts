@@ -259,9 +259,12 @@ async function registrar(
   resposta: Resposta | null,
   saidasTela: number,
   motivo: MotivoZerada | null,
+  pulada = false,
 ): Promise<MotivoZerada | null> {
   // A tela manda a resposta vazia sozinha quando o cronômetro zera.
-  const semResposta = resposta === null && motivo === null;
+  const semResposta = resposta === null && motivo === null && !pulada;
+  // Pulada: o jogador desistiu da questão e ela vale zero.
+  if (pulada) resposta = null;
   // Os itens travados pelas eliminações valem como estão na tela.
   // No tabuleiro, vale o andamento gravado casa a casa.
   resposta = respostaParaCorrigir(comoConteudo(questao), linha.permutacao, linha.eliminadas, linha.resposta, resposta);
@@ -269,7 +272,7 @@ async function registrar(
   const servida = new Date(linha.servida_em);
   const esgotado = tempoEsgotado(servida, agora, questao.tempo_limite_s);
   const causa = esgotado || !linha.final ? null : (motivo ?? (saidasTela > 0 ? "saida" : null));
-  const fracao = esgotado || causa ? 0 : corrigir(comoConteudo(questao), linha.permutacao, resposta);
+  const fracao = esgotado || causa || pulada ? 0 : corrigir(comoConteudo(questao), linha.permutacao, resposta);
   const pontos = pontosPublicos(fracao, agora.getTime() - servida.getTime(), questao.tempo_limite_s, linha.final);
   const { data: gravada } = await db
     .from("respostas_publicas")
@@ -391,6 +394,7 @@ export async function responderPartida(
   resposta: Resposta | null,
   saidasTela: number,
   motivo: MotivoZerada | null,
+  pulada = false,
 ): Promise<EstadoPartida> {
   const partida = await partidaDoJogador(db, jogador.id, partidaId);
   if (!partida) return { fase: "erro", mensagem: "Partida não encontrada." };
@@ -405,7 +409,7 @@ export async function responderPartida(
       .maybeSingle();
     if (linha && !linha.respondida_em) {
       const questao = await carregarQuestao(db, questaoId);
-      zerada = await registrar(db, partida, linha as RespostaPublica, questao, resposta, saidasTela, motivo);
+      zerada = await registrar(db, partida, linha as RespostaPublica, questao, resposta, saidasTela, motivo, pulada);
     }
   }
   const estado = await estadoPartida(db, jogador, partidaId);

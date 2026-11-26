@@ -10,6 +10,7 @@ import {
   subPermutacao,
   type Conteudo,
   type Resposta,
+  type TipoQuestao,
   type Vista,
 } from "./tipos";
 
@@ -273,5 +274,49 @@ export function respostaCompleta(r: Resposta): boolean {
       return r.ponto !== null;
     case "enquanto_isso":
       return r.celulas.every((v) => v !== null);
+  }
+}
+
+/**
+ * Formatos que já começam com uma resposta montada (a ordem embaralhada):
+ * o botão de confirmar só libera depois que o aluno mexe nos itens.
+ */
+export const COMECA_MONTADA: readonly TipoQuestao[] = ["linha_do_tempo", "ordenar_frases"];
+
+/**
+ * A questão está toda respondida e pode ser enviada? Sem isso o botão
+ * "Confirmar resposta" fica desligado (não há envio pela metade).
+ * `mexeu`: o aluno já mudou a resposta nesta tela (conta para os formatos de ordenar).
+ */
+export function prontaParaEnviar(vista: Vista, r: Resposta, mexeu: boolean): boolean {
+  if (COMECA_MONTADA.includes(r.tipo)) return mexeu;
+  if (r.tipo === "encontrar_erro" && vista.tipo === "encontrar_erro") return r.marcados.length >= vista.erros;
+  return respostaCompleta(r);
+}
+
+/** O que falta para liberar o botão de confirmar (texto para o aluno). */
+export function oQueFalta(vista: Vista): string {
+  switch (vista.tipo) {
+    case "linha_do_tempo":
+    case "ordenar_frases":
+      return "Coloque os itens na ordem para liberar o botão de confirmar.";
+    case "encontrar_erro":
+      return vista.erros > 1
+        ? `Marque os ${vista.erros} trechos errados para liberar o botão de confirmar.`
+        : "Marque o trecho errado para liberar o botão de confirmar.";
+    case "investigue":
+      return "Escreva a resposta para liberar o botão de confirmar.";
+    case "estimativa":
+      return "Escolha um valor na régua para liberar o botão de confirmar.";
+    case "detalhe_imagem":
+      return "Marque o ponto na imagem para liberar o botão de confirmar.";
+    case "multipla_escolha":
+    case "interpretacao":
+    case "quem_disse":
+    case "intruso":
+    case "quem_sou_eu":
+      return "Escolha uma resposta para liberar o botão de confirmar.";
+    default:
+      return "Responda todos os itens para liberar o botão de confirmar.";
   }
 }

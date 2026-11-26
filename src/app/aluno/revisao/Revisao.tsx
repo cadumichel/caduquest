@@ -5,11 +5,11 @@ import { Gabarito } from "@/components/Gabarito";
 import { PalcoQuestao, useModoFoco } from "@/components/PalcoQuestao";
 import { QuestaoInterativa } from "@/components/QuestaoInterativa";
 import { Aviso, Botao, BotaoLink } from "@/components/ui";
-import { respostaCompleta, respostaInicial } from "@/lib/questoes/apresentacao";
+import { respostaInicial } from "@/lib/questoes/apresentacao";
 import { XP_POR_REVISAO } from "@/lib/progresso";
 import { LIMITE_REVISAO_DIA } from "@/lib/revisao-bonus";
-import { EM_ETAPAS, type Resposta } from "@/lib/questoes/tipos";
-import { EsperaEtapas } from "@/components/EsperaEtapas";
+import { type Resposta } from "@/lib/questoes/tipos";
+import { BotaoPular, ConfirmarResposta } from "@/components/ConfirmarResposta";
 import { proximaRevisao, responderRevisao, type CorrecaoRevisao, type QuestaoRevisao } from "../actions";
 
 type Atual = { questao: QuestaoRevisao; posicao: number; total: number };
@@ -23,6 +23,9 @@ export function Revisao({ pendentes }: { pendentes: number }) {
   const [bonusRodada, setBonusRodada] = useState(0);
   const [zerou, setZerou] = useState(false);
   const [resposta, setResposta] = useState<Resposta | null>(null);
+  const [mexeu, setMexeu] = useState(false);
+  // Puladas nesta rodada: não voltam nela, mas continuam na lista de revisão.
+  const [puladas, setPuladas] = useState<string[]>([]);
   const [correcao, setCorrecao] = useState<CorrecaoRevisao | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, iniciar] = useTransition();
@@ -40,6 +43,7 @@ export function Revisao({ pendentes }: { pendentes: number }) {
           return;
         }
         setAtual(prox);
+        setMexeu(false);
         setResposta(respostaInicial(prox.questao.vista));
       } catch {
         setErro("Falha de conexão. Tente de novo.");
@@ -71,6 +75,7 @@ export function Revisao({ pendentes }: { pendentes: number }) {
             <Botao
               onClick={() => {
                 setFeitas([]);
+                setPuladas([]);
                 setAcertos(0);
                 setBonusRodada(0);
                 setFim(false);
@@ -108,6 +113,19 @@ export function Revisao({ pendentes }: { pendentes: number }) {
               </Link>
             </span>
           </div>
+          {!correcao && (
+            <div className="flex items-center justify-end gap-3">
+              <span className="text-xs text-slate-500">A questão pulada continua na sua revisão.</span>
+              <BotaoPular
+                disabled={pendente}
+                onPular={() => {
+                  const novas = [...puladas, questao.id];
+                  setPuladas(novas);
+                  carregar([...feitas, ...novas]);
+                }}
+              />
+            </div>
+          )}
         </>
       }
     >
@@ -132,7 +150,11 @@ export function Revisao({ pendentes }: { pendentes: number }) {
           {correcao.explicacao && (
             <p className="rounded-lg bg-marca-50 px-3 py-2 text-sm text-marca-900">💡 {correcao.explicacao}</p>
           )}
-          <Botao className="w-full py-4 text-base" disabled={pendente} onClick={() => carregar(feitas)}>
+          <Botao
+            className="w-full py-4 text-base"
+            disabled={pendente}
+            onClick={() => carregar([...feitas, ...puladas])}
+          >
             {pendente ? "Carregando…" : posicao < total ? "Próxima" : "Ver resultado"}
           </Botao>
         </div>
@@ -141,42 +163,41 @@ export function Revisao({ pendentes }: { pendentes: number }) {
           <QuestaoInterativa
             vista={questao.vista}
             resposta={resposta}
-            onChange={setResposta}
+            onChange={(r) => {
+              setResposta(r);
+              setMexeu(true);
+            }}
             desabilitada={pendente}
             certas={questao.certas}
             segredo={questao.segredo}
           />
           {erro && <Aviso>{erro}</Aviso>}
-          {EM_ETAPAS.includes(resposta.tipo) && !respostaCompleta(resposta) ? (
-            <EsperaEtapas tipo={resposta.tipo} />
-          ) : (
-            <Botao
-              variante="sucesso"
-              className="w-full py-4 text-base shadow-lg"
-              disabled={pendente || !respostaCompleta(resposta)}
-              onClick={() =>
-                iniciar(async () => {
-                  setErro(null);
-                  try {
-                    const r = await responderRevisao(questao.id, questao.permutacao, resposta);
-                    if ("erro" in r) {
-                      setErro(r.erro);
-                      return;
-                    }
-                    setCorrecao(r);
-                    setFeitas((f) => [...f, questao.id]);
-                    if (r.fracao === 1) setAcertos((a) => a + 1);
-                    if (r.corrigiu?.bonus) setBonusRodada((b) => b + r.corrigiu!.bonus);
-                    if (r.corrigiu?.zerou) setZerou(true);
-                  } catch {
-                    setErro("Falha de conexão. Tente de novo.");
+          <ConfirmarResposta
+            vista={questao.vista}
+            resposta={resposta}
+            mexeu={mexeu}
+            pendente={pendente}
+            rotuloPendente="Corrigindo…"
+            onConfirmar={() =>
+              iniciar(async () => {
+                setErro(null);
+                try {
+                  const r = await responderRevisao(questao.id, questao.permutacao, resposta);
+                  if ("erro" in r) {
+                    setErro(r.erro);
+                    return;
                   }
-                })
-              }
-            >
-              {pendente ? "Corrigindo…" : "Confirmar resposta"}
-            </Botao>
-          )}
+                  setCorrecao(r);
+                  setFeitas((f) => [...f, questao.id]);
+                  if (r.fracao === 1) setAcertos((a) => a + 1);
+                  if (r.corrigiu?.bonus) setBonusRodada((b) => b + r.corrigiu!.bonus);
+                  if (r.corrigiu?.zerou) setZerou(true);
+                } catch {
+                  setErro("Falha de conexão. Tente de novo.");
+                }
+              })
+            }
+          />
         </>
       )}
     </PalcoQuestao>

@@ -73,6 +73,7 @@ export async function enviarResposta(
   resposta: unknown,
   saidasTela: number,
   motivo: unknown = null,
+  pulada: unknown = false,
 ): Promise<EstadoJogo> {
   const aluno = await exigirAluno();
   const r = resposta === null ? null : schemaResposta.safeParse(resposta);
@@ -84,6 +85,7 @@ export async function enviarResposta(
     r && r.success ? r.data : null,
     Number.isFinite(saidasTela) ? saidasTela : 0,
     ehMotivoZerada(motivo) ? motivo : null,
+    pulada === true,
   );
 }
 

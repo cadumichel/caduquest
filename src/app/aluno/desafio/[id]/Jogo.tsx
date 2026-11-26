@@ -8,11 +8,10 @@ import { QuestaoInterativa } from "@/components/QuestaoInterativa";
 import { Aviso, Botao, BotaoLink } from "@/components/ui";
 import type { Ajudas, EstadoJogo, ResultadoAjuda } from "@/lib/jogo";
 import { aplicarAjuda, DICAS_POR_TEMPORADA, ELIMINACOES_POR_TEMPORADA, rotuloEliminacao } from "@/lib/questoes/ajudas";
-import { respostaCompleta, respostaInicial } from "@/lib/questoes/apresentacao";
+import { respostaInicial } from "@/lib/questoes/apresentacao";
 import { respostaComProgresso } from "@/lib/questoes/tabuleiro";
 import { respostaComPassos } from "@/lib/questoes/passos";
-import { EM_ETAPAS, ESCOLHA_UNICA } from "@/lib/questoes/tipos";
-import { EsperaEtapas } from "@/components/EsperaEtapas";
+import { BotaoPular, ConfirmarResposta } from "@/components/ConfirmarResposta";
 import type { Resposta } from "@/lib/questoes/tipos";
 import { useTelaProtegida } from "@/components/useTelaProtegida";
 import {
@@ -427,8 +426,8 @@ export function Jogo({
       tecladoLiberado={tecladoLiberado}
       identificacao={identificacao}
       cliquesLiberados={regraCliques === "permitido"}
-      enviar={(resposta, saidas, motivo) =>
-        executar(() => enviarResposta(desafioId, estado.questao.id, resposta, saidas, motivo))
+      enviar={(resposta, saidas, motivo, pulada) =>
+        executar(() => enviarResposta(desafioId, estado.questao.id, resposta, saidas, motivo, pulada))
       }
       sair={() => executar(() => sairDoDesafio(desafioId))}
     />
@@ -453,7 +452,7 @@ function TelaQuestao({
   tecladoLiberado: boolean;
   identificacao: string;
   cliquesLiberados: boolean;
-  enviar: (resposta: Resposta | null, saidas: number, motivo: MotivoZerada | null) => void;
+  enviar: (resposta: Resposta | null, saidas: number, motivo: MotivoZerada | null, pulada?: boolean) => void;
   /** Sair do desafio sem consulta: encerra a tentativa no servidor. */
   sair: () => void;
 }) {
@@ -468,6 +467,7 @@ function TelaQuestao({
       questao.passos,
     ),
   );
+  const [mexeu, setMexeu] = useState(false);
   const [restante, setRestante] = useState(questao.restanteMs);
   const saidas = useRef(0);
   const enviado = useRef(false);
@@ -499,10 +499,10 @@ function TelaQuestao({
     });
 
   const confirmar = useCallback(
-    (r: Resposta | null, motivo: MotivoZerada | null = null) => {
+    (r: Resposta | null, motivo: MotivoZerada | null = null, pulada = false) => {
       if (enviado.current) return;
       enviado.current = true;
-      enviar(r, saidas.current, motivo);
+      enviar(r, saidas.current, motivo, pulada);
     },
     [enviar],
   );
@@ -549,7 +549,15 @@ function TelaQuestao({
 
   const segundos = Math.ceil(restante / 1000);
   const fracao = restante / (questao.tempoLimite * 1000);
-  const completa = respostaCompleta(resposta);
+
+  const pular = () => {
+    // O diálogo do navegador tira o foco da página: não conta como saída.
+    dialogoProprio.current = true;
+    const ok = confirm("Pular esta questão? Ela vale zero e não dá para voltar a ela.");
+    dialogoProprio.current = false;
+    fora.current = false;
+    if (ok) confirmar(null, null, true);
+  };
 
   return (
     <div
@@ -619,11 +627,14 @@ function TelaQuestao({
                 {a}
               </p>
             ))}
-            <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-              <div
-                className={`h-full transition-[width] duration-200 ${fracao < 0.25 ? "bg-red-500" : questao.relampago ? "bg-amber-400" : "bg-marca-600"}`}
-                style={{ width: `${Math.max(0, Math.min(1, fracao)) * 100}%` }}
-              />
+            <div className="flex items-center gap-3">
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
+                <div
+                  className={`h-full transition-[width] duration-200 ${fracao < 0.25 ? "bg-red-500" : questao.relampago ? "bg-amber-400" : "bg-marca-600"}`}
+                  style={{ width: `${Math.max(0, Math.min(1, fracao)) * 100}%` }}
+                />
+              </div>
+              <BotaoPular disabled={pendente} onPular={pular} />
             </div>
           </>
         }
@@ -631,7 +642,10 @@ function TelaQuestao({
         <QuestaoInterativa
           vista={questao.vista}
           resposta={resposta}
-          onChange={setResposta}
+          onChange={(r) => {
+            setResposta(r);
+            setMexeu(true);
+          }}
           desabilitada={pendente}
           ajuda={ajuda}
           progressoTabuleiro={questao.tabuleiro}
@@ -673,28 +687,13 @@ function TelaQuestao({
         )}
 
         {erroRede && <Aviso>Falha de conexão. Toque em confirmar de novo.</Aviso>}
-        {EM_ETAPAS.includes(resposta.tipo) && !completa ? (
-          <EsperaEtapas tipo={resposta.tipo} />
-        ) : (
-          <Botao
-            variante="sucesso"
-            className="w-full py-4 text-base shadow-lg"
-            disabled={pendente || (!completa && ESCOLHA_UNICA.includes(resposta.tipo))}
-            onClick={() => {
-              if (!completa) {
-                // O diálogo do navegador tira o foco da página: não conta como saída.
-                dialogoProprio.current = true;
-                const ok = confirm("Há itens sem resposta. Confirmar mesmo assim?");
-                dialogoProprio.current = false;
-                fora.current = false;
-                if (!ok) return;
-              }
-              confirmar(resposta);
-            }}
-          >
-            {pendente ? "Enviando…" : "Confirmar resposta"}
-          </Botao>
-        )}
+        <ConfirmarResposta
+          vista={questao.vista}
+          resposta={resposta}
+          mexeu={mexeu}
+          pendente={pendente}
+          onConfirmar={() => confirmar(resposta)}
+        />
         {marca && <p className="text-right text-[11px] text-slate-400">{marca}</p>}
         {questao.saidaZera ? (
           <p className="text-center text-xs text-slate-400">
